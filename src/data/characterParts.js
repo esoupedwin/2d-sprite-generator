@@ -10,40 +10,19 @@
 
 // ─── Head ─────────────────────────────────────────────────────────────────────
 
-function drawHead(ctx, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(0, 0, 55, 0, Math.PI * 2);
-  ctx.fill();
-
+function drawEyes(ctx) {
   ctx.fillStyle = '#111';
+  // Pill shape: roundRect with radius = half-width for fully rounded short sides
   ctx.beginPath();
-  ctx.ellipse(-18, 11, 10, 14, 0, 0, Math.PI * 2);
+  ctx.roundRect(-15, 1, 10, 22, 5);  // left eye  (centred at x=−10, y=12)
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(18, 11, 10, 14, 0, 0, Math.PI * 2);
+  ctx.roundRect(19, 1, 10, 22, 5);   // right eye (centred at x=24, y=12)
   ctx.fill();
 }
 
 // ─── Torso ────────────────────────────────────────────────────────────────────
 
-function drawUpperTorso(ctx, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(-27, -22);
-  ctx.lineTo( 27, -22);
-  ctx.lineTo( 22,  28);
-  ctx.lineTo(-22,  28);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawLowerTorso(ctx, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(-30, -12, 60, 20, 5);
-  ctx.fill();
-}
 
 // ─── Part definitions ─────────────────────────────────────────────────────────
 
@@ -52,9 +31,9 @@ export const CHARACTER_PARTS = {
     label: 'Head',
     boneId: 'head',
     options: {
-      red:   { label: 'Red',   draw(ctx) { drawHead(ctx, '#E53935'); } },
-      blue:  { label: 'Blue',  draw(ctx) { drawHead(ctx, '#1E88E5'); } },
-      green: { label: 'Green', draw(ctx) { drawHead(ctx, '#43A047'); } },
+      red:   { label: 'Red',   color: '#E53935', drawExtras: drawEyes },
+      blue:  { label: 'Blue',  color: '#1E88E5', drawExtras: drawEyes },
+      green: { label: 'Green', color: '#43A047', drawExtras: drawEyes },
     },
   },
 
@@ -62,9 +41,9 @@ export const CHARACTER_PARTS = {
     label: 'Upper Body',
     boneId: 'torso',
     options: {
-      blue:  { label: 'Blue',  draw(ctx) { drawUpperTorso(ctx, '#3D6FD9'); } },
-      red:   { label: 'Red',   draw(ctx) { drawUpperTorso(ctx, '#E53935'); } },
-      green: { label: 'Green', draw(ctx) { drawUpperTorso(ctx, '#388E3C'); } },
+      blue:  { label: 'Blue',  color: '#3D6FD9' },
+      red:   { label: 'Red',   color: '#E53935' },
+      green: { label: 'Green', color: '#388E3C' },
     },
   },
 
@@ -72,9 +51,9 @@ export const CHARACTER_PARTS = {
     label: 'Lower Body',
     boneId: 'lower_torso',
     options: {
-      orange: { label: 'Orange', draw(ctx) { drawLowerTorso(ctx, '#E8871A'); } },
-      tan:    { label: 'Tan',    draw(ctx) { drawLowerTorso(ctx, '#A0785A'); } },
-      gray:   { label: 'Gray',   draw(ctx) { drawLowerTorso(ctx, '#757575'); } },
+      orange: { label: 'Orange', color: '#E8871A' },
+      tan:    { label: 'Tan',    color: '#A0785A' },
+      gray:   { label: 'Gray',   color: '#757575' },
     },
   },
 
@@ -117,6 +96,52 @@ export const CHARACTER_PARTS = {
       darkgreen: { label: 'Dark Green', color: '#2E7D32' },
       purple:    { label: 'Purple',     color: '#6A1B9A' },
       gray:      { label: 'Gray',       color: '#546E7A' },
+    },
+  },
+
+  // Prop balanced on head — drawn above the head skin
+  head_prop: {
+    label: 'Head Prop',
+    boneId: 'head',
+    options: {
+      none: {
+        label: 'None',
+        draw() {},
+      },
+      box: {
+        label: 'Box',
+        draw(ctx) {
+          const w = 58, h = 40;
+          const bx = -w / 2;
+          const by = -55 - h;  // sits on top of head circle (radius 55)
+
+          // Main crate face
+          ctx.fillStyle = '#C49A45';
+          ctx.fillRect(bx, by, w, h);
+
+          // Darker top strip — top-face depth illusion
+          ctx.fillStyle = '#A87830';
+          ctx.fillRect(bx, by, w, 7);
+
+          // Vertical plank dividers
+          ctx.strokeStyle = '#8B6015';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(bx + w / 3,     by + 7); ctx.lineTo(bx + w / 3,     by + h);
+          ctx.moveTo(bx + 2 * w / 3, by + 7); ctx.lineTo(bx + 2 * w / 3, by + h);
+          ctx.stroke();
+
+          // Horizontal mid-band
+          ctx.beginPath();
+          ctx.moveTo(bx, by + h / 2); ctx.lineTo(bx + w, by + h / 2);
+          ctx.stroke();
+
+          // Outline
+          ctx.strokeStyle = '#6B4A0A';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(bx, by, w, h);
+        },
+      },
     },
   },
 
@@ -174,6 +199,35 @@ export const CHARACTER_PARTS = {
           ctx.fill();
         },
       },
+      rifle: {
+        label: 'Rifle',
+        draw(ctx) {
+          // Barrel runs along Y axis (Y+ = muzzle/forward, Y- = stock/butt)
+          ctx.fillStyle = '#1A1A1A';
+          ctx.fillRect(-2, -8, 4, 58);    // barrel shaft
+
+          // Receiver block (where hand grips)
+          ctx.fillStyle = '#2E2E2E';
+          ctx.fillRect(-5, -8, 10, 26);   // receiver body
+
+          // Stock (butt end — behind the grip in -Y direction)
+          ctx.fillStyle = '#7B5E2A';
+          ctx.fillRect(-5, -34, 10, 28);  // stock
+          ctx.fillRect(-8, -38, 16, 8);   // butt plate
+
+          // Pistol grip
+          ctx.fillStyle = '#5C3D12';
+          ctx.fillRect(-3, 16, 6, 16);
+
+          // Box magazine
+          ctx.fillStyle = '#444';
+          ctx.fillRect(-3, 4, 6, 16);
+
+          // Muzzle
+          ctx.fillStyle = '#111';
+          ctx.fillRect(-3, 46, 6, 6);
+        },
+      },
     },
   },
 };
@@ -203,5 +257,6 @@ export const DEFAULT_CHARACTER = {
   right_arm:   'purple',
   left_leg:    'darkred',
   right_leg:   'darkgreen',
+  head_prop:   'none',
   weapon:      'none',
 };

@@ -1,7 +1,12 @@
 import { CHARACTER_PARTS } from '../data/characterParts.js';
-import { drawSkin, LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN } from './SkinSystem.js';
+import {
+  drawSkin,
+  LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
+  HEAD_SKIN, BODY_SKIN, LOWER_TORSO_SKIN,
+} from './SkinSystem.js';
 
 function getColor(character, partKey) {
+  if (character.customColors?.[partKey]) return character.customColors[partKey];
   const option = CHARACTER_PARTS[partKey]?.options[character[partKey]];
   return option?.color ?? '#888888';
 }
@@ -20,34 +25,49 @@ function drawPart(ctx, partKey, character, worldTransforms) {
   ctx.restore();
 }
 
+function drawExtras(ctx, partKey, character, worldTransforms) {
+  const option = CHARACTER_PARTS[partKey]?.options[character[partKey]];
+  if (!option?.drawExtras) return;
+  const boneId = CHARACTER_PARTS[partKey].boneId;
+  const bone   = worldTransforms[boneId];
+  if (!bone) return;
+  ctx.save();
+  ctx.translate(bone.x, bone.y);
+  ctx.rotate(bone.rotation);
+  option.drawExtras(ctx);
+  ctx.restore();
+}
+
 /**
  * Renders the character given pre-computed world transforms.
  * Caller is responsible for calling computeWorldTransforms() and caching the result.
  */
 export function renderCharacter(ctx, character, worldTransforms, options = {}) {
-  const { originX = 0, originY = 0, scale = 1, showBones = false, highlightBone = null } = options;
+  const {
+    originX = 0, originY = 0, scale = 1,
+    showBones = false, highlightBone = null,
+    skins = {}, animation = '',
+  } = options;
+
+  const leftArmOverHead = animation === 'carry_walk';
 
   ctx.save();
   ctx.translate(originX, originY);
   ctx.scale(scale, scale);
 
-  // Left leg — behind body
-  drawSkin(ctx, LEFT_LEG_SKIN,  worldTransforms, getColor(character, 'left_leg'));
-  // Right leg
-  drawSkin(ctx, RIGHT_LEG_SKIN, worldTransforms, getColor(character, 'right_leg'));
-  // Left arm — behind body
-  drawSkin(ctx, LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'));
-
-  // Body parts
-  drawPart(ctx, 'lower_torso', character, worldTransforms);
-  drawPart(ctx, 'body',        character, worldTransforms);
-  drawPart(ctx, 'head',        character, worldTransforms);
-
-  // Right arm — in front of body
-  drawSkin(ctx, RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'));
-
-  // Weapon on right hand bone
+  // Back to front: right arm + weapon → legs → lower torso → body → [left arm] → head → [left arm] → prop
+  // Left arm draws above head only during carry_walk
+  drawSkin(ctx, skins.right_arm   || RIGHT_ARM_SKIN,   worldTransforms, getColor(character, 'right_arm'));
   drawPart(ctx, 'weapon', character, worldTransforms);
+  drawSkin(ctx, skins.left_leg    || LEFT_LEG_SKIN,    worldTransforms, getColor(character, 'left_leg'));
+  drawSkin(ctx, skins.right_leg   || RIGHT_LEG_SKIN,   worldTransforms, getColor(character, 'right_leg'));
+  drawSkin(ctx, skins.lower_torso || LOWER_TORSO_SKIN, worldTransforms, getColor(character, 'lower_torso'));
+  drawSkin(ctx, skins.body        || BODY_SKIN,        worldTransforms, getColor(character, 'body'));
+  if (!leftArmOverHead) drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'));
+  drawSkin(ctx, skins.head        || HEAD_SKIN,        worldTransforms, getColor(character, 'head'));
+  drawExtras(ctx, 'head', character, worldTransforms);
+  if (leftArmOverHead)  drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'));
+  drawPart(ctx, 'head_prop', character, worldTransforms);
 
   if (showBones) {
     renderBones(ctx, worldTransforms, highlightBone);

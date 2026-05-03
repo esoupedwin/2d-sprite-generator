@@ -98,6 +98,35 @@ export const RIGHT_LEG_SKIN = [
   ['right_leg',      -8,   0,   -3,   6,    3,  -6],
 ];
 
+// ─── Head ─────────────────────────────────────────────────────────────────────
+// Circle radius 55 approximated with 4 Bézier points. k ≈ 55 × 0.552 = 30.
+export const HEAD_SKIN = [
+  ['head',  0, -55, -30,   0,  30,   0],  // top
+  ['head', 55,   0,   0, -30,   0,  30],  // right
+  ['head',  0,  55,  30,   0, -30,   0],  // bottom
+  ['head',-55,   0,   0,  30,   0, -30],  // left
+];
+
+// ─── Upper torso ──────────────────────────────────────────────────────────────
+// Trapezoid: top (54px wide) tapering to bottom (44px wide), height 50px.
+// Clockwise: top-left → top-right → bottom-right → bottom-left.
+export const BODY_SKIN = [
+  ['torso', -27, -22,   2,  17,  18,   0],  // top-left
+  ['torso',  27, -22, -18,   0,  -2,  17],  // top-right
+  ['torso',  22,  28,   2, -17, -15,   0],  // bottom-right
+  ['torso', -22,  28,  15,   0,  -2, -17],  // bottom-left
+];
+
+// ─── Lower torso ──────────────────────────────────────────────────────────────
+// Rounded rect: x ∈ [−30, 30], y ∈ [−12, 8] (center at y = −2).
+// 4 edge-centre points with handles creating gentle rounding.
+export const LOWER_TORSO_SKIN = [
+  ['lower_torso',  0, -12, -20,   0,  20,   0],  // top centre
+  ['lower_torso', 30,  -2,   0,  -7,   0,   7],  // right centre
+  ['lower_torso',  0,   8,  20,   0, -20,   0],  // bottom centre
+  ['lower_torso',-30,  -2,   0,   7,   0,  -7],  // left centre
+];
+
 // ─── Renderer ────────────────────────────────────────────────────────────────
 
 function rotateOffset(dx, dy, rotation) {
