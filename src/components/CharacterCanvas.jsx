@@ -6,6 +6,7 @@ import {
   DEFAULT_SKINS, getSkin, worldToLocal,
   renderVectorOverlay, updateSkinPoint, addSkinPoint,
 } from '../systems/VectorEditor.js';
+import { mergeOffsets } from '../utils/transforms.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 const CANVAS_W   = 620;
@@ -336,6 +337,7 @@ export function CharacterCanvas({
 
     if (drag.type === 'bone') {
       const bone = BONES[drag.boneId];
+      if (!bone) return;
       let newOffX, newOffY;
       if (!bone.parent) {
         newOffX = charPos.x - bone.localX;
@@ -512,17 +514,6 @@ export function CharacterCanvas({
       )}
     </div>
   );
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function mergeOffsets(pose, boneOffsets) {
-  const result = {};
-  const ids = new Set([...Object.keys(pose), ...Object.keys(boneOffsets)]);
-  for (const id of ids) {
-    const p = pose[id] || {}, o = boneOffsets[id] || {};
-    result[id] = { x: (o.x || 0) + (p.x || 0), y: (o.y || 0) + (p.y || 0), rotation: p.rotation || 0 };
-  }
-  return result;
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────

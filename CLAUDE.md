@@ -22,6 +22,7 @@ src/
     CharacterBuilder.jsx — Left sidebar: part colors, size scaling
     AnimationControls.jsx— Right sidebar: animation selector, export buttons
   utils/
+    transforms.js        — mergeOffsets() shared by CharacterCanvas and export
     export.js            — exportSpriteSheet(), exportAnimationJSON()
   App.jsx                — State owner: characters[], activeCharId, callbacks
   App.css
@@ -36,7 +37,7 @@ computeWorldTransforms(fullPose)    → worldTransforms  {boneId: {x,y,rotation}
 renderCharacter(ctx, character, worldTransforms, options)
 ```
 
-`mergeOffsets` is defined locally in both `CharacterCanvas.jsx` and `export.js` — keep them in sync if you change the merge logic.
+`mergeOffsets` lives in `src/utils/transforms.js` and is imported by both `CharacterCanvas.jsx` and `export.js`.
 
 ## Skeleton (SkeletonSystem.js)
 
@@ -169,7 +170,6 @@ Characters saved to `localStorage` (`2dsprite:characters`) and to `characters.js
 
 ## Common pitfalls
 
-- **mergeOffsets duplication**: both `CharacterCanvas.jsx` and `export.js` define it locally — if you change merge logic, update both.
 - **worldToLocal** in `VectorEditor.js` is inverse rotation only (no translation factor) — it assumes the input `wx, wy` is already character-local (not screen-space).
 - Skin point handles are bone-local offsets FROM the anchor, not from the bone origin.
 - `DRAW_ORDER` in `characterParts.js` is legacy/unused — Renderer.js controls draw order directly.

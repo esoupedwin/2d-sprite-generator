@@ -2,6 +2,7 @@ import { ANIMATIONS, getPoseAtTime } from '../systems/AnimationSystem.js';
 import { computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { DEFAULT_SKINS, getSkin } from '../systems/VectorEditor.js';
 import { renderCharacter } from '../systems/Renderer.js';
+import { mergeOffsets } from './transforms.js';
 
 const FRAME_W = 160;
 const FRAME_H = 240;
@@ -9,16 +10,6 @@ const FRAME_ORIGIN_X = FRAME_W / 2;
 const FRAME_ORIGIN_Y = FRAME_H - 30;
 const FRAME_SCALE = 1.0;
 const SHEET_COLS = 6;
-
-function mergeOffsets(pose, boneOffsets) {
-  const result = {};
-  const ids = new Set([...Object.keys(pose), ...Object.keys(boneOffsets)]);
-  for (const id of ids) {
-    const p = pose[id] || {}, o = boneOffsets[id] || {};
-    result[id] = { x: (o.x || 0) + (p.x || 0), y: (o.y || 0) + (p.y || 0), rotation: p.rotation || 0 };
-  }
-  return result;
-}
 
 /**
  * Renders all frames of an animation to a sprite sheet PNG and triggers download.

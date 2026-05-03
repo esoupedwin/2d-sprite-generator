@@ -232,23 +232,6 @@ export const CHARACTER_PARTS = {
   },
 };
 
-/**
- * Back-to-front draw order.
- * Left side (behind body) → body → right side (in front).
- * Forearms drawn immediately after their upper arm.
- */
-// DRAW_ORDER is kept for legacy reference; Renderer now handles limbs via SkinSystem.
-export const DRAW_ORDER = [
-  'lower_torso',
-  'body',
-  'head',
-  'left_arm',
-  'right_arm',
-  'left_leg',
-  'right_leg',
-  'weapon',
-];
-
 export const DEFAULT_CHARACTER = {
   head:        'red',
   body:        'blue',

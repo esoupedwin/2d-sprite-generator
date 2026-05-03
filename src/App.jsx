@@ -127,7 +127,16 @@ export default function App() {
     setCharacters(prev => {
       const src = prev.find(c => c.id === id);
       if (!src) return prev;
-      const copy = { ...src, id: genId(), name: `${src.name} copy` };
+      const copy = {
+        ...src,
+        id:   genId(),
+        name: `${src.name} copy`,
+        parts:                { ...src.parts, customColors: { ...(src.parts.customColors ?? {}) }, partScales: { ...(src.parts.partScales ?? {}) } },
+        boneOffsets:          { ...src.boneOffsets },
+        skinOverrides:        Object.fromEntries(Object.entries(src.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
+        defaultBoneOffsets:   { ...src.defaultBoneOffsets },
+        defaultSkinOverrides: Object.fromEntries(Object.entries(src.defaultSkinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
+      };
       setActiveCharId(copy.id);
       return [...prev, copy];
     });
