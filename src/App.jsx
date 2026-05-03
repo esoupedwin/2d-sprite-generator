@@ -3,6 +3,11 @@ import { CharacterCanvas } from './components/CharacterCanvas.jsx';
 import { CharacterBuilder } from './components/CharacterBuilder.jsx';
 import { AnimationControls } from './components/AnimationControls.jsx';
 import { DEFAULT_CHARACTER } from './data/characterParts.js';
+import {
+  DEFAULT_BUILD_COLORS,
+  DEFAULT_BUILD_BONE_OFFSETS,
+  DEFAULT_BUILD_SKIN_OVERRIDES,
+} from './data/defaultBuild.js';
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
 
 const CHARS_STORAGE = '2dsprite:characters';
@@ -11,15 +16,21 @@ function genId() {
   return Math.random().toString(36).slice(2, 9);
 }
 
+function cloneSkinOverrides(src) {
+  return Object.fromEntries(Object.entries(src).map(([k, pts]) => [k, pts.map(p => [...p])]));
+}
+
 function newCharacter(name) {
+  const boneOffsets   = Object.fromEntries(Object.entries(DEFAULT_BUILD_BONE_OFFSETS).map(([k, v]) => [k, { ...v }]));
+  const skinOverrides = cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES);
   return {
     id: genId(),
     name,
-    parts: { ...DEFAULT_CHARACTER },
-    boneOffsets: {},
-    skinOverrides: {},
-    defaultBoneOffsets: {},
-    defaultSkinOverrides: {},
+    parts: { ...DEFAULT_CHARACTER, customColors: { ...DEFAULT_BUILD_COLORS } },
+    boneOffsets,
+    skinOverrides,
+    defaultBoneOffsets:   Object.fromEntries(Object.entries(DEFAULT_BUILD_BONE_OFFSETS).map(([k, v]) => [k, { ...v }])),
+    defaultSkinOverrides: cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES),
   };
 }
 
