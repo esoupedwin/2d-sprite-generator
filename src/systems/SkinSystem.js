@@ -139,15 +139,15 @@ function rotateOffset(dx, dy, rotation) {
  * Transforms all skin control points to world space using the bone world
  * transforms, then strokes the closed Bezier outline.
  */
-export function drawSkin(ctx, template, worldTransforms, color) {
+export function drawSkin(ctx, template, worldTransforms, color, scale = 1) {
   const pts = template.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => {
     const bone = worldTransforms[boneId];
-    const a  = rotateOffset(lx, ly, bone.rotation);
+    const a  = rotateOffset(lx * scale, ly * scale, bone.rotation);
     const ax = bone.x + a.x;
     const ay = bone.y + a.y;
 
-    const hi = rotateOffset(hInDx,  hInDy,  bone.rotation);
-    const ho = rotateOffset(hOutDx, hOutDy, bone.rotation);
+    const hi = rotateOffset(hInDx * scale,  hInDy * scale,  bone.rotation);
+    const ho = rotateOffset(hOutDx * scale, hOutDy * scale, bone.rotation);
 
     return {
       x: ax, y: ay,

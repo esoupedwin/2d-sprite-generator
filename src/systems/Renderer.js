@@ -11,6 +11,10 @@ function getColor(character, partKey) {
   return option?.color ?? '#888888';
 }
 
+function getScale(character, partKey) {
+  return character.partScales?.[partKey] ?? 1;
+}
+
 function drawPart(ctx, partKey, character, worldTransforms) {
   const partDef = CHARACTER_PARTS[partKey];
   if (!partDef) return;
@@ -18,9 +22,11 @@ function drawPart(ctx, partKey, character, worldTransforms) {
   if (!option?.draw) return;
   const bone = worldTransforms[partDef.boneId];
   if (!bone) return;
+  const s = getScale(character, partKey);
   ctx.save();
   ctx.translate(bone.x, bone.y);
   ctx.rotate(bone.rotation);
+  if (s !== 1) ctx.scale(s, s);
   option.draw(ctx);
   ctx.restore();
 }
@@ -57,16 +63,16 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
 
   // Back to front: right arm + weapon → legs → lower torso → body → [left arm] → head → [left arm] → prop
   // Left arm draws above head only during carry_walk
-  drawSkin(ctx, skins.right_arm   || RIGHT_ARM_SKIN,   worldTransforms, getColor(character, 'right_arm'));
+  drawSkin(ctx, skins.right_arm   || RIGHT_ARM_SKIN,   worldTransforms, getColor(character, 'right_arm'),   getScale(character, 'right_arm'));
   drawPart(ctx, 'weapon', character, worldTransforms);
-  drawSkin(ctx, skins.left_leg    || LEFT_LEG_SKIN,    worldTransforms, getColor(character, 'left_leg'));
-  drawSkin(ctx, skins.right_leg   || RIGHT_LEG_SKIN,   worldTransforms, getColor(character, 'right_leg'));
-  drawSkin(ctx, skins.lower_torso || LOWER_TORSO_SKIN, worldTransforms, getColor(character, 'lower_torso'));
-  drawSkin(ctx, skins.body        || BODY_SKIN,        worldTransforms, getColor(character, 'body'));
-  if (!leftArmOverHead) drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'));
-  drawSkin(ctx, skins.head        || HEAD_SKIN,        worldTransforms, getColor(character, 'head'));
+  drawSkin(ctx, skins.left_leg    || LEFT_LEG_SKIN,    worldTransforms, getColor(character, 'left_leg'),    getScale(character, 'left_leg'));
+  drawSkin(ctx, skins.right_leg   || RIGHT_LEG_SKIN,   worldTransforms, getColor(character, 'right_leg'),   getScale(character, 'right_leg'));
+  drawSkin(ctx, skins.lower_torso || LOWER_TORSO_SKIN, worldTransforms, getColor(character, 'lower_torso'), getScale(character, 'lower_torso'));
+  drawSkin(ctx, skins.body        || BODY_SKIN,        worldTransforms, getColor(character, 'body'),        getScale(character, 'body'));
+  if (!leftArmOverHead) drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'), getScale(character, 'left_arm'));
+  drawSkin(ctx, skins.head        || HEAD_SKIN,        worldTransforms, getColor(character, 'head'),        getScale(character, 'head'));
   drawExtras(ctx, 'head', character, worldTransforms);
-  if (leftArmOverHead)  drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'));
+  if (leftArmOverHead)  drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'), getScale(character, 'left_arm'));
   drawPart(ctx, 'head_prop', character, worldTransforms);
 
   if (showBones) {

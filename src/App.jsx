@@ -154,6 +154,16 @@ export default function App() {
     }));
   }, [activeCharId]);
 
+  const updatePartScale = useCallback((partKey, scale) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const partScales = { ...(c.parts.partScales ?? {}) };
+      if (Math.abs(scale - 1) < 0.001) delete partScales[partKey];
+      else partScales[partKey] = scale;
+      return { ...c, parts: { ...c.parts, partScales } };
+    }));
+  }, [activeCharId]);
+
   const updateBoneOffsets = useCallback((newOffsets) => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, boneOffsets: newOffsets } : c
@@ -199,6 +209,7 @@ export default function App() {
           activeCharId={activeCharId}
           onPartChange={updatePart}
           onColorChange={updateColor}
+          onScaleChange={updatePartScale}
           onAddCharacter={addCharacter}
           onDeleteCharacter={deleteCharacter}
           onRenameCharacter={renameCharacter}

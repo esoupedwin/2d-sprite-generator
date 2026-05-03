@@ -3,7 +3,7 @@ import { CHARACTER_PARTS } from '../data/characterParts.js';
 
 export function CharacterBuilder({
   character, characters, activeCharId,
-  onPartChange, onColorChange,
+  onPartChange, onColorChange, onScaleChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter,
 }) {
@@ -24,6 +24,7 @@ export function CharacterBuilder({
         const customColor  = character.customColors?.[partKey] ?? null;
         const presetColor  = CHARACTER_PARTS[partKey].options[character[partKey]]?.color ?? '#888888';
         const currentColor = customColor ?? presetColor;
+        const currentScale = character.partScales?.[partKey] ?? 1;
         return (
           <PartSelector
             key={partKey}
@@ -32,8 +33,10 @@ export function CharacterBuilder({
             selected={character[partKey]}
             currentColor={currentColor}
             hasCustomColor={!!customColor}
+            currentScale={currentScale}
             onChange={(val) => onPartChange(partKey, val)}
             onColorChange={(hex) => onColorChange(partKey, hex)}
+            onScaleChange={(s) => onScaleChange(partKey, s)}
           />
         );
       })}
@@ -41,31 +44,48 @@ export function CharacterBuilder({
   );
 }
 
-function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasCustomColor, onColorChange }) {
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 3.0;
+const SCALE_STEP = 0.1;
+
+function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasCustomColor, onColorChange, currentScale, onScaleChange }) {
   const colorInputRef = useRef(null);
   const isShapeSelector = partKey === 'weapon' || partKey === 'head_prop';
+
+  const decScale = () => onScaleChange(Math.max(MIN_SCALE, +((currentScale - SCALE_STEP).toFixed(2))));
+  const incScale = () => onScaleChange(Math.min(MAX_SCALE, +((currentScale + SCALE_STEP).toFixed(2))));
+  const isDefault = Math.abs(currentScale - 1) < 0.001;
 
   return (
     <section className="builder-section">
       <div className="part-header">
         <h3>{partDef.label}</h3>
-        {!isShapeSelector && (
-          <div className="color-swatch-wrap">
-            <button
-              className={`color-swatch-btn${hasCustomColor ? ' custom' : ''}`}
-              style={{ background: currentColor }}
-              onClick={() => colorInputRef.current?.click()}
-              title={hasCustomColor ? 'Custom color — click to change' : 'Pick a custom color'}
-            />
-            <input
-              ref={colorInputRef}
-              type="color"
-              value={currentColor}
-              onChange={e => onColorChange(e.target.value)}
-              className="color-picker-input"
-            />
+        <div className="part-header-controls">
+          <div className="scale-controls">
+            <button className="scale-btn" onClick={decScale} disabled={currentScale <= MIN_SCALE}>−</button>
+            <span className={`scale-value${isDefault ? '' : ' scale-modified'}`}>
+              {Math.round(currentScale * 100)}%
+            </span>
+            <button className="scale-btn" onClick={incScale} disabled={currentScale >= MAX_SCALE}>+</button>
           </div>
-        )}
+          {!isShapeSelector && (
+            <div className="color-swatch-wrap">
+              <button
+                className={`color-swatch-btn${hasCustomColor ? ' custom' : ''}`}
+                style={{ background: currentColor }}
+                onClick={() => colorInputRef.current?.click()}
+                title={hasCustomColor ? 'Custom color — click to change' : 'Pick a custom color'}
+              />
+              <input
+                ref={colorInputRef}
+                type="color"
+                value={currentColor}
+                onChange={e => onColorChange(e.target.value)}
+                className="color-picker-input"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {isShapeSelector ? (
