@@ -76,7 +76,25 @@ export default function App() {
   const [isPlaying,    setIsPlaying]    = useState(true);
   const [showBones,    setShowBones]    = useState(false);
   const [showVectors,  setShowVectors]  = useState(false);
-  const [selectedSkin, setSelectedSkin] = useState('all');
+  const [ragdoll,       setRagdoll]       = useState(false);
+  const [editStructure, setEditStructure] = useState(false);
+  const [selectedSkin,  setSelectedSkin]  = useState('all');
+
+  const toggleRagdoll = useCallback(() => {
+    setRagdoll(p => {
+      const next = !p;
+      if (next) setEditStructure(false);
+      return next;
+    });
+  }, []);
+
+  const toggleEditStructure = useCallback(() => {
+    setEditStructure(p => {
+      const next = !p;
+      if (next) setRagdoll(false);
+      return next;
+    });
+  }, []);
 
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
 
@@ -212,7 +230,11 @@ export default function App() {
   const handleAnimationChange = useCallback((key) => {
     setCurrentAnimation(key);
     setIsPlaying(true);
-    if (key !== 'idle') setShowVectors(false);
+    if (key !== 'edit') {
+      setShowVectors(false);
+      setRagdoll(false);
+      setEditStructure(false);
+    }
   }, []);
 
   return (
@@ -250,6 +272,8 @@ export default function App() {
               isPlaying={isPlaying}
               showBones={showBones}
               showVectors={showVectors}
+              ragdoll={ragdoll}
+              editStructure={editStructure}
               selectedSkin={selectedSkin}
               onAnimationComplete={handleAnimationComplete}
               onBoneOffsetsChange={updateBoneOffsets}
@@ -265,11 +289,15 @@ export default function App() {
             isPlaying={isPlaying}
             showBones={showBones}
             showVectors={showVectors}
+            ragdoll={ragdoll}
+            editStructure={editStructure}
             selectedSkin={selectedSkin}
             onAnimationChange={handleAnimationChange}
             onPlayPause={() => setIsPlaying(p => !p)}
             onToggleBones={() => setShowBones(p => !p)}
             onToggleVectors={() => setShowVectors(p => !p)}
+            onToggleRagdoll={toggleRagdoll}
+            onToggleEditStructure={toggleEditStructure}
             onSkinChange={setSelectedSkin}
           />
 

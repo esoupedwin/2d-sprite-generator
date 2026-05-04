@@ -6,6 +6,7 @@ import {
   DEFAULT_SKINS, getSkin, worldToLocal,
   renderVectorOverlay, updateSkinPoint, addSkinPoint,
 } from '../systems/VectorEditor.js';
+import { solveIK } from '../systems/IKSystem.js';
 import { mergeOffsets } from '../utils/transforms.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -18,6 +19,10 @@ const BASE_SCALE = 2.5;
 const VECTOR_HIT_PX = 10;
 const JOINT_HIT_PX  = 14;
 
+// Joints that stay rigid in ragdoll mode — preserves natural shoulder placement.
+// Still draggable in Edit Structure for body customization.
+const RAGDOLL_LOCKED = new Set(['left_arm', 'right_arm']);
+
 // ── Component ──────────────────────────────────────────────────────────────────
 export function CharacterCanvas({
   character,
@@ -26,7 +31,7 @@ export function CharacterCanvas({
   defaultBoneOffsets:   initialDefaultBoneOffsets,
   defaultSkinOverrides: initialDefaultSkinOverrides,
   currentAnimation, isPlaying,
-  showBones, showVectors, selectedSkin,
+  showBones, showVectors, ragdoll, editStructure, selectedSkin,
   onAnimationComplete,
   onBoneOffsetsChange,
   onSkinOverridesChange,
@@ -38,9 +43,11 @@ export function CharacterCanvas({
   const defaultBoneOffsets  = useRef(initialDefaultBoneOffsets  ?? {});
   const defaultSkinOverrides = useRef(initialDefaultSkinOverrides ?? {});
 
-  const [boneOffsets,   setBoneOffsets]   = useState(() => initialBoneOffsets   ?? {});
-  const [skinOverrides, setSkinOverrides] = useState(() => initialSkinOverrides ?? {});
-  const [zoomPct,       setZoomPct]       = useState(100);
+  const [boneOffsets,    setBoneOffsets]    = useState(() => initialBoneOffsets   ?? {});
+  const [skinOverrides,  setSkinOverrides]  = useState(() => initialSkinOverrides ?? {});
+  // Ephemeral pose layer for ragdoll testing — never persisted, cleared when ragdoll toggles off.
+  const [ragdollOverlay, setRagdollOverlay] = useState({});
+  const [zoomPct,        setZoomPct]        = useState(100);
 
   const dragRef    = useRef(null);
   const panDragRef = useRef(null);
@@ -53,8 +60,8 @@ export function CharacterCanvas({
   const stateRef = useRef({
     time: 0, lastTimestamp: null,
     currentAnimation, isPlaying, character,
-    showBones, showVectors, selectedSkin,
-    boneOffsets: {}, skinOverrides: {},
+    showBones, showVectors, ragdoll, editStructure, selectedSkin,
+    boneOffsets: {}, skinOverrides: {}, ragdollOverlay: {},
     lastWorldTransforms: null,
     vectorHitTargets: [],
   });
@@ -64,9 +71,12 @@ export function CharacterCanvas({
   stateRef.current.character        = character;
   stateRef.current.showBones        = showBones;
   stateRef.current.showVectors      = showVectors;
+  stateRef.current.ragdoll          = ragdoll;
+  stateRef.current.editStructure    = editStructure;
   stateRef.current.selectedSkin     = selectedSkin;
   stateRef.current.boneOffsets      = boneOffsets;
   stateRef.current.skinOverrides    = skinOverrides;
+  stateRef.current.ragdollOverlay   = ragdollOverlay;
 
   // Notify parent of bone/skin changes (skip the very first render)
   const firstRender = useRef(true);
@@ -84,6 +94,11 @@ export function CharacterCanvas({
     stateRef.current.time = 0;
     stateRef.current.lastTimestamp = null;
   }, [currentAnimation]);
+
+  // Drop the ephemeral ragdoll pose whenever ragdoll is turned off.
+  useEffect(() => {
+    if (!ragdoll) setRagdollOverlay(o => Object.keys(o).length === 0 ? o : {});
+  }, [ragdoll]);
 
   // ── Wheel zoom ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -153,9 +168,10 @@ export function CharacterCanvas({
     ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(60, originY + 2); ctx.lineTo(CANVAS_W - 60, originY + 2); ctx.stroke();
 
-    const animPose        = anim ? getPoseAtTime(anim, s.time) : {};
-    const fullPose        = mergeOffsets(animPose, s.boneOffsets);
-    const worldTransforms = computeWorldTransforms(fullPose);
+    const animPose         = anim ? getPoseAtTime(anim, s.time) : {};
+    const persistentOffsets = mergeOffsets(s.boneOffsets, s.ragdollOverlay);
+    const fullPose         = mergeOffsets(animPose, persistentOffsets);
+    const worldTransforms  = computeWorldTransforms(fullPose);
     s.lastWorldTransforms = worldTransforms;
 
     const skins = {};
@@ -231,10 +247,12 @@ export function CharacterCanvas({
       if (closest) return closest;
     }
     const wt = s.lastWorldTransforms;
-    if (wt) {
+    if (wt && (s.ragdoll || s.editStructure)) {
       const r = hitRadius(JOINT_HIT_PX);
+      const ragdollOnly = s.ragdoll && !s.editStructure;
       let closest = null, minDist = r;
       for (const [boneId, bone] of Object.entries(wt)) {
+        if (ragdollOnly && RAGDOLL_LOCKED.has(boneId)) continue;
         const d = Math.hypot(bone.x - x, bone.y - y);
         if (d < minDist) { minDist = d; closest = boneId; }
       }
@@ -247,8 +265,9 @@ export function CharacterCanvas({
   const pushHistory = useCallback(() => {
     const s = stateRef.current;
     const snapshot = {
-      boneOffsets:   Object.fromEntries(Object.entries(s.boneOffsets).map(([k, v]) => [k, { ...v }])),
-      skinOverrides: Object.fromEntries(Object.entries(s.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
+      boneOffsets:    Object.fromEntries(Object.entries(s.boneOffsets).map(([k, v]) => [k, { ...v }])),
+      skinOverrides:  Object.fromEntries(Object.entries(s.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
+      ragdollOverlay: Object.fromEntries(Object.entries(s.ragdollOverlay).map(([k, v]) => [k, { ...v }])),
     };
     const hist = historyRef.current;
     if (hist.length >= 60) hist.shift();
@@ -263,6 +282,7 @@ export function CharacterCanvas({
     setCanUndo(hist.length > 0);
     setBoneOffsets(snapshot.boneOffsets);
     setSkinOverrides(snapshot.skinOverrides);
+    setRagdollOverlay(snapshot.ragdollOverlay ?? {});
   }, []);
 
   useEffect(() => {
@@ -283,7 +303,7 @@ export function CharacterCanvas({
       return;
     }
     if (e.button !== 0) return;
-    if (stateRef.current.currentAnimation !== 'idle') return;
+    if (stateRef.current.currentAnimation !== 'edit') return;
 
     const charPos = getCharPos(e);
     const target  = findTarget(charPos);
@@ -323,9 +343,9 @@ export function CharacterCanvas({
 
     if (!drag) {
       const s       = stateRef.current;
-      const isIdle  = s.currentAnimation === 'idle';
-      const hovered = isIdle ? findTarget(charPos) : null;
-      const addMode = isIdle && s.showVectors && s.selectedSkin !== 'all' && e.ctrlKey;
+      const isEdit  = s.currentAnimation === 'edit';
+      const hovered = isEdit ? findTarget(charPos) : null;
+      const addMode = isEdit && s.showVectors && s.selectedSkin !== 'all' && e.ctrlKey;
       if (canvasRef.current)
         canvasRef.current.style.cursor = hovered ? 'grab' : addMode ? 'crosshair' : 'default';
       return;
@@ -336,20 +356,49 @@ export function CharacterCanvas({
     if (!wt) return;
 
     if (drag.type === 'bone') {
-      const bone = BONES[drag.boneId];
-      if (!bone) return;
-      let newOffX, newOffY;
-      if (!bone.parent) {
-        newOffX = charPos.x - bone.localX;
-        newOffY = charPos.y - bone.localY;
+      if (s.editStructure) {
+        const bone = BONES[drag.boneId];
+        if (!bone) return;
+        let newOffX, newOffY;
+        if (!bone.parent) {
+          newOffX = charPos.x - bone.localX;
+          newOffY = charPos.y - bone.localY;
+        } else {
+          const par = wt[bone.parent];
+          const cos = Math.cos(par.rotation), sin = Math.sin(par.rotation);
+          const dx  = charPos.x - par.x,      dy  = charPos.y - par.y;
+          newOffX = cos * dx + sin * dy - bone.localX;
+          newOffY = -sin * dx + cos * dy - bone.localY;
+        }
+        setBoneOffsets(prev => ({
+          ...prev,
+          [drag.boneId]: { ...(prev[drag.boneId] || {}), x: newOffX, y: newOffY },
+        }));
       } else {
-        const parent = wt[bone.parent];
-        const cos = Math.cos(parent.rotation), sin = Math.sin(parent.rotation);
-        const dx  = charPos.x - parent.x,      dy  = charPos.y - parent.y;
-        newOffX = cos * dx + sin * dy - bone.localX;
-        newOffY = -sin * dx + cos * dy - bone.localY;
+        // Ragdoll: solve on combined (persistent + overlay), apply only the delta
+        // to the ephemeral overlay so persistent boneOffsets stay untouched.
+        setRagdollOverlay(prevOverlay => {
+          const combined = mergeOffsets(s.boneOffsets, prevOverlay);
+          const next     = solveIK(combined, drag.boneId, charPos.x, charPos.y);
+          const out      = { ...prevOverlay };
+          for (const id of Object.keys(next)) {
+            const o = combined[id] || {};
+            const n = next[id]     || {};
+            const dx = (n.x        || 0) - (o.x        || 0);
+            const dy = (n.y        || 0) - (o.y        || 0);
+            const dr = (n.rotation || 0) - (o.rotation || 0);
+            if (Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9 || Math.abs(dr) > 1e-9) {
+              const cur = out[id] || {};
+              out[id] = {
+                x:        (cur.x        || 0) + dx,
+                y:        (cur.y        || 0) + dy,
+                rotation: (cur.rotation || 0) + dr,
+              };
+            }
+          }
+          return out;
+        });
       }
-      setBoneOffsets(prev => ({ ...prev, [drag.boneId]: { x: newOffX, y: newOffY } }));
       return;
     }
 
@@ -433,7 +482,7 @@ export function CharacterCanvas({
       fromBones.forEach((fromId, i) => {
         const toId = toBones[i];
         const off  = prev[fromId];
-        if (off) next[toId] = { x: off.x || 0, y: off.y || 0 };
+        if (off) next[toId] = { x: off.x || 0, y: off.y || 0, rotation: -(off.rotation || 0) };
         else     delete next[toId];
       });
       return next;
@@ -487,15 +536,15 @@ export function CharacterCanvas({
         {canUndo && (
           <button onClick={undo} style={resetBtnStyle('#6366f1')} title="Undo (Ctrl+Z)">Undo</button>
         )}
-        {currentAnimation === 'idle' && (
+        {currentAnimation === 'edit' && (
           <button onClick={saveAsDefault} style={resetBtnStyle('#22c55e')} title="Save current joints and shape as the reset target">
             Save as Default
           </button>
         )}
       </div>
 
-      {/* Mirror controls — idle only */}
-      {currentAnimation === 'idle' && (
+      {/* Mirror controls — edit mode only */}
+      {currentAnimation === 'edit' && (
         <div style={MIRROR_PANEL_STYLE}>
           <span style={MIRROR_LABEL}>Mirror</span>
           <div style={{ display: 'flex', gap: 4 }}>

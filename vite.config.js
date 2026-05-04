@@ -48,5 +48,5 @@ export default defineConfig({
       },
     },
   ],
-  server: { port: 4001 },
+  server: { port: 4000 },
 });

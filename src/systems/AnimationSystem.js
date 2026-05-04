@@ -8,6 +8,13 @@
  */
 
 export const ANIMATIONS = {
+  edit: {
+    name: 'Edit',
+    duration: 1.0,
+    loop: true,
+    tracks: {},
+  },
+
   idle: {
     name: 'Idle',
     duration: 2.0,

@@ -11,11 +11,15 @@ export function AnimationControls({
   isPlaying,
   showBones,
   showVectors,
+  ragdoll,
+  editStructure,
   selectedSkin,
   onAnimationChange,
   onPlayPause,
   onToggleBones,
   onToggleVectors,
+  onToggleRagdoll,
+  onToggleEditStructure,
   onSkinChange,
 }) {
   return (
@@ -44,16 +48,24 @@ export function AnimationControls({
         </label>
 
         {(() => {
-          const isIdle = currentAnimation === 'idle';
+          const isEdit = currentAnimation === 'edit';
+          const dimStyle = !isEdit ? { opacity: 0.35, cursor: 'not-allowed' } : {};
+          const dimTitle = !isEdit ? 'Switch to Edit mode' : '';
           return (
-            <label
-              className="toggle-label"
-              style={!isIdle ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
-              title={!isIdle ? 'Switch to Idle to edit vectors' : ''}
-            >
-              <input type="checkbox" checked={showVectors} onChange={onToggleVectors} disabled={!isIdle} />
-              Edit Vectors
-            </label>
+            <>
+              <label className="toggle-label" style={dimStyle} title={dimTitle}>
+                <input type="checkbox" checked={ragdoll} onChange={onToggleRagdoll} disabled={!isEdit} />
+                Ragdoll
+              </label>
+              <label className="toggle-label" style={dimStyle} title={dimTitle}>
+                <input type="checkbox" checked={editStructure} onChange={onToggleEditStructure} disabled={!isEdit} />
+                Edit Structure
+              </label>
+              <label className="toggle-label" style={dimStyle} title={dimTitle}>
+                <input type="checkbox" checked={showVectors} onChange={onToggleVectors} disabled={!isEdit} />
+                Edit Vectors
+              </label>
+            </>
           );
         })()}
       </div>
