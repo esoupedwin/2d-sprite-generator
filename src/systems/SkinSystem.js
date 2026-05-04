@@ -107,25 +107,26 @@ export const HEAD_SKIN = [
   ['head',-55,   0,   0,  30,   0, -30],  // left
 ];
 
-// ─── Upper torso ──────────────────────────────────────────────────────────────
-// Trapezoid: top (54px wide) tapering to bottom (44px wide), height 50px.
-// Clockwise: top-left → top-right → bottom-right → bottom-left.
+// ─── Torso (combined upper + lower) ──────────────────────────────────────────
+// Single continuous outline so the lower torso bends with the upper at the
+// waist instead of detaching when the lower_torso bone rotates.
+//   Shoulders → waist  : anchored to `torso`  (top stays put)
+//   Waist     → bottom : anchored to `lower_torso` (rotates with the bone)
+// The waist transition points sit exactly on the lower_torso joint, so the
+// silhouette bends smoothly there at any rotation.
 export const BODY_SKIN = [
-  ['torso', -27, -22,   2,  17,  18,   0],  // top-left
-  ['torso',  27, -22, -18,   0,  -2,  17],  // top-right
-  ['torso',  22,  28,   2, -17, -15,   0],  // bottom-right
-  ['torso', -22,  28,  15,   0,  -2, -17],  // bottom-left
+  ['torso',        -27, -22,   2,  17,  18,   0],  // top-left shoulder
+  ['torso',         27, -22, -18,   0,  -2,  17],  // top-right shoulder
+  ['lower_torso',   22,   0,   2, -17,   8,   0],  // right waist (joint)
+  ['lower_torso',   30,  -2,   0,  -7,   0,   7],  // right hip
+  ['lower_torso',    0,   8,  20,   0, -20,   0],  // bottom
+  ['lower_torso',  -30,  -2,   0,   7,   0,  -7],  // left hip
+  ['lower_torso',  -22,   0,  -8,   0,  -2, -17],  // left waist (joint)
 ];
 
-// ─── Lower torso ──────────────────────────────────────────────────────────────
-// Rounded rect: x ∈ [−30, 30], y ∈ [−12, 8] (center at y = −2).
-// 4 edge-centre points with handles creating gentle rounding.
-export const LOWER_TORSO_SKIN = [
-  ['lower_torso',  0, -12, -20,   0,  20,   0],  // top centre
-  ['lower_torso', 30,  -2,   0,  -7,   0,   7],  // right centre
-  ['lower_torso',  0,   8,  20,   0, -20,   0],  // bottom centre
-  ['lower_torso',-30,  -2,   0,   7,   0,  -7],  // left centre
-];
+// Retained for backward compatibility with saved skinOverrides.lower_torso —
+// new characters render the lower torso as part of BODY_SKIN.
+export const LOWER_TORSO_SKIN = [];
 
 // ─── Renderer ────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,7 @@ function rotateOffset(dx, dy, rotation) {
  * transforms, then strokes the closed Bezier outline.
  */
 export function drawSkin(ctx, template, worldTransforms, color, scale = 1) {
+  if (!template || template.length === 0) return;
   const pts = template.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => {
     const bone = worldTransforms[boneId];
     const a  = rotateOffset(lx * scale, ly * scale, bone.rotation);

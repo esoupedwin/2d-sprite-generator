@@ -35,8 +35,10 @@ const IK_PLAN = {
 
   left_hand:     { kind: 'fabrik2' },
   right_hand:    { kind: 'fabrik2' },
-  left_foot:     { kind: 'fabrik2' },
-  right_foot:    { kind: 'fabrik2' },
+  // Knees lock to bending forward (character faces +X). Without this the FABRIK
+  // sign can flip and bend the knee backward like a flamingo.
+  left_foot:     { kind: 'fabrik2', bendSign: -1 },
+  right_foot:    { kind: 'fabrik2', bendSign: -1 },
 };
 
 function worldToLocal(wx, wy, frame) {
@@ -151,12 +153,18 @@ export function solveIK(currentOffsets, draggedBoneId, tx, ty) {
   const alpha    = Math.acos(Math.max(-1, Math.min(1, cosAlpha)));
   const baseAng  = Math.atan2(target.y - j0.y, target.x - j0.x);
 
-  // Pick elbow-bend side from current pose so we don't flip mid-drag.
-  const curElbow = wt[parent.id];
-  const curTip   = wt[draggedBoneId];
-  const cross    = (curTip.x - j0.x) * (curElbow.y - j0.y)
-                 - (curTip.y - j0.y) * (curElbow.x - j0.x);
-  const sign     = cross >= 0 ? 1 : -1;
+  // Locked bend (e.g. knees) overrides the cross-based sign;
+  // otherwise pick from current pose so we don't flip mid-drag.
+  let sign;
+  if (plan.bendSign != null) {
+    sign = plan.bendSign;
+  } else {
+    const curElbow = wt[parent.id];
+    const curTip   = wt[draggedBoneId];
+    const cross    = (curTip.x - j0.x) * (curElbow.y - j0.y)
+                   - (curTip.y - j0.y) * (curElbow.x - j0.x);
+    sign = cross >= 0 ? 1 : -1;
+  }
 
   const elbowAng = baseAng + sign * alpha;
   const elbow    = { x: j0.x + L1 * Math.cos(elbowAng), y: j0.y + L1 * Math.sin(elbowAng) };

@@ -11,13 +11,12 @@
 
 import {
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
-  HEAD_SKIN, BODY_SKIN, LOWER_TORSO_SKIN,
+  HEAD_SKIN, BODY_SKIN,
 } from './SkinSystem.js';
 
 export const DEFAULT_SKINS = {
   head:        HEAD_SKIN,
   body:        BODY_SKIN,
-  lower_torso: LOWER_TORSO_SKIN,
   left_arm:    LEFT_ARM_SKIN,
   right_arm:   RIGHT_ARM_SKIN,
   left_leg:    LEFT_LEG_SKIN,
@@ -28,7 +27,6 @@ export const DEFAULT_SKINS = {
 export const SKIN_COLORS = {
   head:        { anchor: '#f43f5e', handle: '#fb7185', stem: 'rgba(244,63,94,0.5)',    label: 'Head'   },
   body:        { anchor: '#818cf8', handle: '#a5b4fc', stem: 'rgba(129,140,248,0.5)',  label: 'Body'   },
-  lower_torso: { anchor: '#fbbf24', handle: '#fcd34d', stem: 'rgba(251,191,36,0.5)',   label: 'Torso'  },
   left_arm:    { anchor: '#4ade80', handle: '#86efac', stem: 'rgba(74,222,128,0.5)',   label: 'L. Arm' },
   right_arm:   { anchor: '#c084fc', handle: '#d8b4fe', stem: 'rgba(192,132,252,0.5)',  label: 'R. Arm' },
   left_leg:    { anchor: '#fb923c', handle: '#fdba74', stem: 'rgba(251,146,60,0.5)',   label: 'L. Leg' },
