@@ -224,7 +224,7 @@ export default function App() {
 
   // ── Animation callbacks ───────────────────────────────────────────────────────
   const handleAnimationComplete = useCallback((animName) => {
-    if (animName === 'attack' || animName === 'jump') setCurrentAnimation('idle');
+    if (animName === 'attack' || animName === 'jump' || animName === 'punch') setCurrentAnimation('idle');
   }, []);
 
   const handleAnimationChange = useCallback((key) => {

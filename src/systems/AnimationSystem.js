@@ -498,6 +498,79 @@ export const ANIMATIONS = {
     },
   },
 
+  punch: {
+    name: 'Punch',
+    duration: 0.55,
+    loop: false,
+    tracks: {
+      // Torso winds back on wind-up, drives forward through the strike
+      torso: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation: -0.14 },
+        { time: 0.26, rotation:  0.20 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation: -0.07 },
+        { time: 0.26, rotation:  0.12 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      head: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation: -0.10 },
+        { time: 0.28, rotation:  0.06 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      // Right arm: pulls back → shoots to the right (punch extension)
+      right_arm: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation: -0.35 },
+        { time: 0.26, rotation:  1.52 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      right_forearm: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation:  1.10 },  // elbow coils on wind-up
+        { time: 0.23, rotation:  0.06 },  // snaps nearly straight at strike
+        { time: 0.36, rotation:  0.06 },  // hold extension
+        { time: 0.55, rotation:  0.00 },
+      ],
+      right_hand: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation:  0.45 },  // wrist cocks back
+        { time: 0.26, rotation: -0.18 },  // wrist snaps through on impact
+        { time: 0.55, rotation:  0.00 },
+      ],
+      // Left arm: rises into guard during punch, returns after
+      left_arm: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation: -1.00 },
+        { time: 0.36, rotation: -0.80 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      left_forearm: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation:  0.90 },
+        { time: 0.36, rotation:  0.70 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      // Stance: slight weight shift into the punch
+      left_leg: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation:  0.12 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      right_leg: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.12, rotation: -0.10 },
+        { time: 0.55, rotation:  0.00 },
+      ],
+      left_shin:  [{ time: 0.00, rotation: 0.15 }, { time: 0.55, rotation: 0.15 }],
+      right_shin: [{ time: 0.00, rotation: 0.15 }, { time: 0.55, rotation: 0.15 }],
+    },
+  },
+
   carry_walk: {
     name: 'Carry',
     duration: 0.90,
