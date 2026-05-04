@@ -34,29 +34,10 @@ function newCharacter(name) {
   };
 }
 
-// body and lower_torso were once two skins; they're now a single combined
-// outline (BODY_SKIN). Strip the legacy overrides so saved characters fall
-// through to the new default and render the connected silhouette.
-function stripLegacyTorsoSkins(overrides) {
-  if (!overrides) return overrides;
-  if (!('body' in overrides) && !('lower_torso' in overrides)) return overrides;
-  const { body, lower_torso, ...rest } = overrides;
-  return rest;
-}
-
-function migrateCharacters(chars) {
-  if (!Array.isArray(chars)) return chars;
-  return chars.map(c => ({
-    ...c,
-    skinOverrides:        stripLegacyTorsoSkins(c.skinOverrides),
-    defaultSkinOverrides: stripLegacyTorsoSkins(c.defaultSkinOverrides),
-  }));
-}
-
 function loadCharactersFromStorage() {
   try {
     const arr = JSON.parse(localStorage.getItem(CHARS_STORAGE));
-    if (Array.isArray(arr) && arr.length > 0) return migrateCharacters(arr);
+    if (Array.isArray(arr) && arr.length > 0) return arr;
   } catch {}
 
   // Migrate from old single-character format
@@ -131,9 +112,8 @@ export default function App() {
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
-          const migrated = migrateCharacters(data);
-          setCharacters(migrated);
-          setActiveCharId(migrated[0].id);
+          setCharacters(data);
+          setActiveCharId(data[0].id);
         }
       })
       .catch(() => {});
