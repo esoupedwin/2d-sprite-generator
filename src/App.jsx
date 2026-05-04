@@ -2,13 +2,17 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { CharacterCanvas } from './components/CharacterCanvas.jsx';
 import { CharacterBuilder } from './components/CharacterBuilder.jsx';
 import { AnimationControls } from './components/AnimationControls.jsx';
+import { PoseEditor } from './components/PoseEditor.jsx';
 import { DEFAULT_CHARACTER } from './data/characterParts.js';
 import {
   DEFAULT_BUILD_COLORS,
   DEFAULT_BUILD_BONE_OFFSETS,
   DEFAULT_BUILD_SKIN_OVERRIDES,
 } from './data/defaultBuild.js';
+import { ANIMATIONS } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
+import { framesToAnimation } from './utils/poseToAnimation.js';
+import { mergeOffsets } from './utils/transforms.js';
 
 const CHARS_STORAGE = '2dsprite:characters';
 
@@ -79,6 +83,15 @@ export default function App() {
   const [ragdoll,       setRagdoll]       = useState(false);
   const [editStructure, setEditStructure] = useState(false);
   const [selectedSkin,  setSelectedSkin]  = useState('all');
+
+  // ── Pose editor ───────────────────────────────────────────────────────────────
+  const [poseEditorOpen,  setPoseEditorOpen]  = useState(false);
+  const [poseFrames,      setPoseFrames]      = useState([]);
+  const [activePoseFrame, setActivePoseFrame] = useState(0);
+  const [poseAnimName,    setPoseAnimName]    = useState('My Animation');
+  const [poseAnimLoop,    setPoseAnimLoop]    = useState(true);
+  // Tracks the live ragdoll overlay inside CharacterCanvas so we can commit it on frame switch
+  const poseOverlayRef = useRef({});
 
   const toggleRagdoll = useCallback(() => {
     setRagdoll(p => {
@@ -165,6 +178,7 @@ export default function App() {
         skinOverrides:        Object.fromEntries(Object.entries(src.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
         defaultBoneOffsets:   { ...src.defaultBoneOffsets },
         defaultSkinOverrides: Object.fromEntries(Object.entries(src.defaultSkinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
+        customAnimations:     (src.customAnimations ?? []).map(a => ({ ...a, tracks: Object.fromEntries(Object.entries(a.tracks).map(([k, kfs]) => [k, kfs.map(kf => ({ ...kf }))])) })),
       };
       setActiveCharId(copy.id);
       return [...prev, copy];
@@ -222,9 +236,118 @@ export default function App() {
     ));
   }, [activeCharId]);
 
+  // ── Pose editor callbacks ─────────────────────────────────────────────────────
+  const openPoseEditor = useCallback(() => {
+    const char = characters.find(c => c.id === activeCharId) ?? characters[0];
+    const firstFrame = { id: genId(), duration: 0.5, boneOffsets: { ...char.boneOffsets } };
+    poseOverlayRef.current = {};
+    setPoseFrames([firstFrame]);
+    setActivePoseFrame(0);
+    setPoseAnimName('My Animation');
+    setPoseAnimLoop(true);
+    setPoseEditorOpen(true);
+    setCurrentAnimation('edit');
+    setRagdoll(true);
+    setEditStructure(false);
+    setShowVectors(false);
+  }, [activeCharId, characters]);
+
+  const closePoseEditor = useCallback(() => {
+    poseOverlayRef.current = {};
+    setPoseEditorOpen(false);
+    setRagdoll(false);
+  }, []);
+
+  // Fired by CharacterCanvas whenever ragdollOverlay changes — keep ref in sync
+  const handlePoseRagdollOverlayChange = useCallback((overlay) => {
+    poseOverlayRef.current = overlay;
+  }, []);
+
+  // Merges the live ragdoll overlay into the active frame's boneOffsets, resets overlay
+  const commitCurrentPoseFrame = useCallback((frames, activeIndex) => {
+    const overlay = poseOverlayRef.current;
+    poseOverlayRef.current = {};
+    if (Object.keys(overlay).length === 0) return frames;
+    return frames.map((f, i) =>
+      i === activeIndex ? { ...f, boneOffsets: mergeOffsets(f.boneOffsets, overlay) } : f
+    );
+  }, []);
+
+  // boneOffsets changes from canvas are not used in pose editor mode (ragdoll overlay is the source)
+  const updatePoseFrameBones = useCallback(() => {}, []);
+
+  const selectPoseFrame = useCallback((newIndex) => {
+    setPoseFrames(prev => {
+      const committed = commitCurrentPoseFrame(prev, activePoseFrame);
+      setActivePoseFrame(newIndex);
+      return committed;
+    });
+  }, [activePoseFrame, commitCurrentPoseFrame]);
+
+  const addPoseFrame = useCallback(() => {
+    setPoseFrames(prev => {
+      const committed = commitCurrentPoseFrame(prev, activePoseFrame);
+      const src = committed[activePoseFrame];
+      const newFrame = { id: genId(), duration: 0.5, boneOffsets: { ...src.boneOffsets } };
+      const next = [...committed.slice(0, activePoseFrame + 1), newFrame, ...committed.slice(activePoseFrame + 1)];
+      setActivePoseFrame(activePoseFrame + 1);
+      return next;
+    });
+  }, [activePoseFrame, commitCurrentPoseFrame]);
+
+  const deletePoseFrame = useCallback((index) => {
+    setPoseFrames(prev => {
+      const committed = commitCurrentPoseFrame(prev, activePoseFrame);
+      const next = committed.filter((_, i) => i !== index);
+      setActivePoseFrame(cur => Math.min(cur, next.length - 1));
+      return next;
+    });
+  }, [activePoseFrame, commitCurrentPoseFrame]);
+
+  const duplicatePoseFrame = useCallback((index) => {
+    setPoseFrames(prev => {
+      const committed = commitCurrentPoseFrame(prev, activePoseFrame);
+      const frame = committed[index];
+      const copy = { id: genId(), duration: frame.duration, boneOffsets: { ...frame.boneOffsets } };
+      const next = [...committed.slice(0, index + 1), copy, ...committed.slice(index + 1)];
+      setActivePoseFrame(index + 1);
+      return next;
+    });
+  }, [activePoseFrame, commitCurrentPoseFrame]);
+
+  const updatePoseFrameDuration = useCallback((index, duration) => {
+    setPoseFrames(prev => prev.map((f, i) => i === index ? { ...f, duration } : f));
+  }, []);
+
+  const createCustomAnimation = useCallback(() => {
+    const char = characters.find(c => c.id === activeCharId) ?? characters[0];
+    // Commit overlay into the active frame before building the animation
+    const finalFrames = commitCurrentPoseFrame(poseFrames, activePoseFrame);
+    const anim = framesToAnimation(finalFrames, char.boneOffsets, poseAnimName, poseAnimLoop);
+    if (!anim) return;
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, customAnimations: [...(c.customAnimations ?? []), anim] } : c
+    ));
+    poseOverlayRef.current = {};
+    setPoseEditorOpen(false);
+    setRagdoll(false);
+    setCurrentAnimation(anim.id);
+  }, [activeCharId, activePoseFrame, characters, commitCurrentPoseFrame, poseFrames, poseAnimName, poseAnimLoop]);
+
+  const deleteCustomAnimation = useCallback((animId) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId
+        ? { ...c, customAnimations: (c.customAnimations ?? []).filter(a => a.id !== animId) }
+        : c
+    ));
+    setCurrentAnimation(cur => cur === animId ? 'idle' : cur);
+  }, [activeCharId]);
+
   // ── Animation callbacks ───────────────────────────────────────────────────────
-  const handleAnimationComplete = useCallback((animName) => {
-    if (animName === 'attack' || animName === 'jump' || animName === 'punch') setCurrentAnimation('idle');
+  const handleAnimationComplete = useCallback((animKey) => {
+    if (['attack', 'jump', 'punch'].includes(animKey) || !ANIMATIONS[animKey]) {
+      setCurrentAnimation('idle');
+    }
   }, []);
 
   const handleAnimationChange = useCallback((key) => {
@@ -260,26 +383,50 @@ export default function App() {
         />
 
         <main className="center-panel">
-          <div className="canvas-wrapper">
-            <CharacterCanvas
-              key={activeCharId}
-              character={activeChar.parts}
-              boneOffsets={activeChar.boneOffsets}
-              skinOverrides={activeChar.skinOverrides}
-              defaultBoneOffsets={activeChar.defaultBoneOffsets}
-              defaultSkinOverrides={activeChar.defaultSkinOverrides}
-              currentAnimation={currentAnimation}
-              isPlaying={isPlaying}
-              showBones={showBones}
-              showVectors={showVectors}
-              ragdoll={ragdoll}
-              editStructure={editStructure}
-              selectedSkin={selectedSkin}
-              onAnimationComplete={handleAnimationComplete}
-              onBoneOffsetsChange={updateBoneOffsets}
-              onSkinOverridesChange={updateSkinOverrides}
-              onSaveDefault={saveCharacterDefault}
-            />
+          <div className="canvas-and-editor">
+            <div className="canvas-wrapper">
+              <CharacterCanvas
+                key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
+                character={activeChar.parts}
+                boneOffsets={poseEditorOpen ? (poseFrames[activePoseFrame]?.boneOffsets ?? {}) : activeChar.boneOffsets}
+                skinOverrides={activeChar.skinOverrides}
+                defaultBoneOffsets={activeChar.defaultBoneOffsets}
+                defaultSkinOverrides={activeChar.defaultSkinOverrides}
+                currentAnimation={currentAnimation}
+                isPlaying={isPlaying}
+                showBones={showBones}
+                showVectors={poseEditorOpen ? false : showVectors}
+                ragdoll={poseEditorOpen ? true : ragdoll}
+                editStructure={poseEditorOpen ? false : editStructure}
+                selectedSkin={selectedSkin}
+                customAnimations={activeChar.customAnimations}
+                onAnimationComplete={handleAnimationComplete}
+                onBoneOffsetsChange={poseEditorOpen ? updatePoseFrameBones : updateBoneOffsets}
+                onSkinOverridesChange={updateSkinOverrides}
+                onRagdollOverlayChange={poseEditorOpen ? handlePoseRagdollOverlayChange : undefined}
+                onSaveDefault={saveCharacterDefault}
+              />
+            </div>
+
+            {poseEditorOpen && (
+              <PoseEditor
+                character={activeChar.parts}
+                skinOverrides={activeChar.skinOverrides}
+                frames={poseFrames}
+                activeFrame={activePoseFrame}
+                animName={poseAnimName}
+                animLoop={poseAnimLoop}
+                onFrameSelect={selectPoseFrame}
+                onFrameAdd={addPoseFrame}
+                onFrameDelete={deletePoseFrame}
+                onFrameDuplicate={duplicatePoseFrame}
+                onFrameDurationChange={updatePoseFrameDuration}
+                onNameChange={setPoseAnimName}
+                onLoopChange={setPoseAnimLoop}
+                onCreate={createCustomAnimation}
+                onClose={closePoseEditor}
+              />
+            )}
           </div>
         </main>
 
@@ -292,6 +439,8 @@ export default function App() {
             ragdoll={ragdoll}
             editStructure={editStructure}
             selectedSkin={selectedSkin}
+            customAnimations={activeChar.customAnimations}
+            poseEditorOpen={poseEditorOpen}
             onAnimationChange={handleAnimationChange}
             onPlayPause={() => setIsPlaying(p => !p)}
             onToggleBones={() => setShowBones(p => !p)}
@@ -299,6 +448,8 @@ export default function App() {
             onToggleRagdoll={toggleRagdoll}
             onToggleEditStructure={toggleEditStructure}
             onSkinChange={setSelectedSkin}
+            onNewAnimation={openPoseEditor}
+            onDeleteAnimation={deleteCustomAnimation}
           />
 
           <div className="divider" />

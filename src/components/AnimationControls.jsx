@@ -14,6 +14,8 @@ export function AnimationControls({
   ragdoll,
   editStructure,
   selectedSkin,
+  customAnimations,
+  poseEditorOpen,
   onAnimationChange,
   onPlayPause,
   onToggleBones,
@@ -21,6 +23,8 @@ export function AnimationControls({
   onToggleRagdoll,
   onToggleEditStructure,
   onSkinChange,
+  onNewAnimation,
+  onDeleteAnimation,
 }) {
   return (
     <div className="anim-controls">
@@ -30,15 +34,47 @@ export function AnimationControls({
             key={key}
             className={`anim-btn ${currentAnimation === key ? 'active' : ''}`}
             onClick={() => onAnimationChange(key)}
+            disabled={poseEditorOpen}
           >
             {anim.name}
             {!anim.loop && <span className="tag">once</span>}
           </button>
         ))}
+
+        {customAnimations?.length > 0 && (
+          <div className="custom-anim-divider" />
+        )}
+
+        {customAnimations?.map(anim => (
+          <div key={anim.id} className="custom-anim-row">
+            <button
+              className={`anim-btn ${currentAnimation === anim.id ? 'active' : ''}`}
+              onClick={() => onAnimationChange(anim.id)}
+              disabled={poseEditorOpen}
+            >
+              {anim.name}
+              {!anim.loop && <span className="tag">once</span>}
+            </button>
+            <button
+              className="custom-anim-delete"
+              onClick={() => onDeleteAnimation(anim.id)}
+              title="Delete animation"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
       </div>
 
+      <button
+        className={`new-anim-btn${poseEditorOpen ? ' active' : ''}`}
+        onClick={onNewAnimation}
+      >
+        {poseEditorOpen ? 'Editing Animation...' : '+ New Animation'}
+      </button>
+
       <div className="playback-row">
-        <button className="play-btn" onClick={onPlayPause}>
+        <button className="play-btn" onClick={onPlayPause} disabled={poseEditorOpen}>
           {isPlaying ? '⏸ Pause' : '▶ Play'}
         </button>
 
@@ -49,20 +85,20 @@ export function AnimationControls({
 
         {(() => {
           const isEdit = currentAnimation === 'edit';
-          const dimStyle = !isEdit ? { opacity: 0.35, cursor: 'not-allowed' } : {};
-          const dimTitle = !isEdit ? 'Switch to Edit mode' : '';
+          const dimStyle = (!isEdit || poseEditorOpen) ? { opacity: 0.35, cursor: 'not-allowed' } : {};
+          const dimTitle = !isEdit ? 'Switch to Edit mode' : poseEditorOpen ? 'Close pose editor first' : '';
           return (
             <>
               <label className="toggle-label" style={dimStyle} title={dimTitle}>
-                <input type="checkbox" checked={ragdoll} onChange={onToggleRagdoll} disabled={!isEdit} />
+                <input type="checkbox" checked={ragdoll} onChange={onToggleRagdoll} disabled={!isEdit || poseEditorOpen} />
                 Ragdoll
               </label>
               <label className="toggle-label" style={dimStyle} title={dimTitle}>
-                <input type="checkbox" checked={editStructure} onChange={onToggleEditStructure} disabled={!isEdit} />
+                <input type="checkbox" checked={editStructure || poseEditorOpen} onChange={onToggleEditStructure} disabled={!isEdit || poseEditorOpen} />
                 Edit Structure
               </label>
               <label className="toggle-label" style={dimStyle} title={dimTitle}>
-                <input type="checkbox" checked={showVectors} onChange={onToggleVectors} disabled={!isEdit} />
+                <input type="checkbox" checked={showVectors} onChange={onToggleVectors} disabled={!isEdit || poseEditorOpen} />
                 Edit Vectors
               </label>
             </>

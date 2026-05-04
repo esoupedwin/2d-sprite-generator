@@ -32,9 +32,11 @@ export function CharacterCanvas({
   defaultSkinOverrides: initialDefaultSkinOverrides,
   currentAnimation, isPlaying,
   showBones, showVectors, ragdoll, editStructure, selectedSkin,
+  customAnimations,
   onAnimationComplete,
   onBoneOffsetsChange,
   onSkinOverridesChange,
+  onRagdollOverlayChange,
   onSaveDefault,
 }) {
   const canvasRef = useRef(null);
@@ -77,8 +79,9 @@ export function CharacterCanvas({
   stateRef.current.boneOffsets      = boneOffsets;
   stateRef.current.skinOverrides    = skinOverrides;
   stateRef.current.ragdollOverlay   = ragdollOverlay;
+  stateRef.current.customAnimations = customAnimations;
 
-  // Notify parent of bone/skin changes (skip the very first render)
+  // Notify parent of bone/skin/overlay changes (skip the very first render)
   const firstRender = useRef(true);
   useEffect(() => {
     if (firstRender.current) return;
@@ -88,6 +91,10 @@ export function CharacterCanvas({
     if (firstRender.current) return;
     onSkinOverridesChange?.(skinOverrides);
   }, [skinOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (firstRender.current) return;
+    onRagdollOverlayChange?.(ragdollOverlay);
+  }, [ragdollOverlay]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { firstRender.current = false; }, []);
 
   useEffect(() => {
@@ -131,7 +138,8 @@ export function CharacterCanvas({
     const delta = Math.min((timestamp - s.lastTimestamp) / 1000, 0.05);
     s.lastTimestamp = timestamp;
 
-    const anim = ANIMATIONS[s.currentAnimation];
+    const anim = ANIMATIONS[s.currentAnimation]
+      ?? s.customAnimations?.find(a => a.id === s.currentAnimation);
     if (anim && s.isPlaying) {
       s.time += delta;
       if (anim.loop)                       s.time %= anim.duration;
