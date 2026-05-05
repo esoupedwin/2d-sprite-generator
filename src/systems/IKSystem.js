@@ -153,17 +153,14 @@ export function solveIK(currentOffsets, draggedBoneId, tx, ty) {
   const alpha    = Math.acos(Math.max(-1, Math.min(1, cosAlpha)));
   const baseAng  = Math.atan2(target.y - j0.y, target.x - j0.x);
 
-  // Locked bend (e.g. knees) overrides the cross-based sign;
-  // otherwise pick from current pose so we don't flip mid-drag.
+  // Locked bend (e.g. knees) overrides; otherwise pick the elbow side from
+  // the target's horizontal offset to the shoulder so the elbow flips when
+  // the hand crosses to the other side.
   let sign;
   if (plan.bendSign != null) {
     sign = plan.bendSign;
   } else {
-    const curElbow = wt[parent.id];
-    const curTip   = wt[draggedBoneId];
-    const cross    = (curTip.x - j0.x) * (curElbow.y - j0.y)
-                   - (curTip.y - j0.y) * (curElbow.x - j0.x);
-    sign = cross >= 0 ? 1 : -1;
+    sign = (target.x - j0.x) >= 0 ? 1 : -1;
   }
 
   const elbowAng = baseAng + sign * alpha;

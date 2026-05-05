@@ -52,26 +52,22 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   const {
     originX = 0, originY = 0, scale = 1,
     showBones = false, highlightBone = null,
-    skins = {}, animation = '',
+    skins = {},
   } = options;
-
-  const leftArmOverHead = animation === 'carry_walk';
 
   ctx.save();
   ctx.translate(originX, originY);
   ctx.scale(scale, scale);
 
-  // Back to front: right arm + weapon → legs → lower torso → body → [left arm] → head → [left arm] → prop
-  // Left arm draws above head only during carry_walk
+  // Back to front: right arm + weapon → legs → lower torso → body → head → left arm → prop
   drawSkin(ctx, skins.right_arm   || RIGHT_ARM_SKIN,   worldTransforms, getColor(character, 'right_arm'),   getScale(character, 'right_arm'));
   drawPart(ctx, 'weapon', character, worldTransforms);
   drawSkin(ctx, skins.left_leg    || LEFT_LEG_SKIN,    worldTransforms, getColor(character, 'left_leg'),    getScale(character, 'left_leg'));
   drawSkin(ctx, skins.right_leg   || RIGHT_LEG_SKIN,   worldTransforms, getColor(character, 'right_leg'),   getScale(character, 'right_leg'));
   drawSkin(ctx, skins.body        || BODY_SKIN,        worldTransforms, getColor(character, 'body'),        getScale(character, 'body'));
-  if (!leftArmOverHead) drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'), getScale(character, 'left_arm'));
   drawSkin(ctx, skins.head        || HEAD_SKIN,        worldTransforms, getColor(character, 'head'),        getScale(character, 'head'));
   drawExtras(ctx, 'head', character, worldTransforms);
-  if (leftArmOverHead)  drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'), getScale(character, 'left_arm'));
+  drawSkin(ctx, skins.left_arm    || LEFT_ARM_SKIN,    worldTransforms, getColor(character, 'left_arm'),    getScale(character, 'left_arm'));
   drawPart(ctx, 'head_prop', character, worldTransforms);
 
   if (showBones) {
