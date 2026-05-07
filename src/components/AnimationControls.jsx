@@ -13,6 +13,8 @@ export function AnimationControls({
   showVectors,
   ragdoll,
   editStructure,
+  rebindMode,
+  showBinds,
   selectedSkin,
   customAnimations,
   poseEditorOpen,
@@ -22,6 +24,8 @@ export function AnimationControls({
   onToggleVectors,
   onToggleRagdoll,
   onToggleEditStructure,
+  onToggleRebindMode,
+  onToggleBinds,
   onSkinChange,
   onNewAnimation,
   onDeleteAnimation,
@@ -105,6 +109,20 @@ export function AnimationControls({
           );
         })()}
       </div>
+
+      {/* Vector-edit sub-toggles */}
+      {showVectors && (
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <label className="toggle-label" title="Drag an anchor to reattach it to the closest valid bone">
+            <input type="checkbox" checked={!!rebindMode} onChange={onToggleRebindMode} />
+            Rebind Anchor
+          </label>
+          <label className="toggle-label" title="Draw a line from each anchor to the joint it's bound to">
+            <input type="checkbox" checked={!!showBinds} onChange={onToggleBinds} />
+            Show Binds
+          </label>
+        </div>
+      )}
 
       {/* Part selector — visible only in vector edit mode */}
       {showVectors && (

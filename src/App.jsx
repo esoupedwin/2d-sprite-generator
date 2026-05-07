@@ -82,6 +82,8 @@ export default function App() {
   const [showVectors,  setShowVectors]  = useState(false);
   const [ragdoll,       setRagdoll]       = useState(false);
   const [editStructure, setEditStructure] = useState(false);
+  const [rebindMode,    setRebindMode]    = useState(false);
+  const [showBinds,     setShowBinds]     = useState(false);
   const [selectedSkin,  setSelectedSkin]  = useState('all');
 
   // ── Pose editor ───────────────────────────────────────────────────────────────
@@ -398,6 +400,8 @@ export default function App() {
                 showVectors={poseEditorOpen ? false : showVectors}
                 ragdoll={poseEditorOpen ? true : ragdoll}
                 editStructure={poseEditorOpen ? false : editStructure}
+                rebindMode={poseEditorOpen ? false : rebindMode}
+                showBinds={poseEditorOpen ? false : showBinds}
                 selectedSkin={selectedSkin}
                 customAnimations={activeChar.customAnimations}
                 onAnimationComplete={handleAnimationComplete}
@@ -438,6 +442,8 @@ export default function App() {
             showVectors={showVectors}
             ragdoll={ragdoll}
             editStructure={editStructure}
+            rebindMode={rebindMode}
+            showBinds={showBinds}
             selectedSkin={selectedSkin}
             customAnimations={activeChar.customAnimations}
             poseEditorOpen={poseEditorOpen}
@@ -447,6 +453,8 @@ export default function App() {
             onToggleVectors={() => setShowVectors(p => !p)}
             onToggleRagdoll={toggleRagdoll}
             onToggleEditStructure={toggleEditStructure}
+            onToggleRebindMode={() => setRebindMode(p => !p)}
+            onToggleBinds={() => setShowBinds(p => !p)}
             onSkinChange={setSelectedSkin}
             onNewAnimation={openPoseEditor}
             onDeleteAnimation={deleteCustomAnimation}

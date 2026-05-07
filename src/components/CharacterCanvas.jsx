@@ -4,7 +4,8 @@ import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { renderCharacter } from '../systems/Renderer.js';
 import {
   DEFAULT_SKINS, getSkin, worldToLocal,
-  renderVectorOverlay, updateSkinPoint, addSkinPoint,
+  renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
+  deleteSkinPoint,
 } from '../systems/VectorEditor.js';
 import { solveIK } from '../systems/IKSystem.js';
 import { mergeOffsets } from '../utils/transforms.js';
@@ -23,6 +24,14 @@ const JOINT_HIT_PX  = 14;
 // Still draggable in Edit Structure for body customization.
 const RAGDOLL_LOCKED = new Set(['left_arm', 'right_arm']);
 
+// Rotation handles for bones that have no IK rotation control of their own
+// (the upper arms — joints 4 and 7). The handle sits at the given bone-local
+// offset and dragging it sets the bone's rotation directly.
+const ROTATE_HANDLES = [
+  { boneId: 'left_arm',  lx: -12, ly: 0 },
+  { boneId: 'right_arm', lx:  12, ly: 0 },
+];
+
 // ── Component ──────────────────────────────────────────────────────────────────
 export function CharacterCanvas({
   character,
@@ -31,7 +40,7 @@ export function CharacterCanvas({
   defaultBoneOffsets:   initialDefaultBoneOffsets,
   defaultSkinOverrides: initialDefaultSkinOverrides,
   currentAnimation, isPlaying,
-  showBones, showVectors, ragdoll, editStructure, selectedSkin,
+  showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
   customAnimations,
   onAnimationComplete,
   onBoneOffsetsChange,
@@ -62,10 +71,11 @@ export function CharacterCanvas({
   const stateRef = useRef({
     time: 0, lastTimestamp: null,
     currentAnimation, isPlaying, character,
-    showBones, showVectors, ragdoll, editStructure, selectedSkin,
+    showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
     boneOffsets: {}, skinOverrides: {}, ragdollOverlay: {},
     lastWorldTransforms: null,
     vectorHitTargets: [],
+    rotateHitTargets: [],
   });
 
   stateRef.current.currentAnimation = currentAnimation;
@@ -75,6 +85,8 @@ export function CharacterCanvas({
   stateRef.current.showVectors      = showVectors;
   stateRef.current.ragdoll          = ragdoll;
   stateRef.current.editStructure    = editStructure;
+  stateRef.current.rebindMode       = rebindMode;
+  stateRef.current.showBinds        = showBinds;
   stateRef.current.selectedSkin     = selectedSkin;
   stateRef.current.boneOffsets      = boneOffsets;
   stateRef.current.skinOverrides    = skinOverrides;
@@ -198,12 +210,44 @@ export function CharacterCanvas({
       ctx.save();
       ctx.translate(originX, originY);
       ctx.scale(scale, scale);
-      const activeVec    = drag?.type !== 'bone' ? drag : null;
+      const activeVec    = drag?.type !== 'bone' && drag?.type !== 'rotate' ? drag : null;
       const visualScale  = 1 / zoom;
+      if (s.showBinds) {
+        renderBoneBinds(ctx, worldTransforms, s.skinOverrides, s.selectedSkin, visualScale);
+      }
       s.vectorHitTargets = renderVectorOverlay(ctx, worldTransforms, s.skinOverrides, activeVec, s.selectedSkin, visualScale);
       ctx.restore();
     } else {
       s.vectorHitTargets = [];
+    }
+
+    if (s.showBones && (s.ragdoll || s.editStructure)) {
+      ctx.save();
+      ctx.translate(originX, originY);
+      ctx.scale(scale, scale);
+      const visualScale = 1 / zoom;
+      const r = 3 * visualScale;
+      const targets = [];
+      for (const h of ROTATE_HANDLES) {
+        const bone = worldTransforms[h.boneId];
+        if (!bone) continue;
+        const c = Math.cos(bone.rotation), sn = Math.sin(bone.rotation);
+        const hx = bone.x + c * h.lx - sn * h.ly;
+        const hy = bone.y + sn * h.lx + c * h.ly;
+        const active = drag?.type === 'rotate' && drag.boneId === h.boneId;
+        ctx.lineWidth   = 0.8 * visualScale;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillStyle   = active ? '#FFFFFF' : '#FF66FF';
+        ctx.beginPath();
+        ctx.arc(hx, hy, active ? r * 1.4 : r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        targets.push({ boneId: h.boneId, lx: h.lx, ly: h.ly, x: hx, y: hy });
+      }
+      s.rotateHitTargets = targets;
+      ctx.restore();
+    } else {
+      s.rotateHitTargets = [];
     }
 
     if (anim) {
@@ -257,6 +301,14 @@ export function CharacterCanvas({
     const wt = s.lastWorldTransforms;
     if (wt && (s.ragdoll || s.editStructure)) {
       const r = hitRadius(JOINT_HIT_PX);
+      // Rotation handles take priority over joints (smaller, drawn on top).
+      let closestRot = null, minRotDist = r;
+      for (const h of s.rotateHitTargets) {
+        const d = Math.hypot(h.x - x, h.y - y);
+        if (d < minRotDist) { minRotDist = d; closestRot = h; }
+      }
+      if (closestRot) return { type: 'rotate', boneId: closestRot.boneId, lx: closestRot.lx, ly: closestRot.ly };
+
       const ragdollOnly = s.ragdoll && !s.editStructure;
       let closest = null, minDist = r;
       for (const [boneId, bone] of Object.entries(wt)) {
@@ -316,6 +368,12 @@ export function CharacterCanvas({
     const charPos = getCharPos(e);
     const target  = findTarget(charPos);
     if (target) {
+      if (e.altKey && target.type === 'anchor') {
+        pushHistory();
+        setSkinOverrides(prev => deleteSkinPoint(prev, target.skinKey, target.pointIndex));
+        e.preventDefault();
+        return;
+      }
       pushHistory();
       dragRef.current = target;
       if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
@@ -362,6 +420,42 @@ export function CharacterCanvas({
     const s  = stateRef.current;
     const wt = s.lastWorldTransforms;
     if (!wt) return;
+
+    if (drag.type === 'rotate') {
+      const armBone = wt[drag.boneId];
+      if (!armBone) return;
+      const parentDef = BONES[BONES[drag.boneId].parent];
+      const pw = parentDef ? wt[parentDef.id] : { rotation: 0 };
+      const cursorAngle     = Math.atan2(charPos.y - armBone.y, charPos.x - armBone.x);
+      const handleRestAngle = Math.atan2(drag.ly, drag.lx);
+      const desiredWorldRot = cursorAngle - handleRestAngle;
+      const desiredLocalRot = desiredWorldRot - pw.rotation;
+      const newRotation     = desiredLocalRot - BONES[drag.boneId].baseRotation;
+
+      if (s.editStructure) {
+        setBoneOffsets(prev => ({
+          ...prev,
+          [drag.boneId]: { ...(prev[drag.boneId] || {}), rotation: newRotation },
+        }));
+      } else {
+        setRagdollOverlay(prev => {
+          const combined = mergeOffsets(s.boneOffsets, prev);
+          const curRot   = (combined[drag.boneId]?.rotation) || 0;
+          const dr       = newRotation - curRot;
+          if (Math.abs(dr) < 1e-9) return prev;
+          const overlay  = prev[drag.boneId] || {};
+          return {
+            ...prev,
+            [drag.boneId]: {
+              x:        overlay.x        || 0,
+              y:        overlay.y        || 0,
+              rotation: (overlay.rotation || 0) + dr,
+            },
+          };
+        });
+      }
+      return;
+    }
 
     if (drag.type === 'bone') {
       if (s.editStructure) {
@@ -416,6 +510,11 @@ export function CharacterCanvas({
     const bone = wt[boneId];
     if (!bone) return;
 
+    if (type === 'anchor' && s.rebindMode) {
+      setSkinOverrides(prev => rebindSkinPoint(prev, skinKey, pointIndex, wt, charPos.x, charPos.y));
+      return;
+    }
+
     const cos = Math.cos(bone.rotation), sin = Math.sin(bone.rotation);
     let update;
     if (type === 'anchor') {
@@ -425,7 +524,7 @@ export function CharacterCanvas({
       const anchorX = bone.x + cos * lx - sin * ly;
       const anchorY = bone.y + sin * lx + cos * ly;
       const dx = charPos.x - anchorX, dy = charPos.y - anchorY;
-      update = { type, dx: cos * dx + sin * dy, dy: -sin * dx + cos * dy };
+      update = { type, dx: cos * dx + sin * dy, dy: -sin * dx + cos * dy, mirror: e.ctrlKey };
     }
     setSkinOverrides(prev => updateSkinPoint(prev, skinKey, pointIndex, update));
   }, [getCharPos, findTarget]);
@@ -506,6 +605,44 @@ export function CharacterCanvas({
     });
   }, [pushHistory]);
 
+  // ── Replicate (copy without rotation negation) ───────────────────────────────
+  const replicateLimb = useCallback((fromSide, limbType) => {
+    pushHistory();
+    const pairs = limbType === 'legs'
+      ? [['left_leg','right_leg'], ['left_shin','right_shin'], ['left_foot','right_foot']]
+      : [['left_arm','right_arm'], ['left_forearm','right_forearm'], ['left_hand','right_hand']];
+
+    const fromBones  = pairs.map(p => fromSide === 'left' ? p[0] : p[1]);
+    const toBones    = pairs.map(p => fromSide === 'left' ? p[1] : p[0]);
+    const boneIdMap  = Object.fromEntries(pairs.map(([l, r]) => fromSide === 'left' ? [l, r] : [r, l]));
+    const fromSkinKey = fromSide === 'left'
+      ? (limbType === 'legs' ? 'left_leg'  : 'left_arm')
+      : (limbType === 'legs' ? 'right_leg' : 'right_arm');
+    const toSkinKey = fromSide === 'left'
+      ? (limbType === 'legs' ? 'right_leg' : 'right_arm')
+      : (limbType === 'legs' ? 'left_leg'  : 'left_arm');
+
+    setBoneOffsets(prev => {
+      const next = { ...prev };
+      fromBones.forEach((fromId, i) => {
+        const toId = toBones[i];
+        const off  = prev[fromId];
+        if (off) next[toId] = { x: off.x || 0, y: off.y || 0, rotation: off.rotation || 0 };
+        else     delete next[toId];
+      });
+      return next;
+    });
+
+    setSkinOverrides(prev => {
+      const src    = getSkin(fromSkinKey, prev);
+      const copied = src.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => [
+        boneIdMap[boneId] ?? boneId,
+        lx, ly, hInDx, hInDy, hOutDx, hOutDy,
+      ]);
+      return { ...prev, [toSkinKey]: copied };
+    });
+  }, [pushHistory]);
+
   const hasBoneEdits = JSON.stringify(boneOffsets)   !== JSON.stringify(defaultBoneOffsets.current);
   const hasSkinEdits = JSON.stringify(skinOverrides) !== JSON.stringify(defaultSkinOverrides.current);
 
@@ -562,6 +699,15 @@ export function CharacterCanvas({
           <div style={{ display: 'flex', gap: 4 }}>
             <button style={MIRROR_BTN} onClick={() => mirrorLimb('left',  'legs')}>L→R Legs</button>
             <button style={MIRROR_BTN} onClick={() => mirrorLimb('right', 'legs')}>R→L Legs</button>
+          </div>
+          <span style={{ ...MIRROR_LABEL, marginTop: 4 }}>Copy</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button style={MIRROR_BTN} onClick={() => replicateLimb('left',  'arms')}>L→R Arms</button>
+            <button style={MIRROR_BTN} onClick={() => replicateLimb('right', 'arms')}>R→L Arms</button>
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button style={MIRROR_BTN} onClick={() => replicateLimb('left',  'legs')}>L→R Legs</button>
+            <button style={MIRROR_BTN} onClick={() => replicateLimb('right', 'legs')}>R→L Legs</button>
           </div>
         </div>
       )}

@@ -99,7 +99,7 @@ const BONE_IDS = {
 function renderBones(ctx, worldTransforms, highlightBone = null) {
   const BONE_COLOR  = 'rgba(255, 200, 0, 0.9)';
   const JOINT_FILL  = 'rgba(255, 200, 0, 1)';
-  const JOINT_R     = 5;
+  const JOINT_R     = 3.125;
 
   const connections = [
     ['torso',         'lower_torso'],
@@ -119,7 +119,7 @@ function renderBones(ctx, worldTransforms, highlightBone = null) {
   ];
 
   // Bone lines
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2 / 1.4;
   ctx.strokeStyle = BONE_COLOR;
   for (const [a, b] of connections) {
     const wa = worldTransforms[a];
