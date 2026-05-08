@@ -189,3 +189,93 @@ export function strokeSkinOutline(ctx, template, worldTransforms, color, lineWid
   ctx.lineWidth   = lineWidth;
   ctx.stroke();
 }
+
+/**
+ * Computes the world-space bounding box of a skin template after applying
+ * the given world transforms and scale. Includes Bezier handles so the
+ * curve never extends past the box.
+ */
+export function computeSkinBounds(template, worldTransforms, scale = 1) {
+  if (!template || template.length === 0) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy] of template) {
+    const bone = worldTransforms[boneId];
+    if (!bone) return null;
+    const a  = rotateOffset(lx * scale, ly * scale, bone.rotation);
+    const ax = bone.x + a.x, ay = bone.y + a.y;
+    const hi = rotateOffset(hInDx * scale,  hInDy * scale,  bone.rotation);
+    const ho = rotateOffset(hOutDx * scale, hOutDy * scale, bone.rotation);
+    for (const [x, y] of [[ax, ay], [ax + hi.x, ay + hi.y], [ax + ho.x, ay + ho.y]]) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/**
+ * Same closed Bezier outline as drawSkin, but filled with an image clipped
+ * to the path. The image is stretched to the skin's bounding box so it
+ * deforms when the underlying bones move.
+ */
+export function drawSkinImage(ctx, template, worldTransforms, image, scale = 1) {
+  if (!template || template.length === 0) return;
+  if (!image || !image.complete || image.naturalWidth === 0) return;
+  const bounds = computeSkinBounds(template, worldTransforms, scale);
+  if (!bounds) return;
+  ctx.save();
+  if (!buildSkinPath(ctx, template, worldTransforms, scale)) { ctx.restore(); return; }
+  ctx.clip();
+  ctx.drawImage(image, bounds.x, bounds.y, bounds.w, bounds.h);
+  ctx.restore();
+}
+
+/**
+ * Pins an image to a single-bone skin (e.g. HEAD_SKIN). The image is sized
+ * to the skin's bone-local bounding box and rotates with the bone, but is
+ * NOT clipped — the full PNG covers the area. Used to replace a skin blob
+ * with a custom texture.
+ */
+export function drawSkinPinned(ctx, template, worldTransforms, image, scale = 1) {
+  if (!template || template.length === 0) return;
+  if (!image || !image.complete || image.naturalWidth === 0) return;
+  const boneId = template[0][0];
+  const bone   = worldTransforms[boneId];
+  if (!bone) return;
+
+  // Bounds of all anchors + handles in BONE-LOCAL space.
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [, lx, ly, hInDx, hInDy, hOutDx, hOutDy] of template) {
+    const pts = [
+      [lx, ly],
+      [lx + hInDx,  ly + hInDy],
+      [lx + hOutDx, ly + hOutDy],
+    ];
+    for (const [x, y] of pts) {
+      const sx = x * scale, sy = y * scale;
+      if (sx < minX) minX = sx;
+      if (sx > maxX) maxX = sx;
+      if (sy < minY) minY = sy;
+      if (sy > maxY) maxY = sy;
+    }
+  }
+  if (minX === Infinity) return;
+
+  // Preserve the image's aspect ratio (contain): scale uniformly to fit
+  // inside the bounding box and center any leftover space.
+  const boxW = maxX - minX;
+  const boxH = maxY - minY;
+  const fit  = Math.min(boxW / image.naturalWidth, boxH / image.naturalHeight);
+  const drawW = image.naturalWidth  * fit;
+  const drawH = image.naturalHeight * fit;
+  const drawX = minX + (boxW - drawW) / 2;
+  const drawY = minY + (boxH - drawH) / 2;
+
+  ctx.save();
+  ctx.translate(bone.x, bone.y);
+  ctx.rotate(bone.rotation);
+  ctx.drawImage(image, drawX, drawY, drawW, drawH);
+  ctx.restore();
+}

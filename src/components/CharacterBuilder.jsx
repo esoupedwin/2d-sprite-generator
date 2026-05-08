@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
-import { Copy, Pencil, Plus, RotateCcw, X } from 'lucide-react';
+import { Copy, ImageUp, Pencil, Plus, RotateCcw, X } from 'lucide-react';
 
 export function CharacterBuilder({
   character, characters, activeCharId,
   onPartChange, onColorChange, onScaleChange,
+  onBodyImageChange, onHeadImageChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter,
 }) {
@@ -40,9 +41,19 @@ export function CharacterBuilder({
             currentColor={currentColor}
             hasCustomColor={!!customColor}
             currentScale={currentScale}
+            partImage={
+              partKey === 'body' ? character.bodyImage :
+              partKey === 'head' ? character.headImage :
+              null
+            }
             onChange={(val) => onPartChange(partKey, val)}
             onColorChange={(hex) => onColorChange(partKey, hex)}
             onScaleChange={(s) => onScaleChange(partKey, s)}
+            onPartImageChange={
+              partKey === 'body' ? onBodyImageChange :
+              partKey === 'head' ? onHeadImageChange :
+              null
+            }
           />
         );
       })}
@@ -54,9 +65,17 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;
 const SCALE_STEP = 0.1;
 
-function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasCustomColor, onColorChange, currentScale, onScaleChange }) {
+function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasCustomColor, onColorChange, currentScale, onScaleChange, partImage, onPartImageChange }) {
   const colorInputRef = useRef(null);
+  const imageInputRef = useRef(null);
   const isShapeSelector = partKey === 'weapon' || partKey === 'head_prop';
+
+  const handleImageFile = (file) => {
+    if (!file || !onPartImageChange) return;
+    const reader = new FileReader();
+    reader.onload = () => onPartImageChange(reader.result);
+    reader.readAsDataURL(file);
+  };
 
   const decScale = () => onScaleChange(Math.max(MIN_SCALE, +((currentScale - SCALE_STEP).toFixed(2))));
   const incScale = () => onScaleChange(Math.min(MAX_SCALE, +((currentScale + SCALE_STEP).toFixed(2))));
@@ -132,7 +151,7 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
           ))}
         </div>
       ) : (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/30" style={{ background: currentColor }} />
           <span className="font-mono text-xs tracking-wide">{currentColor.toUpperCase()}</span>
           {hasCustomColor && (
@@ -143,6 +162,34 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
             >
               <RotateCcw className="h-3 w-3" />
             </button>
+          )}
+          {onPartImageChange && (
+            <>
+              <button
+                onClick={() => imageInputRef.current?.click()}
+                title={partImage ? 'Replace image' : `Upload PNG to skin the ${partDef.label.toLowerCase()}`}
+                className="ml-auto inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ImageUp className="h-3.5 w-3.5" />
+                <span className="text-[11px]">{partImage ? 'Replace' : 'Upload PNG'}</span>
+              </button>
+              {partImage && (
+                <button
+                  onClick={() => onPartImageChange(null)}
+                  title="Remove image"
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                className="hidden"
+                onChange={e => handleImageFile(e.target.files?.[0])}
+              />
+            </>
           )}
         </div>
       )}

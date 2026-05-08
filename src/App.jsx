@@ -221,6 +221,26 @@ export default function App() {
     }));
   }, [activeCharId]);
 
+  const updateBodyImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (dataUrl) parts.bodyImage = dataUrl;
+      else         delete parts.bodyImage;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  const updateHeadImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (dataUrl) parts.headImage = dataUrl;
+      else         delete parts.headImage;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
   const updateBoneOffsets = useCallback((newOffsets) => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, boneOffsets: newOffsets } : c
@@ -427,6 +447,8 @@ export default function App() {
           onPartChange={updatePart}
           onColorChange={updateColor}
           onScaleChange={updatePartScale}
+          onBodyImageChange={updateBodyImage}
+          onHeadImageChange={updateHeadImage}
           onAddCharacter={addCharacter}
           onDeleteCharacter={deleteCharacter}
           onRenameCharacter={renameCharacter}

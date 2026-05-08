@@ -64,6 +64,10 @@ export function CharacterCanvas({
   const dragRef    = useRef(null);
   const panDragRef = useRef(null);
   const viewRef    = useRef({ zoom: 1, panX: 0, panY: 0 });
+  // Decoded HTMLImageElements for character.bodyImage / character.headImage
+  // (data URLs). Reload whenever the prop changes; null while loading.
+  const bodyImageRef = useRef(null);
+  const headImageRef = useRef(null);
 
   // Undo history — session-only, capped at 60 entries
   const historyRef = useRef([]);
@@ -119,6 +123,28 @@ export function CharacterCanvas({
   useEffect(() => {
     if (!ragdoll) setRagdollOverlay(o => Object.keys(o).length === 0 ? o : {});
   }, [ragdoll]);
+
+  // Decode the character's body image so the renderer can drawImage it.
+  useEffect(() => {
+    const url = character?.bodyImage;
+    if (!url) { bodyImageRef.current = null; return; }
+    const img = new Image();
+    img.onload = () => { bodyImageRef.current = img; };
+    img.onerror = () => { bodyImageRef.current = null; };
+    img.src = url;
+    return () => { img.onload = img.onerror = null; };
+  }, [character?.bodyImage]);
+
+  // Same for the head image.
+  useEffect(() => {
+    const url = character?.headImage;
+    if (!url) { headImageRef.current = null; return; }
+    const img = new Image();
+    img.onload = () => { headImageRef.current = img; };
+    img.onerror = () => { headImageRef.current = null; };
+    img.src = url;
+    return () => { img.onload = img.onerror = null; };
+  }, [character?.headImage]);
 
   // ── Wheel zoom ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -204,7 +230,9 @@ export function CharacterCanvas({
       showBones:     s.showBones,
       highlightBone: drag?.type === 'bone' ? drag.boneId : null,
       skins,
-      animation: s.currentAnimation,
+      animation:     s.currentAnimation,
+      bodyImage:     bodyImageRef.current,
+      headImage:     headImageRef.current,
     });
 
     if (s.showVectors) {

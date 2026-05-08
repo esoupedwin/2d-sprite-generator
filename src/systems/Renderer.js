@@ -1,6 +1,6 @@
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import {
-  drawSkin,
+  drawSkin, drawSkinImage, drawSkinPinned,
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
   HEAD_SKIN, BODY_SKIN,
 } from './SkinSystem.js';
@@ -52,7 +52,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   const {
     originX = 0, originY = 0, scale = 1,
     showBones = false, highlightBone = null,
-    skins = {},
+    skins = {}, bodyImage = null, headImage = null,
   } = options;
 
   ctx.save();
@@ -64,9 +64,27 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   drawPart(ctx, 'weapon', character, worldTransforms);
   drawSkin(ctx, skins.left_leg    || LEFT_LEG_SKIN,    worldTransforms, getColor(character, 'left_leg'),    getScale(character, 'left_leg'));
   drawSkin(ctx, skins.right_leg   || RIGHT_LEG_SKIN,   worldTransforms, getColor(character, 'right_leg'),   getScale(character, 'right_leg'));
-  drawSkin(ctx, skins.body        || BODY_SKIN,        worldTransforms, getColor(character, 'body'),        getScale(character, 'body'));
-  drawSkin(ctx, skins.head        || HEAD_SKIN,        worldTransforms, getColor(character, 'head'),        getScale(character, 'head'));
-  drawExtras(ctx, 'head', character, worldTransforms);
+  {
+    const bodyTmpl  = skins.body || BODY_SKIN;
+    const bodyScale = getScale(character, 'body');
+    if (bodyImage) {
+      drawSkinImage(ctx, bodyTmpl, worldTransforms, bodyImage, bodyScale);
+    } else {
+      drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
+    }
+  }
+  {
+    const headTmpl  = skins.head || HEAD_SKIN;
+    const headScale = getScale(character, 'head');
+    if (headImage) {
+      // Image replaces the head blob entirely: skip both the colored fill
+      // and the eye extras so the full PNG is visible.
+      drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale);
+    } else {
+      drawSkin(ctx, headTmpl, worldTransforms, getColor(character, 'head'), headScale);
+      drawExtras(ctx, 'head', character, worldTransforms);
+    }
+  }
   drawSkin(ctx, skins.left_arm    || LEFT_ARM_SKIN,    worldTransforms, getColor(character, 'left_arm'),    getScale(character, 'left_arm'));
   drawPart(ctx, 'head_prop', character, worldTransforms);
 
