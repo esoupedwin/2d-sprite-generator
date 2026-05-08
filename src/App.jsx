@@ -13,6 +13,9 @@ import { ANIMATIONS } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { SectionTitle } from '@/components/ui/section-title';
 
 const CHARS_STORAGE = '2dsprite:characters';
 
@@ -347,29 +350,76 @@ export default function App() {
 
   // ── Animation callbacks ───────────────────────────────────────────────────────
   const handleAnimationComplete = useCallback((animKey) => {
-    if (['attack', 'jump', 'punch'].includes(animKey) || !ANIMATIONS[animKey]) {
+    if (['attack', 'jump'].includes(animKey) || !ANIMATIONS[animKey]) {
       setCurrentAnimation('idle');
     }
   }, []);
 
   const handleAnimationChange = useCallback((key) => {
-    setCurrentAnimation(key);
+    setCurrentAnimation(prev => {
+      // Snap into a T-pose when first entering edit mode so limbs are spread
+      // out and easier to grab. Only applied on the transition into edit.
+      // Arm rotations are derived from the character's structural offsets so
+      // the forearm bone ends up horizontal regardless of how the elbow is
+      // positioned in the build.
+      if (key === 'edit' && prev !== 'edit') {
+        setCharacters(chars => chars.map(c => {
+          if (c.id !== activeCharId) return c;
+          const off = c.boneOffsets ?? {};
+          // Effective bone-local offsets for elbow (forearm) and wrist (hand).
+          const lfx = 0  + (off.left_forearm?.x  ?? 0);
+          const lfy = 40 + (off.left_forearm?.y  ?? 0);
+          const rfx = 0  + (off.right_forearm?.x ?? 0);
+          const rfy = 40 + (off.right_forearm?.y ?? 0);
+          const lhx = 0  + (off.left_hand?.x     ?? 0);
+          const lhy = 40 + (off.left_hand?.y     ?? 0);
+          const rhx = 0  + (off.right_hand?.x    ?? 0);
+          const rhy = 40 + (off.right_hand?.y    ?? 0);
+
+          // World rotations needed so each segment lies on the horizontal axis.
+          // Left arm extends toward -X (world angle π); right arm toward +X.
+          const leftArmWorld   = Math.PI - Math.atan2(lfy, lfx);
+          const rightArmWorld  =          -Math.atan2(rfy, rfx);
+          const leftFArmWorld  = Math.PI - Math.atan2(lhy, lhx);
+          const rightFArmWorld =          -Math.atan2(rhy, rhx);
+
+          // Bone-local rotations: world minus parent's world.
+          return {
+            ...c,
+            boneOffsets: {
+              ...off,
+              left_arm:      { ...(off.left_arm      ?? {}), rotation: leftArmWorld   },
+              right_arm:     { ...(off.right_arm     ?? {}), rotation: rightArmWorld  },
+              left_forearm:  { ...(off.left_forearm  ?? {}), rotation: leftFArmWorld  - leftArmWorld  },
+              right_forearm: { ...(off.right_forearm ?? {}), rotation: rightFArmWorld - rightArmWorld },
+              left_hand:     { ...(off.left_hand     ?? {}), rotation: 0 },
+              right_hand:    { ...(off.right_hand    ?? {}), rotation: 0 },
+            },
+          };
+        }));
+      }
+      return key;
+    });
     setIsPlaying(true);
     if (key !== 'edit') {
       setShowVectors(false);
       setRagdoll(false);
       setEditStructure(false);
     }
-  }, []);
+  }, [activeCharId]);
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>2D Character Generator</h1>
-        <p className="subtitle">Skeletal animation · Modular parts · Export ready</p>
+    <div className="flex flex-col min-h-screen">
+      <header className="px-6 py-3 border-b border-border bg-card">
+        <h1 className="text-xl font-bold text-foreground">
+          2D Character Generator
+        </h1>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Skeletal animation · Modular parts · Export ready
+        </p>
       </header>
 
-      <div className="app-body">
+      <div className="flex flex-1 overflow-hidden">
         <CharacterBuilder
           character={activeChar.parts}
           characters={characters}
@@ -384,9 +434,9 @@ export default function App() {
           onDuplicateCharacter={duplicateCharacter}
         />
 
-        <main className="center-panel">
-          <div className="canvas-and-editor">
-            <div className="canvas-wrapper">
+        <main className="flex-1 flex items-center justify-center p-6 overflow-auto">
+          <div className="flex flex-col items-center gap-4">
+            <div className="rounded-lg border border-border overflow-hidden shadow-2xl">
               <CharacterCanvas
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
                 character={activeChar.parts}
@@ -434,7 +484,7 @@ export default function App() {
           </div>
         </main>
 
-        <aside className="controls-panel">
+        <aside className="w-[440px] shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
           <AnimationControls
             currentAnimation={currentAnimation}
             isPlaying={isPlaying}
@@ -460,23 +510,25 @@ export default function App() {
             onDeleteAnimation={deleteCustomAnimation}
           />
 
-          <div className="divider" />
+          <Separator />
 
-          <div className="export-section">
-            <span className="export-label">Export</span>
-            <div className="export-buttons">
-              <button
-                className="export-btn"
+          <div className="flex flex-col gap-2">
+            <SectionTitle>Export</SectionTitle>
+            <div className="flex flex-col gap-1.5">
+              <Button
+                variant="outline"
+                className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
                 onClick={() => exportSpriteSheet(activeChar.parts, currentAnimation, activeChar.boneOffsets, activeChar.skinOverrides)}
               >
                 Sprite Sheet (PNG)
-              </button>
-              <button
-                className="export-btn"
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
                 onClick={() => exportAnimationJSON(currentAnimation)}
               >
                 Animation Data (JSON)
-              </button>
+              </Button>
             </div>
           </div>
         </aside>

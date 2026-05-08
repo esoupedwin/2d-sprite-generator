@@ -36,24 +36,26 @@ export const ANIMATIONS = {
         { time: 2.0, rotation: 0 },
       ],
       left_arm: [
-        { time: 0.0, rotation: 0.05 },
-        { time: 1.0, rotation: 0.08 },
-        { time: 2.0, rotation: 0.05 },
+        { time: 0.0, rotation: -1.023 },
+        { time: 1.0, rotation: -0.993 },
+        { time: 2.0, rotation: -1.023 },
       ],
       left_forearm: [
-        { time: 0.0, rotation: 0.12 },
-        { time: 1.0, rotation: 0.16 },
-        { time: 2.0, rotation: 0.12 },
+        { time: 0.0, rotation: -0.318 },
+        { time: 1.0, rotation: -0.278 },
+        { time: 2.0, rotation: -0.318 },
       ],
+      // Right arm hangs down-and-to-the-right (visible outside the body)
+      // with a subtle breathing bob.
       right_arm: [
-        { time: 0.0, rotation: -0.05 },
-        { time: 1.0, rotation: -0.08 },
-        { time: 2.0, rotation: -0.05 },
+        { time: 0.0, rotation: 1.022 },
+        { time: 1.0, rotation: 0.992 },
+        { time: 2.0, rotation: 1.022 },
       ],
       right_forearm: [
-        { time: 0.0, rotation: -0.12 },
-        { time: 1.0, rotation: -0.16 },
-        { time: 2.0, rotation: -0.12 },
+        { time: 0.0, rotation: -0.558 },
+        { time: 1.0, rotation: -0.598 },
+        { time: 2.0, rotation: -0.558 },
       ],
       left_hand: [
         { time: 0.0, rotation:  0.06 },
@@ -163,16 +165,16 @@ export const ANIMATIONS = {
       ],
       // --- ARMS: reduced swing, more elbow bend → looks loose and bouncy ---
       left_arm: [
-        { time: 0.00, rotation:  0.30 },
-        { time: 0.36, rotation: -0.30 },
-        { time: 0.72, rotation:  0.30 },
+        { time: 0.00, rotation: -0.773 },
+        { time: 0.36, rotation: -1.373 },
+        { time: 0.72, rotation: -0.773 },
       ],
       left_forearm: [
-        { time: 0.00, rotation:  0.45 },
-        { time: 0.18, rotation:  0.18 },
-        { time: 0.36, rotation:  0.08 },
-        { time: 0.54, rotation:  0.18 },
-        { time: 0.72, rotation:  0.45 },
+        { time: 0.00, rotation: 0.012 },
+        { time: 0.18, rotation: -0.258 },
+        { time: 0.36, rotation: -0.358 },
+        { time: 0.54, rotation: -0.258 },
+        { time: 0.72, rotation: 0.012 },
       ],
       left_hand: [
         { time: 0.00, rotation:  0.18 },
@@ -180,16 +182,16 @@ export const ANIMATIONS = {
         { time: 0.72, rotation:  0.18 },
       ],
       right_arm: [
-        { time: 0.00, rotation: -0.30 },
-        { time: 0.36, rotation:  0.30 },
-        { time: 0.72, rotation: -0.30 },
+        { time: 0.00, rotation: 0.772 },
+        { time: 0.36, rotation: 1.372 },
+        { time: 0.72, rotation: 0.772 },
       ],
       right_forearm: [
-        { time: 0.00, rotation: -0.08 },
-        { time: 0.18, rotation: -0.18 },
-        { time: 0.36, rotation: -0.45 },
-        { time: 0.54, rotation: -0.18 },
-        { time: 0.72, rotation: -0.08 },
+        { time: 0.00, rotation: -0.518 },
+        { time: 0.18, rotation: -0.618 },
+        { time: 0.36, rotation: -0.888 },
+        { time: 0.54, rotation: -0.618 },
+        { time: 0.72, rotation: -0.518 },
       ],
       right_hand: [
         { time: 0.00, rotation: -0.06 },
@@ -272,17 +274,17 @@ export const ANIMATIONS = {
       ],
       // --- ARMS: pumping hard (~90° forearm bend held throughout) ---
       left_arm: [
-        { time: 0.000, rotation:  0.58 },
-        { time: 0.225, rotation: -0.58 },
-        { time: 0.450, rotation:  0.58 },
+        { time: 0.000, rotation: -0.493 },
+        { time: 0.225, rotation: -1.653 },
+        { time: 0.450, rotation: -0.493 },
       ],
       // Forearm stays bent ~90° and lags the upper arm slightly
       left_forearm: [
-        { time: 0.000, rotation:  0.52 },
-        { time: 0.113, rotation:  0.22 },
-        { time: 0.225, rotation:  0.10 },
-        { time: 0.338, rotation:  0.22 },
-        { time: 0.450, rotation:  0.52 },
+        { time: 0.000, rotation: 0.082 },
+        { time: 0.113, rotation: -0.218 },
+        { time: 0.225, rotation: -0.338 },
+        { time: 0.338, rotation: -0.218 },
+        { time: 0.450, rotation: 0.082 },
       ],
       left_hand: [
         { time: 0.000, rotation:  0.20 },
@@ -290,21 +292,126 @@ export const ANIMATIONS = {
         { time: 0.450, rotation:  0.20 },
       ],
       right_arm: [
-        { time: 0.000, rotation: -0.58 },
-        { time: 0.225, rotation:  0.58 },
-        { time: 0.450, rotation: -0.58 },
+        { time: 0.000, rotation: 0.492 },
+        { time: 0.225, rotation: 1.652 },
+        { time: 0.450, rotation: 0.492 },
       ],
       right_forearm: [
-        { time: 0.000, rotation: -0.10 },
-        { time: 0.113, rotation: -0.22 },
-        { time: 0.225, rotation: -0.52 },
-        { time: 0.338, rotation: -0.22 },
-        { time: 0.450, rotation: -0.10 },
+        { time: 0.000, rotation: -0.538 },
+        { time: 0.113, rotation: -0.658 },
+        { time: 0.225, rotation: -0.958 },
+        { time: 0.338, rotation: -0.658 },
+        { time: 0.450, rotation: -0.538 },
       ],
       right_hand: [
         { time: 0.000, rotation: -0.08 },
         { time: 0.225, rotation: -0.20 },
         { time: 0.450, rotation: -0.08 },
+      ],
+    },
+  },
+  scared_run: {
+    name: 'Panic',
+    duration: 0.40,
+    loop: true,
+    tracks: {
+      // Deep forward hunch + big bounce — desperate sprint
+      torso: [
+        { time: 0.000, y:  0,  rotation:  0.22 },
+        { time: 0.100, y: -11, rotation:  0.24 },
+        { time: 0.200, y:  0,  rotation:  0.22 },
+        { time: 0.300, y: -11, rotation:  0.24 },
+        { time: 0.400, y:  0,  rotation:  0.22 },
+      ],
+      lower_torso: [
+        { time: 0.000, rotation:  0.18 },
+        { time: 0.100, rotation:  0.00 },
+        { time: 0.200, rotation: -0.18 },
+        { time: 0.300, rotation:  0.00 },
+        { time: 0.400, rotation:  0.18 },
+      ],
+      // Head craning backward — looking over shoulder at the danger
+      head: [
+        { time: 0.000, rotation: -0.35 },
+        { time: 0.100, rotation: -0.28 },
+        { time: 0.200, rotation: -0.38 },
+        { time: 0.300, rotation: -0.28 },
+        { time: 0.400, rotation: -0.35 },
+      ],
+      // Left arm: wild windmill — thrown back then whips forward-up in panic
+      left_arm: [
+        { time: 0.000, rotation: -0.173 },
+        { time: 0.200, rotation: -2.373 },
+        { time: 0.400, rotation: -0.173 },
+      ],
+      left_forearm: [
+        { time: 0.000, rotation: 0.212 },
+        { time: 0.100, rotation: 0.562 },  // droops behind on backswing
+        { time: 0.200, rotation: -0.288 },  // trails as arm whips forward
+        { time: 0.300, rotation: 0.012 },
+        { time: 0.400, rotation: 0.212 },
+      ],
+      left_hand: [
+        { time: 0.000, rotation:  0.35 },
+        { time: 0.200, rotation:  0.08 },
+        { time: 0.400, rotation:  0.35 },
+      ],
+      // Right arm: opposite phase — thrown wildly backward from forward position
+      right_arm: [
+        { time: 0.000, rotation: 1.169 },
+        { time: 0.200, rotation: 3.169 },
+        { time: 0.400, rotation: 1.169 },
+      ],
+      right_forearm: [
+        { time: 0.000, rotation: -0.588 },
+        { time: 0.100, rotation: -0.988 },
+        { time: 0.200, rotation: -1.138 },  // trails on the big backswing
+        { time: 0.300, rotation: -0.688 },
+        { time: 0.400, rotation: -0.588 },
+      ],
+      right_hand: [
+        { time: 0.000, rotation: -0.08 },
+        { time: 0.200, rotation: -0.32 },
+        { time: 0.400, rotation: -0.08 },
+      ],
+      // Legs: frantic stride, high heel kick behind
+      left_leg: [
+        { time: 0.000, rotation: -0.68 },
+        { time: 0.200, rotation:  0.68 },
+        { time: 0.400, rotation: -0.68 },
+      ],
+      left_shin: [
+        { time: 0.000, rotation: 0.14 },
+        { time: 0.100, rotation: 0.12 },
+        { time: 0.200, rotation: 0.24 },
+        { time: 0.300, rotation: 0.92 },
+        { time: 0.400, rotation: 0.14 },
+      ],
+      left_foot: [
+        { time: 0.000, rotation: -0.30 },
+        { time: 0.100, rotation:  0.00 },
+        { time: 0.200, rotation:  0.42 },
+        { time: 0.300, rotation: -0.14 },
+        { time: 0.400, rotation: -0.30 },
+      ],
+      right_leg: [
+        { time: 0.000, rotation:  0.68 },
+        { time: 0.200, rotation: -0.68 },
+        { time: 0.400, rotation:  0.68 },
+      ],
+      right_shin: [
+        { time: 0.000, rotation: 0.24 },
+        { time: 0.100, rotation: 0.92 },
+        { time: 0.200, rotation: 0.14 },
+        { time: 0.300, rotation: 0.12 },
+        { time: 0.400, rotation: 0.24 },
+      ],
+      right_foot: [
+        { time: 0.000, rotation:  0.42 },
+        { time: 0.100, rotation: -0.14 },
+        { time: 0.200, rotation: -0.30 },
+        { time: 0.300, rotation:  0.00 },
+        { time: 0.400, rotation:  0.42 },
       ],
     },
   },
@@ -347,33 +454,33 @@ export const ANIMATIONS = {
         { time: 0.9,  rotation:  0 },
       ],
       left_arm: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.12, rotation:  0.5 },
-        { time: 0.35, rotation: -0.7 },
-        { time: 0.68, rotation:  0.4 },
-        { time: 0.9,  rotation:  0 },
+        { time: 0.0,  rotation: -1.073 },
+        { time: 0.12, rotation: -0.573 },
+        { time: 0.35, rotation: -1.773 },
+        { time: 0.68, rotation: -0.673 },
+        { time: 0.9,  rotation: -1.073 },
       ],
       // Forearm drags behind upper arm like a pendulum
       left_forearm: [
-        { time: 0.0,  rotation:  0.12 },
-        { time: 0.12, rotation:  0.5 },  // droop during crouch
-        { time: 0.35, rotation: -0.3 },  // trails as arm rises
-        { time: 0.68, rotation:  0.6 },  // bounces on land
-        { time: 0.9,  rotation:  0.12 },
+        { time: 0.0,  rotation: -0.318 },
+        { time: 0.12, rotation: 0.062 },  // droop during crouch
+        { time: 0.35, rotation: -0.738 },  // trails as arm rises
+        { time: 0.68, rotation: 0.162 },  // bounces on land
+        { time: 0.9,  rotation: -0.318 },
       ],
       right_arm: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.12, rotation: -0.5 },
-        { time: 0.35, rotation:  0.7 },
-        { time: 0.68, rotation: -0.4 },
-        { time: 0.9,  rotation:  0 },
+        { time: 0.0,  rotation: 2.069 },
+        { time: 0.12, rotation: 1.569 },
+        { time: 0.35, rotation: 2.769 },
+        { time: 0.68, rotation: 1.669 },
+        { time: 0.9,  rotation: 2.069 },
       ],
       right_forearm: [
-        { time: 0.0,  rotation: -0.12 },
-        { time: 0.12, rotation: -0.5 },
-        { time: 0.35, rotation:  0.3 },
-        { time: 0.68, rotation: -0.6 },
-        { time: 0.9,  rotation: -0.12 },
+        { time: 0.0,  rotation: -0.558 },
+        { time: 0.12, rotation: -0.938 },
+        { time: 0.35, rotation: -0.138 },
+        { time: 0.68, rotation: -1.038 },
+        { time: 0.9,  rotation: -0.558 },
       ],
       left_hand: [
         { time: 0.0,  rotation:  0.06 },
@@ -439,18 +546,18 @@ export const ANIMATIONS = {
     tracks: {
       // Upper arm: wind-up back, then slam forward
       right_arm: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.18, rotation: -1.3 },
-        { time: 0.35, rotation:  2.1 },
-        { time: 0.65, rotation:  0 },
+        { time: 0.0,  rotation: 2.069 },
+        { time: 0.18, rotation: 0.769 },
+        { time: 0.35, rotation: 4.169 },
+        { time: 0.65, rotation: 2.069 },
       ],
       // Forearm: lags on wind-up, whips forward at strike, snaps back
       right_forearm: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.18, rotation:  0.5 },  // trails behind upper arm
-        { time: 0.28, rotation: -0.8 },  // whips forward just before contact
-        { time: 0.40, rotation:  0.3 },  // follows through
-        { time: 0.65, rotation:  0 },
+        { time: 0.0,  rotation: -0.438 },
+        { time: 0.18, rotation: 0.062 },  // trails behind upper arm
+        { time: 0.28, rotation: -1.238 },  // whips forward just before contact
+        { time: 0.40, rotation: -0.138 },  // follows through
+        { time: 0.65, rotation: -0.438 },
       ],
       // Wrist: cocks back, snaps forward with the strike
       right_hand: [
@@ -500,74 +607,92 @@ export const ANIMATIONS = {
 
   punch: {
     name: 'Punch',
-    duration: 0.55,
-    loop: false,
+    // Strike resolves at ~0.60s; the rest is a held idle so the animation
+    // pauses before looping back into the next punch.
+    duration: 1.50,
+    loop: true,
     tracks: {
-      // Torso winds back on wind-up, drives forward through the strike
+      // Character faces +X — the strike drives toward the right.
+      // Torso winds back (CW lean toward -X), then snaps forward (CCW).
       torso: [
         { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation: -0.14 },
-        { time: 0.26, rotation:  0.20 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.18, rotation:  0.22 },   // wind back
+        { time: 0.28, rotation: -0.32 },   // snap into strike
+        { time: 0.40, rotation: -0.20 },   // follow-through
+        { time: 0.60, rotation:  0.00 },
       ],
       lower_torso: [
         { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation: -0.07 },
-        { time: 0.26, rotation:  0.12 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.18, rotation:  0.10 },
+        { time: 0.28, rotation: -0.18 },
+        { time: 0.40, rotation: -0.10 },
+        { time: 0.60, rotation:  0.00 },
       ],
       head: [
         { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation: -0.10 },
-        { time: 0.28, rotation:  0.06 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.18, rotation:  0.14 },   // chin tucks toward back shoulder
+        { time: 0.28, rotation: -0.10 },   // snaps forward with body
+        { time: 0.60, rotation:  0.00 },
       ],
-      // Right arm: pulls back → shoots to the right (punch extension)
+
+      // Right arm — the puncher. Chambers tight, then whips out to +X for
+      // full extension. R_arm = -π/2 extends the forearm to +X; the forearm
+      // coils with negative rotation so the wrist sweeps over-the-top.
       right_arm: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation: -0.35 },
-        { time: 0.26, rotation:  1.52 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.00, rotation: 0.000 },   // T-pose rest — arm extended +X
+        { time: 0.18, rotation: 1.372 },   // chamber: arm pulls back/up
+        { time: 0.20, rotation: 1.372 },
+        { time: 0.28, rotation: 0.192 },   // STRIKE — arm level horizontal (+X)
+        { time: 0.36, rotation: 0.272 },   // impact hold (slight recoil)
+        { time: 0.60, rotation: 0.000 },
       ],
       right_forearm: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation:  1.10 },  // elbow coils on wind-up
-        { time: 0.23, rotation:  0.06 },  // snaps nearly straight at strike
-        { time: 0.36, rotation:  0.06 },  // hold extension
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.00, rotation: -0.438 },
+        { time: 0.18, rotation: -3.238 },   // tightly coiled back, fist by shoulder
+        { time: 0.20, rotation: -3.238 },
+        { time: 0.26, rotation: -0.388 },   // snaps straight just before peak (level with arm)
+        { time: 0.40, rotation: -0.388 },   // hold extension
+        { time: 0.60, rotation: -0.438 },
       ],
       right_hand: [
         { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation:  0.45 },  // wrist cocks back
-        { time: 0.26, rotation: -0.18 },  // wrist snaps through on impact
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.18, rotation: -0.55 },   // wrist cocked
+        { time: 0.28, rotation:  0.20 },   // wrist snaps through impact
+        { time: 0.40, rotation:  0.10 },
+        { time: 0.60, rotation:  0.00 },
       ],
-      // Left arm: rises into guard during punch, returns after
+
+      // Left arm — pulls up into guard while the right arm fires.
       left_arm: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation: -1.00 },
-        { time: 0.36, rotation: -0.80 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.00, rotation: -1.073 },
+        { time: 0.18, rotation: -1.373 },
+        { time: 0.28, rotation: -0.123 },   // up to guard
+        { time: 0.40, rotation: -0.273 },
+        { time: 0.60, rotation: -1.073 },
       ],
       left_forearm: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation:  0.90 },
-        { time: 0.36, rotation:  0.70 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.00, rotation: -0.438 },
+        { time: 0.18, rotation: -0.038 },
+        { time: 0.28, rotation: -1.488 },   // tucked tight to chin
+        { time: 0.40, rotation: -1.288 },
+        { time: 0.60, rotation: -0.438 },
       ],
-      // Stance: slight weight shift into the punch
+
+      // Stance: load on the back leg, drive forward through the strike.
       left_leg: [
         { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation:  0.12 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.18, rotation:  0.12 },   // load
+        { time: 0.28, rotation: -0.18 },   // push off toward +X
+        { time: 0.60, rotation:  0.00 },
       ],
       right_leg: [
         { time: 0.00, rotation:  0.00 },
-        { time: 0.12, rotation: -0.10 },
-        { time: 0.55, rotation:  0.00 },
+        { time: 0.18, rotation: -0.14 },
+        { time: 0.28, rotation:  0.10 },
+        { time: 0.60, rotation:  0.00 },
       ],
-      left_shin:  [{ time: 0.00, rotation: 0.15 }, { time: 0.55, rotation: 0.15 }],
-      right_shin: [{ time: 0.00, rotation: 0.15 }, { time: 0.55, rotation: 0.15 }],
+      left_shin:  [{ time: 0.00, rotation: 0.15 }, { time: 0.60, rotation: 0.15 }],
+      right_shin: [{ time: 0.00, rotation: 0.15 }, { time: 0.60, rotation: 0.15 }],
     },
   },
 
@@ -599,14 +724,14 @@ export const ANIMATIONS = {
       ],
       // Left arm: stretches leftward (past vertical — tilted to screen-left, away from face)
       left_arm: [
-        { time: 0.000, rotation: -3.70 },
-        { time: 0.450, rotation: -3.75 },
-        { time: 0.900, rotation: -3.70 },
+        { time: 0.000, rotation: -4.773 },
+        { time: 0.450, rotation: -4.823 },
+        { time: 0.900, rotation: -4.773 },
       ],
       left_forearm: [
-        { time: 0.000, rotation: -0.25 },
-        { time: 0.450, rotation: -0.20 },
-        { time: 0.900, rotation: -0.25 },
+        { time: 0.000, rotation: -0.688 },
+        { time: 0.450, rotation: -0.638 },
+        { time: 0.900, rotation: -0.688 },
       ],
       left_hand: [
         { time: 0.0, rotation: -0.08 },
@@ -614,14 +739,14 @@ export const ANIMATIONS = {
       ],
       // Right arm: spread backward (past vertical — tilted toward back)
       right_arm: [
-        { time: 0.000, rotation: -3.55 },
-        { time: 0.450, rotation: -3.60 },
-        { time: 0.900, rotation: -3.55 },
+        { time: 0.000, rotation: -1.481 },
+        { time: 0.450, rotation: -1.531 },
+        { time: 0.900, rotation: -1.481 },
       ],
       right_forearm: [
-        { time: 0.000, rotation: -0.28 },
-        { time: 0.450, rotation: -0.22 },
-        { time: 0.900, rotation: -0.28 },
+        { time: 0.000, rotation: -0.718 },
+        { time: 0.450, rotation: -0.658 },
+        { time: 0.900, rotation: -0.718 },
       ],
       right_hand: [
         { time: 0.0, rotation: -0.10 },
@@ -674,65 +799,73 @@ export const ANIMATIONS = {
     duration: 0.6,
     loop: true,
     tracks: {
-      // Upright hip-fire stance. Body rocks back on fire, rebounds.
+      // Hip-fire stance facing +X. Slight forward lean; rocks back on fire,
+      // overshoots forward on recovery, settles.
       torso: [
-        { time: 0.00, y:  0, rotation:  0.00 },
-        { time: 0.03, y:  2, rotation: -0.06 },  // BANG — body rocks back
-        { time: 0.22, y: -1, rotation:  0.02 },  // rebounds
-        { time: 0.60, y:  0, rotation:  0.00 },
+        { time: 0.00, y:  0, rotation:  0.04 },
+        { time: 0.03, y:  2, rotation: -0.05 },  // BANG — body rocks back
+        { time: 0.18, y: -1, rotation:  0.07 },  // overshoot forward
+        { time: 0.40, y:  0, rotation:  0.04 },  // settle
+        { time: 0.60, y:  0, rotation:  0.04 },
       ],
       lower_torso: [
         { time: 0.00, rotation:  0.00 },
-        { time: 0.03, rotation: -0.08 },  // hips absorb impulse
-        { time: 0.32, rotation:  0.00 },
+        { time: 0.03, rotation: -0.07 },         // hips absorb impulse
+        { time: 0.30, rotation:  0.00 },
         { time: 0.60, rotation:  0.00 },
       ],
-      // Head upright; jolts back slightly on fire
       head: [
-        { time: 0.00, rotation: -0.05 },
-        { time: 0.06, rotation:  0.04 },
-        { time: 0.38, rotation: -0.06 },
-        { time: 0.60, rotation: -0.05 },
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.05, rotation:  0.05 },         // jolts back briefly
+        { time: 0.30, rotation: -0.02 },         // refocuses on target
+        { time: 0.60, rotation:  0.00 },
       ],
-      // Right arm (trigger hand) — arm angled forward at hip level, kicks up on fire
+
+      // Right arm (trigger hand) — upper arm hangs at side, forearm bent
+      // ~90° forward to grip. World rotations: arm ≈ -0.50 (vertical down),
+      // forearm ≈ -1.63 (horizontal +X).
       right_arm: [
-        { time: 0.00, rotation: -0.55 },
-        { time: 0.03, rotation: -0.82 },  // muzzle rise
-        { time: 0.28, rotation: -0.52 },
-        { time: 0.60, rotation: -0.55 },
+        { time: 0.00, rotation: 1.571 },
+        { time: 0.03, rotation: 1.471 },         // arm kicks up with recoil
+        { time: 0.25, rotation: 1.601 },         // slight overshoot down
+        { time: 0.60, rotation: 1.571 },
       ],
       right_forearm: [
-        { time: 0.00, rotation: -0.85 },
-        { time: 0.03, rotation: -1.05 },  // wrist whips up
-        { time: 0.32, rotation: -0.82 },
-        { time: 0.60, rotation: -0.85 },
+        { time: 0.00, rotation: -1.572 },
+        { time: 0.03, rotation: -1.872 },        // muzzle rise — forearm whips up ~17°
+        { time: 0.25, rotation: -1.502 },        // overshoot down
+        { time: 0.60, rotation: -1.572 },
       ],
       right_hand: [
-        { time: 0.00, rotation: -0.17 },
-        { time: 0.03, rotation:  0.04 },  // kicks up from recoil
-        { time: 0.32, rotation: -0.20 },
-        { time: 0.60, rotation: -0.17 },
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.03, rotation:  0.25 },         // wrist snaps up on fire
+        { time: 0.30, rotation:  0.00 },
+        { time: 0.60, rotation:  0.00 },
       ],
-      // Left arm (support hand) — reaches forward along barrel at hip level
+
+      // Left arm (support hand) — extends forward and slightly down to the
+      // foregrip. World ≈ -1.55 (forward at ~30° below horizontal). Forearm
+      // continues straight along the barrel (no elbow bend).
       left_arm: [
-        { time: 0.00, rotation: -0.65 },
-        { time: 0.03, rotation: -0.88 },
-        { time: 0.30, rotation: -0.62 },
-        { time: 0.60, rotation: -0.65 },
+        { time: 0.00, rotation: -2.360 },
+        { time: 0.03, rotation: -2.260 },        // kicks up slightly
+        { time: 0.25, rotation: -2.400 },        // overshoot down-forward
+        { time: 0.60, rotation: -2.360 },
       ],
       left_forearm: [
-        { time: 0.00, rotation: -0.72 },
-        { time: 0.03, rotation: -0.90 },
-        { time: 0.32, rotation: -0.68 },
-        { time: 0.60, rotation: -0.72 },
+        { time: 0.00, rotation:  0.000 },
+        { time: 0.03, rotation: -0.150 },        // forearm lifts with recoil
+        { time: 0.30, rotation:  0.030 },        // slight droop
+        { time: 0.60, rotation:  0.000 },
       ],
       left_hand: [
-        { time: 0.00, rotation: -0.10 },
-        { time: 0.03, rotation: -0.16 },
-        { time: 0.32, rotation: -0.08 },
-        { time: 0.60, rotation: -0.10 },
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.03, rotation:  0.10 },
+        { time: 0.30, rotation:  0.00 },
+        { time: 0.60, rotation:  0.00 },
       ],
-      // Legs: braced wide stance — static
+
+      // Legs: braced wide stance — static.
       left_leg:   [{ time: 0.0, rotation: -0.15 }, { time: 0.6, rotation: -0.15 }],
       left_shin:  [{ time: 0.0, rotation:  0.22 }, { time: 0.6, rotation:  0.22 }],
       left_foot:  [{ time: 0.0, rotation: -0.05 }, { time: 0.6, rotation: -0.05 }],
@@ -769,16 +902,16 @@ export const ANIMATIONS = {
       ],
       // Right arm (trigger hand) — low hip, hard muzzle kick each cycle
       right_arm: [
-        { time: 0.00, rotation: -0.35 },
-        { time: 0.02, rotation: -0.62 },  // muzzle kicks up
-        { time: 0.07, rotation: -0.32 },
-        { time: 0.12, rotation: -0.35 },
+        { time: 0.00, rotation: 1.719 },
+        { time: 0.02, rotation: 1.449 },  // muzzle kicks up
+        { time: 0.07, rotation: 1.749 },
+        { time: 0.12, rotation: 1.719 },
       ],
       right_forearm: [
-        { time: 0.00, rotation: -0.75 },
-        { time: 0.02, rotation: -0.98 },
-        { time: 0.07, rotation: -0.72 },
-        { time: 0.12, rotation: -0.75 },
+        { time: 0.00, rotation: -1.188 },
+        { time: 0.02, rotation: -1.418 },
+        { time: 0.07, rotation: -1.158 },
+        { time: 0.12, rotation: -1.188 },
       ],
       right_hand: [
         { time: 0.00, rotation: -0.15 },
@@ -788,16 +921,16 @@ export const ANIMATIONS = {
       ],
       // Left arm (support hand) — grips barrel low, follows the kick
       left_arm: [
-        { time: 0.00, rotation: -0.45 },
-        { time: 0.02, rotation: -0.68 },
-        { time: 0.07, rotation: -0.42 },
-        { time: 0.12, rotation: -0.45 },
+        { time: 0.00, rotation: -1.523 },
+        { time: 0.02, rotation: -1.753 },
+        { time: 0.07, rotation: -1.493 },
+        { time: 0.12, rotation: -1.523 },
       ],
       left_forearm: [
-        { time: 0.00, rotation: -0.62 },
-        { time: 0.02, rotation: -0.82 },
-        { time: 0.07, rotation: -0.60 },
-        { time: 0.12, rotation: -0.62 },
+        { time: 0.00, rotation: -1.058 },
+        { time: 0.02, rotation: -1.258 },
+        { time: 0.07, rotation: -1.038 },
+        { time: 0.12, rotation: -1.058 },
       ],
       left_hand: [
         { time: 0.00, rotation: -0.10 },
@@ -814,112 +947,7 @@ export const ANIMATIONS = {
       right_foot: [{ time: 0.0, rotation:  0.08 }, { time: 0.12, rotation:  0.08 }],
     },
   },
-
-  scared_run: {
-    name: 'Panic',
-    duration: 0.40,
-    loop: true,
-    tracks: {
-      // Deep forward hunch + big bounce — desperate sprint
-      torso: [
-        { time: 0.000, y:  0,  rotation:  0.22 },
-        { time: 0.100, y: -11, rotation:  0.24 },
-        { time: 0.200, y:  0,  rotation:  0.22 },
-        { time: 0.300, y: -11, rotation:  0.24 },
-        { time: 0.400, y:  0,  rotation:  0.22 },
-      ],
-      lower_torso: [
-        { time: 0.000, rotation:  0.18 },
-        { time: 0.100, rotation:  0.00 },
-        { time: 0.200, rotation: -0.18 },
-        { time: 0.300, rotation:  0.00 },
-        { time: 0.400, rotation:  0.18 },
-      ],
-      // Head craning backward — looking over shoulder at the danger
-      head: [
-        { time: 0.000, rotation: -0.35 },
-        { time: 0.100, rotation: -0.28 },
-        { time: 0.200, rotation: -0.38 },
-        { time: 0.300, rotation: -0.28 },
-        { time: 0.400, rotation: -0.35 },
-      ],
-      // Left arm: wild windmill — thrown back then whips forward-up in panic
-      left_arm: [
-        { time: 0.000, rotation:  0.90 },
-        { time: 0.200, rotation: -1.30 },
-        { time: 0.400, rotation:  0.90 },
-      ],
-      left_forearm: [
-        { time: 0.000, rotation:  0.65 },
-        { time: 0.100, rotation:  1.00 },  // droops behind on backswing
-        { time: 0.200, rotation:  0.15 },  // trails as arm whips forward
-        { time: 0.300, rotation:  0.45 },
-        { time: 0.400, rotation:  0.65 },
-      ],
-      left_hand: [
-        { time: 0.000, rotation:  0.35 },
-        { time: 0.200, rotation:  0.08 },
-        { time: 0.400, rotation:  0.35 },
-      ],
-      // Right arm: opposite phase — thrown wildly backward from forward position
-      right_arm: [
-        { time: 0.000, rotation: -0.90 },
-        { time: 0.200, rotation:  1.10 },
-        { time: 0.400, rotation: -0.90 },
-      ],
-      right_forearm: [
-        { time: 0.000, rotation: -0.15 },
-        { time: 0.100, rotation: -0.55 },
-        { time: 0.200, rotation: -0.70 },  // trails on the big backswing
-        { time: 0.300, rotation: -0.25 },
-        { time: 0.400, rotation: -0.15 },
-      ],
-      right_hand: [
-        { time: 0.000, rotation: -0.08 },
-        { time: 0.200, rotation: -0.32 },
-        { time: 0.400, rotation: -0.08 },
-      ],
-      // Legs: frantic stride, high heel kick behind
-      left_leg: [
-        { time: 0.000, rotation: -0.68 },
-        { time: 0.200, rotation:  0.68 },
-        { time: 0.400, rotation: -0.68 },
-      ],
-      left_shin: [
-        { time: 0.000, rotation: 0.14 },
-        { time: 0.100, rotation: 0.12 },
-        { time: 0.200, rotation: 0.24 },
-        { time: 0.300, rotation: 0.92 },
-        { time: 0.400, rotation: 0.14 },
-      ],
-      left_foot: [
-        { time: 0.000, rotation: -0.30 },
-        { time: 0.100, rotation:  0.00 },
-        { time: 0.200, rotation:  0.42 },
-        { time: 0.300, rotation: -0.14 },
-        { time: 0.400, rotation: -0.30 },
-      ],
-      right_leg: [
-        { time: 0.000, rotation:  0.68 },
-        { time: 0.200, rotation: -0.68 },
-        { time: 0.400, rotation:  0.68 },
-      ],
-      right_shin: [
-        { time: 0.000, rotation: 0.24 },
-        { time: 0.100, rotation: 0.92 },
-        { time: 0.200, rotation: 0.14 },
-        { time: 0.300, rotation: 0.12 },
-        { time: 0.400, rotation: 0.24 },
-      ],
-      right_foot: [
-        { time: 0.000, rotation:  0.42 },
-        { time: 0.100, rotation: -0.14 },
-        { time: 0.200, rotation: -0.30 },
-        { time: 0.300, rotation:  0.00 },
-        { time: 0.400, rotation:  0.42 },
-      ],
-    },
-  },
+
 };
 
 function lerp(a, b, t) {

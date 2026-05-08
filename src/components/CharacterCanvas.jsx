@@ -3,10 +3,11 @@ import { ANIMATIONS, getPoseAtTime } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { renderCharacter } from '../systems/Renderer.js';
 import {
-  DEFAULT_SKINS, getSkin, worldToLocal,
+  DEFAULT_SKINS, SKIN_COLORS, getSkin, worldToLocal,
   renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
   deleteSkinPoint,
 } from '../systems/VectorEditor.js';
+import { strokeSkinOutline } from '../systems/SkinSystem.js';
 import { solveIK } from '../systems/IKSystem.js';
 import { mergeOffsets } from '../utils/transforms.js';
 
@@ -212,6 +213,15 @@ export function CharacterCanvas({
       ctx.scale(scale, scale);
       const activeVec    = drag?.type !== 'bone' && drag?.type !== 'rotate' ? drag : null;
       const visualScale  = 1 / zoom;
+
+      // Stroke the selected part's outline so the user can see the contour
+      // they're shaping while the rest of the character keeps its filled look.
+      if (s.selectedSkin !== 'all') {
+        const tmpl = getSkin(s.selectedSkin, s.skinOverrides);
+        const col  = SKIN_COLORS[s.selectedSkin]?.anchor ?? '#fff';
+        if (tmpl) strokeSkinOutline(ctx, tmpl, worldTransforms, col, 1.2 * visualScale);
+      }
+
       if (s.showBinds) {
         renderBoneBinds(ctx, worldTransforms, s.skinOverrides, s.selectedSkin, visualScale);
       }
@@ -647,12 +657,12 @@ export function CharacterCanvas({
   const hasSkinEdits = JSON.stringify(skinOverrides) !== JSON.stringify(defaultSkinOverrides.current);
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
+    <div className="relative inline-block">
       <canvas
         ref={canvasRef}
         width={CANVAS_W}
         height={CANVAS_H}
-        style={{ display: 'block', borderRadius: '8px' }}
+        className="block rounded-lg"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDrag}
@@ -661,99 +671,105 @@ export function CharacterCanvas({
       />
 
       {/* Zoom controls */}
-      <div style={ZOOM_BAR_STYLE}>
-        <button style={ZOOM_BTN} onClick={() => stepZoom(1 / 1.3)}>−</button>
-        <span style={ZOOM_LABEL}>{zoomPct}%</span>
-        <button style={ZOOM_BTN} onClick={() => stepZoom(1.3)}>+</button>
+      <div className="absolute bottom-2.5 left-2.5 flex items-center gap-0.5 bg-black/55 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+        <button onClick={() => stepZoom(1 / 1.3)} className="text-zinc-300 hover:text-white text-base px-1 py-0.5">−</button>
+        <span className="text-zinc-300 font-mono text-[11px] min-w-[38px] text-center">{zoomPct}%</span>
+        <button onClick={() => stepZoom(1.3)} className="text-zinc-300 hover:text-white text-base px-1 py-0.5">+</button>
         {zoomPct !== 100 && (
-          <button style={{ ...ZOOM_BTN, marginLeft: 2, fontSize: 13 }} onClick={resetView} title="Reset view">⌂</button>
+          <button onClick={resetView} title="Reset view" className="text-zinc-300 hover:text-white text-sm ml-0.5 px-1 py-0.5">⌂</button>
         )}
       </div>
 
       {/* Top-right controls */}
-      <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+      <div className="absolute top-2.5 right-2.5 flex flex-col items-end gap-1.5">
         {(hasBoneEdits || hasSkinEdits) && (
-          <div style={{ display: 'flex', gap: 6 }}>
-            {hasBoneEdits && <button onClick={resetBones} style={resetBtnStyle('#ef4444')}>Reset joints</button>}
-            {hasSkinEdits && <button onClick={resetSkins} style={resetBtnStyle('#f97316')}>Reset shape</button>}
+          <div className="flex gap-1.5">
+            {hasBoneEdits && (
+              <button
+                onClick={resetBones}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded px-2.5 py-1 text-[11px] font-mono shadow-md transition-colors"
+              >
+                Reset joints
+              </button>
+            )}
+            {hasSkinEdits && (
+              <button
+                onClick={resetSkins}
+                className="bg-orange-500 text-white hover:bg-orange-500/90 rounded px-2.5 py-1 text-[11px] font-mono shadow-md transition-colors"
+              >
+                Reset shape
+              </button>
+            )}
           </div>
         )}
         {canUndo && (
-          <button onClick={undo} style={resetBtnStyle('#6366f1')} title="Undo (Ctrl+Z)">Undo</button>
+          <button
+            onClick={undo}
+            title="Undo (Ctrl+Z)"
+            className="bg-indigo-500 text-white hover:bg-indigo-500/90 rounded px-2.5 py-1 text-[11px] font-mono shadow-md transition-colors"
+          >
+            Undo
+          </button>
         )}
         {currentAnimation === 'edit' && (
-          <button onClick={saveAsDefault} style={resetBtnStyle('#22c55e')} title="Save current joints and shape as the reset target">
+          <button
+            onClick={saveAsDefault}
+            title="Save current joints and shape as the reset target"
+            className="bg-emerald-500 text-white hover:bg-emerald-500/90 rounded px-2.5 py-1 text-[11px] font-mono shadow-md transition-colors"
+          >
             Save as Default
           </button>
         )}
       </div>
 
-      {/* Mirror controls — edit mode only */}
+      {/* Mirror / Copy controls — edit mode only */}
       {currentAnimation === 'edit' && (
-        <div style={MIRROR_PANEL_STYLE}>
-          <span style={MIRROR_LABEL}>Mirror</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button style={MIRROR_BTN} onClick={() => mirrorLimb('left',  'arms')}>L→R Arms</button>
-            <button style={MIRROR_BTN} onClick={() => mirrorLimb('right', 'arms')}>R→L Arms</button>
+        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 bg-black/55 backdrop-blur-sm rounded-md px-2 py-1.5">
+          <CanvasPanelLabel>Mirror</CanvasPanelLabel>
+          <div className="flex gap-1">
+            <CanvasPanelButton onClick={() => mirrorLimb('left',  'arms')}>L→R Arms</CanvasPanelButton>
+            <CanvasPanelButton onClick={() => mirrorLimb('right', 'arms')}>R→L Arms</CanvasPanelButton>
           </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button style={MIRROR_BTN} onClick={() => mirrorLimb('left',  'legs')}>L→R Legs</button>
-            <button style={MIRROR_BTN} onClick={() => mirrorLimb('right', 'legs')}>R→L Legs</button>
+          <div className="flex gap-1">
+            <CanvasPanelButton onClick={() => mirrorLimb('left',  'legs')}>L→R Legs</CanvasPanelButton>
+            <CanvasPanelButton onClick={() => mirrorLimb('right', 'legs')}>R→L Legs</CanvasPanelButton>
           </div>
-          <span style={{ ...MIRROR_LABEL, marginTop: 4 }}>Copy</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button style={MIRROR_BTN} onClick={() => replicateLimb('left',  'arms')}>L→R Arms</button>
-            <button style={MIRROR_BTN} onClick={() => replicateLimb('right', 'arms')}>R→L Arms</button>
+          <CanvasPanelLabel className="mt-1">Copy</CanvasPanelLabel>
+          <div className="flex gap-1">
+            <CanvasPanelButton onClick={() => replicateLimb('left',  'arms')}>L→R Arms</CanvasPanelButton>
+            <CanvasPanelButton onClick={() => replicateLimb('right', 'arms')}>R→L Arms</CanvasPanelButton>
           </div>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button style={MIRROR_BTN} onClick={() => replicateLimb('left',  'legs')}>L→R Legs</button>
-            <button style={MIRROR_BTN} onClick={() => replicateLimb('right', 'legs')}>R→L Legs</button>
+          <div className="flex gap-1">
+            <CanvasPanelButton onClick={() => replicateLimb('left',  'legs')}>L→R Legs</CanvasPanelButton>
+            <CanvasPanelButton onClick={() => replicateLimb('right', 'legs')}>R→L Legs</CanvasPanelButton>
           </div>
         </div>
       )}
 
       {showVectors && zoomPct > 110 && (
-        <div style={HINT_STYLE}>Right-click drag to pan</div>
+        <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 text-white/45 font-mono text-[10px] pointer-events-none whitespace-nowrap">
+          Right-click drag to pan
+        </div>
       )}
     </div>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────────
-const ZOOM_BAR_STYLE = {
-  position: 'absolute', bottom: 10, left: 10,
-  display: 'flex', alignItems: 'center', gap: 2,
-  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
-  borderRadius: 6, padding: '3px 6px',
-};
-const ZOOM_BTN = {
-  background: 'none', border: 'none', color: '#ccc',
-  fontSize: 16, lineHeight: 1, cursor: 'pointer', padding: '1px 5px', borderRadius: 4,
-};
-const ZOOM_LABEL = {
-  color: '#ddd', fontFamily: 'monospace', fontSize: 11, minWidth: 38, textAlign: 'center',
-};
-const HINT_STYLE = {
-  position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
-  color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', fontSize: 10,
-  pointerEvents: 'none', whiteSpace: 'nowrap',
-};
-const resetBtnStyle = (bg) => ({
-  padding: '4px 10px', fontSize: '11px', fontFamily: 'monospace',
-  background: bg, color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', opacity: 0.9,
-});
-const MIRROR_PANEL_STYLE = {
-  position: 'absolute', top: 10, left: 10,
-  display: 'flex', flexDirection: 'column', gap: 4,
-  background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
-  borderRadius: 6, padding: '6px 8px',
-};
-const MIRROR_LABEL = {
-  fontSize: 10, color: 'rgba(255,255,255,0.45)',
-  textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2,
-};
-const MIRROR_BTN = {
-  padding: '3px 7px', fontSize: '10px', fontFamily: 'monospace',
-  background: 'rgba(255,255,255,0.12)', color: '#ddd',
-  border: '1px solid rgba(255,255,255,0.15)', borderRadius: 4, cursor: 'pointer',
-};
+function CanvasPanelLabel({ className = '', children }) {
+  return (
+    <span className={`text-[10px] uppercase tracking-wider text-white/45 mb-0.5 ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function CanvasPanelButton({ onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-2 py-0.5 text-[10px] font-mono bg-white/10 text-zinc-200 border border-white/15 rounded hover:bg-white/20 hover:border-primary transition-colors"
+    >
+      {children}
+    </button>
+  );
+}

@@ -57,6 +57,8 @@ torso
 
 All rotations in **radians**. Positive = clockwise (canvas coords). Y increases downward.
 
+**Facing convention:** the character always faces **+X (right)**. Any directional animation — punch, attack, walk push-off, weapon swing, etc. — should be oriented toward +X. A "forward" punch sends the fist to the right side of the canvas.
+
 ## Skin template format
 
 ```js

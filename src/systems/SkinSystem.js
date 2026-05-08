@@ -136,42 +136,56 @@ function rotateOffset(dx, dy, rotation) {
   return { x: cos * dx - sin * dy, y: sin * dx + cos * dy };
 }
 
-/**
- * Transforms all skin control points to world space using the bone world
- * transforms, then strokes the closed Bezier outline.
- */
-export function drawSkin(ctx, template, worldTransforms, color, scale = 1) {
-  if (!template || template.length === 0) return;
+function buildSkinPath(ctx, template, worldTransforms, scale) {
   const pts = template.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => {
     const bone = worldTransforms[boneId];
+    if (!bone) return null;
     const a  = rotateOffset(lx * scale, ly * scale, bone.rotation);
     const ax = bone.x + a.x;
     const ay = bone.y + a.y;
-
     const hi = rotateOffset(hInDx * scale,  hInDy * scale,  bone.rotation);
     const ho = rotateOffset(hOutDx * scale, hOutDy * scale, bone.rotation);
-
     return {
       x: ax, y: ay,
       hIn:  { x: ax + hi.x, y: ay + hi.y },
       hOut: { x: ax + ho.x, y: ay + ho.y },
     };
   });
+  if (pts.some(p => !p)) return false;
 
-  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(pts[0].x, pts[0].y);
-
   for (let i = 1; i < pts.length; i++) {
     const prev = pts[i - 1];
     const curr = pts[i];
     ctx.bezierCurveTo(prev.hOut.x, prev.hOut.y, curr.hIn.x, curr.hIn.y, curr.x, curr.y);
   }
-
-  // Close back to first point
   const last  = pts[pts.length - 1];
   const first = pts[0];
   ctx.bezierCurveTo(last.hOut.x, last.hOut.y, first.hIn.x, first.hIn.y, first.x, first.y);
+  return true;
+}
 
+/**
+ * Transforms all skin control points to world space using the bone world
+ * transforms, then fills the closed Bezier outline.
+ */
+export function drawSkin(ctx, template, worldTransforms, color, scale = 1) {
+  if (!template || template.length === 0) return;
+  if (!buildSkinPath(ctx, template, worldTransforms, scale)) return;
+  ctx.fillStyle = color;
   ctx.fill();
+}
+
+/**
+ * Strokes the same Bezier outline as drawSkin without filling — used as a
+ * visual aid while editing vectors so the user can see the part's contour
+ * over the rendered character.
+ */
+export function strokeSkinOutline(ctx, template, worldTransforms, color, lineWidth, scale = 1) {
+  if (!template || template.length === 0) return;
+  if (!buildSkinPath(ctx, template, worldTransforms, scale)) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = lineWidth;
+  ctx.stroke();
 }
