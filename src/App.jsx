@@ -13,6 +13,7 @@ import { ANIMATIONS } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
@@ -469,7 +470,18 @@ export default function App() {
           />
 
           <main className="flex-1 flex items-center justify-center p-6 overflow-auto">
-            <div className="rounded-lg border border-border overflow-hidden shadow-2xl">
+            <div className="flex flex-col items-start">
+              {currentAnimation === 'edit' && (
+                <div className="bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
+                  Edit Mode
+                </div>
+              )}
+              <div className={cn(
+                  'rounded-lg border overflow-hidden shadow-2xl transition-colors duration-200',
+                  currentAnimation === 'edit'
+                    ? 'border-yellow-400 shadow-[0_0_24px_rgba(250,204,21,0.25)] rounded-tl-none'
+                    : 'border-border',
+                )}>
               <CharacterCanvas
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
                 character={activeChar.parts}
@@ -493,6 +505,7 @@ export default function App() {
                 onRagdollOverlayChange={poseEditorOpen ? handlePoseRagdollOverlayChange : undefined}
                 onSaveDefault={saveCharacterDefault}
               />
+            </div>
             </div>
           </main>
 

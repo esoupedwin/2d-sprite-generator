@@ -12,10 +12,10 @@ import { solveIK } from '../systems/IKSystem.js';
 import { mergeOffsets } from '../utils/transforms.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const CANVAS_W   = 620;
-const CANVAS_H   = 640;
+const CANVAS_W   = 868;
+const CANVAS_H   = 896;
 const ORIGIN_X   = CANVAS_W / 2;
-const ORIGIN_Y   = 490;
+const ORIGIN_Y   = 686;
 const BASE_SCALE = 2.5;
 
 const VECTOR_HIT_PX = 10;
