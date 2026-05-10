@@ -98,6 +98,18 @@ export default function App() {
   // Tracks the live ragdoll overlay inside CharacterCanvas so we can commit it on frame switch
   const poseOverlayRef = useRef({});
 
+  // Space = play/pause (when not typing in an input)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === ' ' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        setIsPlaying(p => !p);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const toggleRagdoll = useCallback(() => {
     setRagdoll(p => {
       const next = !p;
@@ -370,7 +382,7 @@ export default function App() {
 
   // ── Animation callbacks ───────────────────────────────────────────────────────
   const handleAnimationComplete = useCallback((animKey) => {
-    if (['attack', 'jump'].includes(animKey) || !ANIMATIONS[animKey]) {
+    if (animKey === 'jump' || !ANIMATIONS[animKey]) {
       setCurrentAnimation('idle');
     }
   }, []);
@@ -430,34 +442,33 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="px-6 py-3 border-b border-border bg-card">
-        <h1 className="text-xl font-bold text-foreground">
-          2D Character Generator
-        </h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Skeletal animation · Modular parts · Export ready
-        </p>
+      {/* Slim single-line header */}
+      <header className="px-4 py-2 border-b border-border bg-card flex items-center gap-2 shrink-0">
+        <h1 className="text-sm font-semibold text-foreground">2D Character Generator</h1>
+        <span className="text-muted-foreground/30 select-none">·</span>
+        <span className="text-xs text-muted-foreground">Skeletal animation · Modular parts · Export ready</span>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <CharacterBuilder
-          character={activeChar.parts}
-          characters={characters}
-          activeCharId={activeCharId}
-          onPartChange={updatePart}
-          onColorChange={updateColor}
-          onScaleChange={updatePartScale}
-          onBodyImageChange={updateBodyImage}
-          onHeadImageChange={updateHeadImage}
-          onAddCharacter={addCharacter}
-          onDeleteCharacter={deleteCharacter}
-          onRenameCharacter={renameCharacter}
-          onSelectCharacter={selectCharacter}
-          onDuplicateCharacter={duplicateCharacter}
-        />
+      <div className="flex flex-col flex-1 overflow-hidden">
+        {/* Three-panel row */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <CharacterBuilder
+            character={activeChar.parts}
+            characters={characters}
+            activeCharId={activeCharId}
+            onPartChange={updatePart}
+            onColorChange={updateColor}
+            onScaleChange={updatePartScale}
+            onBodyImageChange={updateBodyImage}
+            onHeadImageChange={updateHeadImage}
+            onAddCharacter={addCharacter}
+            onDeleteCharacter={deleteCharacter}
+            onRenameCharacter={renameCharacter}
+            onSelectCharacter={selectCharacter}
+            onDuplicateCharacter={duplicateCharacter}
+          />
 
-        <main className="flex-1 flex items-center justify-center p-6 overflow-auto">
-          <div className="flex flex-col items-center gap-4">
+          <main className="flex-1 flex items-center justify-center p-6 overflow-auto">
             <div className="rounded-lg border border-border overflow-hidden shadow-2xl">
               <CharacterCanvas
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
@@ -483,77 +494,80 @@ export default function App() {
                 onSaveDefault={saveCharacterDefault}
               />
             </div>
+          </main>
 
-            {poseEditorOpen && (
-              <PoseEditor
-                character={activeChar.parts}
-                skinOverrides={activeChar.skinOverrides}
-                frames={poseFrames}
-                activeFrame={activePoseFrame}
-                animName={poseAnimName}
-                animLoop={poseAnimLoop}
-                onFrameSelect={selectPoseFrame}
-                onFrameAdd={addPoseFrame}
-                onFrameDelete={deletePoseFrame}
-                onFrameDuplicate={duplicatePoseFrame}
-                onFrameDurationChange={updatePoseFrameDuration}
-                onNameChange={setPoseAnimName}
-                onLoopChange={setPoseAnimLoop}
-                onCreate={createCustomAnimation}
-                onClose={closePoseEditor}
-              />
-            )}
-          </div>
-        </main>
+          <aside className="w-80 shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
+            <AnimationControls
+              currentAnimation={currentAnimation}
+              isPlaying={isPlaying}
+              showBones={showBones}
+              showVectors={showVectors}
+              ragdoll={ragdoll}
+              editStructure={editStructure}
+              rebindMode={rebindMode}
+              showBinds={showBinds}
+              selectedSkin={selectedSkin}
+              customAnimations={activeChar.customAnimations}
+              poseEditorOpen={poseEditorOpen}
+              onAnimationChange={handleAnimationChange}
+              onPlayPause={() => setIsPlaying(p => !p)}
+              onToggleBones={() => setShowBones(p => !p)}
+              onToggleVectors={() => setShowVectors(p => !p)}
+              onToggleRagdoll={toggleRagdoll}
+              onToggleEditStructure={toggleEditStructure}
+              onToggleRebindMode={() => setRebindMode(p => !p)}
+              onToggleBinds={() => setShowBinds(p => !p)}
+              onSkinChange={setSelectedSkin}
+              onNewAnimation={openPoseEditor}
+              onDeleteAnimation={deleteCustomAnimation}
+            />
 
-        <aside className="w-[440px] shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
-          <AnimationControls
-            currentAnimation={currentAnimation}
-            isPlaying={isPlaying}
-            showBones={showBones}
-            showVectors={showVectors}
-            ragdoll={ragdoll}
-            editStructure={editStructure}
-            rebindMode={rebindMode}
-            showBinds={showBinds}
-            selectedSkin={selectedSkin}
-            customAnimations={activeChar.customAnimations}
-            poseEditorOpen={poseEditorOpen}
-            onAnimationChange={handleAnimationChange}
-            onPlayPause={() => setIsPlaying(p => !p)}
-            onToggleBones={() => setShowBones(p => !p)}
-            onToggleVectors={() => setShowVectors(p => !p)}
-            onToggleRagdoll={toggleRagdoll}
-            onToggleEditStructure={toggleEditStructure}
-            onToggleRebindMode={() => setRebindMode(p => !p)}
-            onToggleBinds={() => setShowBinds(p => !p)}
-            onSkinChange={setSelectedSkin}
-            onNewAnimation={openPoseEditor}
-            onDeleteAnimation={deleteCustomAnimation}
-          />
+            <Separator />
 
-          <Separator />
-
-          <div className="flex flex-col gap-2">
-            <SectionTitle>Export</SectionTitle>
-            <div className="flex flex-col gap-1.5">
-              <Button
-                variant="outline"
-                className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
-                onClick={() => exportSpriteSheet(activeChar.parts, currentAnimation, activeChar.boneOffsets, activeChar.skinOverrides)}
-              >
-                Sprite Sheet (PNG)
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
-                onClick={() => exportAnimationJSON(currentAnimation)}
-              >
-                Animation Data (JSON)
-              </Button>
+            <div className="flex flex-col gap-2">
+              <SectionTitle>Export</SectionTitle>
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  variant="outline"
+                  className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
+                  onClick={() => exportSpriteSheet(activeChar.parts, currentAnimation, activeChar.boneOffsets, activeChar.skinOverrides)}
+                >
+                  Sprite Sheet (PNG)
+                </Button>
+                <Button
+                  variant="outline"
+                  className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
+                  onClick={() => exportAnimationJSON(currentAnimation)}
+                >
+                  Animation Data (JSON)
+                </Button>
+              </div>
             </div>
+          </aside>
+        </div>
+
+        {/* Pose editor — full-width bottom panel, canvas stays full size */}
+        {poseEditorOpen && (
+          <div className="shrink-0 border-t border-border bg-card">
+            <PoseEditor
+              character={activeChar.parts}
+              skinOverrides={activeChar.skinOverrides}
+              frames={poseFrames}
+              activeFrame={activePoseFrame}
+              animName={poseAnimName}
+              animLoop={poseAnimLoop}
+              onFrameSelect={selectPoseFrame}
+              onFrameAdd={addPoseFrame}
+              onFrameDelete={deletePoseFrame}
+              onFrameDuplicate={duplicatePoseFrame}
+              onFrameDurationChange={updatePoseFrameDuration}
+              onNameChange={setPoseAnimName}
+              onLoopChange={setPoseAnimLoop}
+              onCreate={createCustomAnimation}
+              onClose={closePoseEditor}
+            />
           </div>
-        </aside>
+        )}
       </div>
     </div>
   );

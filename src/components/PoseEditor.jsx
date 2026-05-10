@@ -79,7 +79,7 @@ export function PoseEditor({
   const totalDuration = frames.reduce((s, f) => s + f.duration, 0);
 
   return (
-    <div className="w-full max-w-[820px] bg-card border border-border rounded-lg p-3.5 flex flex-col gap-2.5">
+    <div className="w-full px-4 py-3 flex flex-col gap-2.5">
       <div className="flex items-center gap-2.5 flex-wrap">
         <SectionTitle className="whitespace-nowrap">Pose Editor</SectionTitle>
 

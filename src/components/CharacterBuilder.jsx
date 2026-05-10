@@ -92,7 +92,7 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
             <button
               onClick={decScale}
               disabled={currentScale <= MIN_SCALE}
-              className="w-[18px] h-[18px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+              className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
             >
               −
             </button>
@@ -105,7 +105,7 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
             <button
               onClick={incScale}
               disabled={currentScale >= MAX_SCALE}
-              className="w-[18px] h-[18px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+              className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
             >
               +
             </button>
@@ -229,7 +229,7 @@ function CharacterList({ characters, activeCharId, onSelect, onAdd, onDelete, on
         </Button>
       </div>
 
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-0.5 max-h-[140px] overflow-y-auto">
         {characters.map(char => {
           const isActive = char.id === activeCharId;
           return (

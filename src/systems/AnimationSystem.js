@@ -539,72 +539,6 @@ export const ANIMATIONS = {
     },
   },
 
-  attack: {
-    name: 'Attack',
-    duration: 0.65,
-    loop: false,
-    tracks: {
-      // Upper arm: wind-up back, then slam forward
-      right_arm: [
-        { time: 0.0,  rotation: 2.069 },
-        { time: 0.18, rotation: 0.769 },
-        { time: 0.35, rotation: 4.169 },
-        { time: 0.65, rotation: 2.069 },
-      ],
-      // Forearm: lags on wind-up, whips forward at strike, snaps back
-      right_forearm: [
-        { time: 0.0,  rotation: -0.438 },
-        { time: 0.18, rotation: 0.062 },  // trails behind upper arm
-        { time: 0.28, rotation: -1.238 },  // whips forward just before contact
-        { time: 0.40, rotation: -0.138 },  // follows through
-        { time: 0.65, rotation: -0.438 },
-      ],
-      // Wrist: cocks back, snaps forward with the strike
-      right_hand: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.18, rotation:  0.4 },  // cocks back
-        { time: 0.28, rotation: -0.7 },  // snaps through on contact
-        { time: 0.45, rotation:  0.2 },
-        { time: 0.65, rotation:  0 },
-      ],
-      torso: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.18, rotation: -0.18 },
-        { time: 0.35, rotation:  0.22 },
-        { time: 0.65, rotation:  0 },
-      ],
-      lower_torso: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.18, rotation: -0.08 },
-        { time: 0.35, rotation:  0.12 },
-        { time: 0.65, rotation:  0 },
-      ],
-      // Slight knee bend held during attack stance
-      left_shin: [
-        { time: 0.0,  rotation: 0.15 },
-        { time: 0.65, rotation: 0.15 },
-      ],
-      right_shin: [
-        { time: 0.0,  rotation: 0.15 },
-        { time: 0.65, rotation: 0.15 },
-      ],
-      left_foot: [
-        { time: 0.0,  rotation: 0.06 },
-        { time: 0.65, rotation: 0.06 },
-      ],
-      right_foot: [
-        { time: 0.0,  rotation: 0.06 },
-        { time: 0.65, rotation: 0.06 },
-      ],
-      head: [
-        { time: 0.0,  rotation:  0 },
-        { time: 0.18, rotation:  0.1 },
-        { time: 0.35, rotation: -0.1 },
-        { time: 0.65, rotation:  0 },
-      ],
-    },
-  },
-
   punch: {
     name: 'Punch',
     // Strike resolves at ~0.60s; the rest is a held idle so the animation
@@ -947,7 +881,7 @@ export const ANIMATIONS = {
       right_foot: [{ time: 0.0, rotation:  0.08 }, { time: 0.12, rotation:  0.08 }],
     },
   },
-
+
 };
 
 function lerp(a, b, t) {
