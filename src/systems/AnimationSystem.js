@@ -729,7 +729,7 @@ export const ANIMATIONS = {
   },
 
   rifle: {
-    name: 'Rifle',
+    name: 'Shoot',
     duration: 0.6,
     loop: true,
     tracks: {
@@ -882,6 +882,309 @@ export const ANIMATIONS = {
     },
   },
 
+  // ── Rifle weapon animations ───────────────────────────────────────────────────
+
+  rifle_idle: {
+    name: 'Idle',
+    duration: 2.0,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.0, y: 0,  rotation: 0.06 },
+        { time: 1.0, y: -2, rotation: 0.07 },
+        { time: 2.0, y: 0,  rotation: 0.06 },
+      ],
+      lower_torso: [
+        { time: 0.0, y: 0 },
+        { time: 1.0, y: -1 },
+        { time: 2.0, y: 0 },
+      ],
+      head: [
+        { time: 0.0, rotation: -0.02 },
+        { time: 1.5, rotation:  0.01 },
+        { time: 2.0, rotation: -0.02 },
+      ],
+      right_arm:    [{ time: 0.0, rotation: 1.35 }, { time: 1.0, rotation: 1.32 }, { time: 2.0, rotation: 1.35 }],
+      right_forearm:[{ time: 0.0, rotation:-1.50 }, { time: 1.0, rotation:-1.47 }, { time: 2.0, rotation:-1.50 }],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 2.0, rotation: 0.00 }],
+      left_arm:     [{ time: 0.0, rotation:-2.20 }, { time: 1.0, rotation:-2.22 }, { time: 2.0, rotation:-2.20 }],
+      left_forearm: [{ time: 0.0, rotation: 0.10 }, { time: 1.0, rotation: 0.08 }, { time: 2.0, rotation: 0.10 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 2.0, rotation: 0.00 }],
+      left_shin:    [{ time: 0.0, rotation: 0.10 }, { time: 1.0, rotation: 0.12 }, { time: 2.0, rotation: 0.10 }],
+      right_shin:   [{ time: 0.0, rotation: 0.10 }, { time: 1.0, rotation: 0.12 }, { time: 2.0, rotation: 0.10 }],
+      left_foot:    [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+      right_foot:   [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+    },
+  },
+
+  rifle_walk: {
+    name: 'Walk',
+    duration: 0.72,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.00, y:  0, rotation: 0.10 },
+        { time: 0.18, y: -6, rotation: 0.12 },
+        { time: 0.36, y:  0, rotation: 0.10 },
+        { time: 0.54, y: -6, rotation: 0.12 },
+        { time: 0.72, y:  0, rotation: 0.10 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.14 },
+        { time: 0.18, rotation:  0.00 },
+        { time: 0.36, rotation: -0.14 },
+        { time: 0.54, rotation:  0.00 },
+        { time: 0.72, rotation:  0.14 },
+      ],
+      head: [
+        { time: 0.00, rotation: -0.04 },
+        { time: 0.22, rotation:  0.01 },
+        { time: 0.36, rotation: -0.04 },
+        { time: 0.58, rotation:  0.01 },
+        { time: 0.72, rotation: -0.04 },
+      ],
+      right_arm:    [{ time: 0.00, rotation: 1.35 }, { time: 0.18, rotation: 1.32 }, { time: 0.36, rotation: 1.35 }, { time: 0.54, rotation: 1.32 }, { time: 0.72, rotation: 1.35 }],
+      right_forearm:[{ time: 0.00, rotation:-1.50 }, { time: 0.18, rotation:-1.47 }, { time: 0.36, rotation:-1.50 }, { time: 0.54, rotation:-1.47 }, { time: 0.72, rotation:-1.50 }],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 0.72, rotation: 0.00 }],
+      left_arm:     [{ time: 0.00, rotation:-2.20 }, { time: 0.18, rotation:-2.22 }, { time: 0.36, rotation:-2.20 }, { time: 0.54, rotation:-2.22 }, { time: 0.72, rotation:-2.20 }],
+      left_forearm: [{ time: 0.00, rotation: 0.10 }, { time: 0.18, rotation: 0.08 }, { time: 0.36, rotation: 0.10 }, { time: 0.54, rotation: 0.08 }, { time: 0.72, rotation: 0.10 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 0.72, rotation: 0.00 }],
+      left_leg:  [{ time: 0.00, rotation:-0.42 }, { time: 0.36, rotation: 0.42 }, { time: 0.72, rotation:-0.42 }],
+      left_shin: [{ time: 0.00, rotation:0.10 }, { time: 0.18, rotation:0.08 }, { time: 0.36, rotation:0.18 }, { time: 0.54, rotation:0.65 }, { time: 0.72, rotation:0.10 }],
+      left_foot: [{ time: 0.00, rotation:-0.22 }, { time: 0.18, rotation:0.00 }, { time: 0.36, rotation:0.30 }, { time: 0.54, rotation:-0.10 }, { time: 0.72, rotation:-0.22 }],
+      right_leg:  [{ time: 0.00, rotation: 0.42 }, { time: 0.36, rotation:-0.42 }, { time: 0.72, rotation: 0.42 }],
+      right_shin: [{ time: 0.00, rotation:0.18 }, { time: 0.18, rotation:0.65 }, { time: 0.36, rotation:0.10 }, { time: 0.54, rotation:0.08 }, { time: 0.72, rotation:0.18 }],
+      right_foot: [{ time: 0.00, rotation:0.30 }, { time: 0.18, rotation:-0.10 }, { time: 0.36, rotation:-0.22 }, { time: 0.54, rotation:0.00 }, { time: 0.72, rotation:0.30 }],
+    },
+  },
+
+  rifle_run: {
+    name: 'Run',
+    duration: 0.45,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.000, y:  0,  rotation: 0.20 },
+        { time: 0.113, y: -10, rotation: 0.22 },
+        { time: 0.225, y:  0,  rotation: 0.20 },
+        { time: 0.338, y: -10, rotation: 0.22 },
+        { time: 0.450, y:  0,  rotation: 0.20 },
+      ],
+      lower_torso: [
+        { time: 0.000, rotation:  0.18 },
+        { time: 0.113, rotation:  0.00 },
+        { time: 0.225, rotation: -0.18 },
+        { time: 0.338, rotation:  0.00 },
+        { time: 0.450, rotation:  0.18 },
+      ],
+      head: [
+        { time: 0.000, rotation: -0.06 },
+        { time: 0.140, rotation:  0.01 },
+        { time: 0.225, rotation: -0.06 },
+        { time: 0.365, rotation:  0.01 },
+        { time: 0.450, rotation: -0.06 },
+      ],
+      right_arm:    [{ time: 0.000, rotation: 1.30 }, { time: 0.113, rotation: 1.27 }, { time: 0.225, rotation: 1.30 }, { time: 0.338, rotation: 1.27 }, { time: 0.450, rotation: 1.30 }],
+      right_forearm:[{ time: 0.000, rotation:-1.45 }, { time: 0.113, rotation:-1.42 }, { time: 0.225, rotation:-1.45 }, { time: 0.338, rotation:-1.42 }, { time: 0.450, rotation:-1.45 }],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 0.45, rotation: 0.00 }],
+      left_arm:     [{ time: 0.000, rotation:-2.15 }, { time: 0.113, rotation:-2.18 }, { time: 0.225, rotation:-2.15 }, { time: 0.338, rotation:-2.18 }, { time: 0.450, rotation:-2.15 }],
+      left_forearm: [{ time: 0.000, rotation: 0.12 }, { time: 0.113, rotation: 0.10 }, { time: 0.225, rotation: 0.12 }, { time: 0.338, rotation: 0.10 }, { time: 0.450, rotation: 0.12 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 0.45, rotation: 0.00 }],
+      left_leg:  [{ time: 0.000, rotation:-0.60 }, { time: 0.225, rotation: 0.60 }, { time: 0.450, rotation:-0.60 }],
+      left_shin: [{ time: 0.000, rotation:0.12 }, { time: 0.113, rotation:0.10 }, { time: 0.225, rotation:0.22 }, { time: 0.338, rotation:0.82 }, { time: 0.450, rotation:0.12 }],
+      left_foot: [{ time: 0.000, rotation:-0.28 }, { time: 0.113, rotation:0.00 }, { time: 0.225, rotation:0.40 }, { time: 0.338, rotation:-0.14 }, { time: 0.450, rotation:-0.28 }],
+      right_leg:  [{ time: 0.000, rotation: 0.60 }, { time: 0.225, rotation:-0.60 }, { time: 0.450, rotation: 0.60 }],
+      right_shin: [{ time: 0.000, rotation:0.22 }, { time: 0.113, rotation:0.82 }, { time: 0.225, rotation:0.12 }, { time: 0.338, rotation:0.10 }, { time: 0.450, rotation:0.22 }],
+      right_foot: [{ time: 0.000, rotation:0.40 }, { time: 0.113, rotation:-0.14 }, { time: 0.225, rotation:-0.28 }, { time: 0.338, rotation:0.00 }, { time: 0.450, rotation:0.40 }],
+    },
+  },
+
+  // ── Sword weapon animations ───────────────────────────────────────────────────
+
+  sword_idle: {
+    name: 'Idle',
+    duration: 2.0,
+    loop: true,
+    tracks: {
+      // Alert forward lean — fighter ready to engage
+      torso: [
+        { time: 0.0, y: 0,  rotation: 0.08 },
+        { time: 1.0, y: -2, rotation: 0.09 },
+        { time: 2.0, y: 0,  rotation: 0.08 },
+      ],
+      lower_torso: [
+        { time: 0.0, y: 0 },
+        { time: 1.0, y: -1 },
+        { time: 2.0, y: 0 },
+      ],
+      // Head slightly forward — scanning for threats
+      head: [
+        { time: 0.0, rotation: -0.06 },
+        { time: 1.2, rotation: -0.03 },
+        { time: 2.0, rotation: -0.06 },
+      ],
+      // Sword arm lowered — elbow bent, blade angled upward at waist level
+      right_arm:    [{ time: 0.0, rotation: 0.70 }, { time: 1.0, rotation: 0.67 }, { time: 2.0, rotation: 0.70 }],
+      right_forearm:[{ time: 0.0, rotation:-0.55 }, { time: 1.0, rotation:-0.52 }, { time: 2.0, rotation:-0.55 }],
+      right_hand:   [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+      // Left arm hanging relaxed at hip
+      left_arm:     [{ time: 0.0, rotation:-1.52 }, { time: 1.0, rotation:-1.55 }, { time: 2.0, rotation:-1.52 }],
+      left_forearm: [{ time: 0.0, rotation:-0.12 }, { time: 1.0, rotation:-0.10 }, { time: 2.0, rotation:-0.12 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 2.0, rotation: 0.00 }],
+      // Fighting stance — feet shoulder-width apart, slight knee bend
+      left_leg:     [{ time: 0.0, rotation:-0.15 }, { time: 2.0, rotation:-0.15 }],
+      right_leg:    [{ time: 0.0, rotation: 0.15 }, { time: 2.0, rotation: 0.15 }],
+      left_shin:    [{ time: 0.0, rotation: 0.14 }, { time: 1.0, rotation: 0.16 }, { time: 2.0, rotation: 0.14 }],
+      right_shin:   [{ time: 0.0, rotation: 0.14 }, { time: 1.0, rotation: 0.16 }, { time: 2.0, rotation: 0.14 }],
+      left_foot:    [{ time: 0.0, rotation:-0.05 }, { time: 2.0, rotation:-0.05 }],
+      right_foot:   [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+    },
+  },
+
+  sword_walk: {
+    name: 'Walk',
+    duration: 0.72,
+    loop: true,
+    tracks: {
+      // Forward fighting lean maintained through the stride
+      torso: [
+        { time: 0.00, y:  0, rotation: 0.06 },
+        { time: 0.18, y: -6, rotation: 0.08 },
+        { time: 0.36, y:  0, rotation: 0.06 },
+        { time: 0.54, y: -6, rotation: 0.08 },
+        { time: 0.72, y:  0, rotation: 0.06 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.14 },
+        { time: 0.18, rotation:  0.00 },
+        { time: 0.36, rotation: -0.14 },
+        { time: 0.54, rotation:  0.00 },
+        { time: 0.72, rotation:  0.14 },
+      ],
+      // Head stays alert, slight nod from stride
+      head: [
+        { time: 0.00, rotation: -0.06 },
+        { time: 0.22, rotation: -0.02 },
+        { time: 0.36, rotation: -0.06 },
+        { time: 0.58, rotation: -0.02 },
+        { time: 0.72, rotation: -0.06 },
+      ],
+      // Sword arm: larger natural bob, stays in en-garde range
+      right_arm:    [{ time: 0.00, rotation:-0.78 }, { time: 0.18, rotation:-0.70 }, { time: 0.36, rotation:-0.86 }, { time: 0.54, rotation:-0.70 }, { time: 0.72, rotation:-0.78 }],
+      right_forearm:[{ time: 0.00, rotation:-0.38 }, { time: 0.18, rotation:-0.30 }, { time: 0.36, rotation:-0.46 }, { time: 0.54, rotation:-0.30 }, { time: 0.72, rotation:-0.38 }],
+      right_hand:   [{ time: 0.0, rotation: 0.05 }, { time: 0.72, rotation: 0.05 }],
+      // Left arm: natural swing counterweight from hip
+      left_arm:     [{ time: 0.00, rotation:-1.52 }, { time: 0.18, rotation:-1.43 }, { time: 0.36, rotation:-1.62 }, { time: 0.54, rotation:-1.43 }, { time: 0.72, rotation:-1.52 }],
+      left_forearm: [{ time: 0.00, rotation:-0.12 }, { time: 0.18, rotation:-0.06 }, { time: 0.36, rotation:-0.18 }, { time: 0.54, rotation:-0.06 }, { time: 0.72, rotation:-0.12 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 0.72, rotation: 0.00 }],
+      // Standard walk legs
+      left_leg:  [{ time: 0.00, rotation:-0.42 }, { time: 0.36, rotation: 0.42 }, { time: 0.72, rotation:-0.42 }],
+      left_shin: [{ time: 0.00, rotation:0.10 }, { time: 0.18, rotation:0.08 }, { time: 0.36, rotation:0.18 }, { time: 0.54, rotation:0.65 }, { time: 0.72, rotation:0.10 }],
+      left_foot: [{ time: 0.00, rotation:-0.22 }, { time: 0.18, rotation:0.00 }, { time: 0.36, rotation:0.30 }, { time: 0.54, rotation:-0.10 }, { time: 0.72, rotation:-0.22 }],
+      right_leg:  [{ time: 0.00, rotation: 0.42 }, { time: 0.36, rotation:-0.42 }, { time: 0.72, rotation: 0.42 }],
+      right_shin: [{ time: 0.00, rotation:0.18 }, { time: 0.18, rotation:0.65 }, { time: 0.36, rotation:0.10 }, { time: 0.54, rotation:0.08 }, { time: 0.72, rotation:0.18 }],
+      right_foot: [{ time: 0.00, rotation:0.30 }, { time: 0.18, rotation:-0.10 }, { time: 0.36, rotation:-0.22 }, { time: 0.54, rotation:0.00 }, { time: 0.72, rotation:0.30 }],
+    },
+  },
+
+  sword_slash: {
+    name: 'Slash',
+    duration: 0.85,
+    loop: false,
+    tracks: {
+      // Torso: wind back CW → snap forward CCW → recover
+      torso: [
+        { time: 0.00, rotation:  0.08 },   // alert stance
+        { time: 0.20, rotation:  0.44 },   // wind back
+        { time: 0.35, rotation: -0.52 },   // SLASH — snap through
+        { time: 0.48, rotation: -0.32 },   // follow-through
+        { time: 0.85, rotation:  0.08 },   // recover
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.20, rotation:  0.22 },
+        { time: 0.35, rotation: -0.30 },
+        { time: 0.48, rotation: -0.18 },
+        { time: 0.85, rotation:  0.00 },
+      ],
+      // Head: looks back during wind-up, snaps forward with the slash
+      head: [
+        { time: 0.00, rotation: -0.06 },
+        { time: 0.20, rotation:  0.18 },
+        { time: 0.35, rotation: -0.22 },
+        { time: 0.55, rotation: -0.10 },
+        { time: 0.85, rotation: -0.06 },
+      ],
+      // Right arm: en-garde → overhead (telegraphed) → slash snap → follow-through
+      right_arm: [
+        { time: 0.00, rotation: -0.78 },   // en-garde
+        { time: 0.18, rotation: -2.12 },   // overhead — raise quickly
+        { time: 0.22, rotation: -2.12 },   // hold one frame
+        { time: 0.35, rotation:  0.42 },   // SLASH — whips down toward +X
+        { time: 0.50, rotation:  0.72 },   // follow-through, arm swings past
+        { time: 0.85, rotation: -0.78 },   // recover
+      ],
+      right_forearm: [
+        { time: 0.00, rotation: -0.38 },
+        { time: 0.18, rotation: -0.68 },   // coiled at overhead
+        { time: 0.32, rotation:  0.18 },   // whips through impact
+        { time: 0.50, rotation: -0.22 },
+        { time: 0.85, rotation: -0.38 },
+      ],
+      right_hand: [
+        { time: 0.00, rotation:  0.05 },
+        { time: 0.18, rotation: -0.38 },   // grip braced overhead
+        { time: 0.35, rotation:  0.42 },   // snaps through
+        { time: 0.55, rotation:  0.15 },
+        { time: 0.85, rotation:  0.05 },
+      ],
+      // Left arm: rises as counterbalance when right arm slashes down
+      left_arm: [
+        { time: 0.00, rotation: -1.52 },   // hip
+        { time: 0.20, rotation: -1.15 },   // lifts slightly during wind-up
+        { time: 0.35, rotation: -0.55 },   // swings forward as counterweight
+        { time: 0.55, rotation: -1.20 },   // settles back
+        { time: 0.85, rotation: -1.52 },
+      ],
+      left_forearm: [
+        { time: 0.00, rotation: -0.12 },
+        { time: 0.20, rotation: -0.38 },
+        { time: 0.35, rotation: -0.68 },
+        { time: 0.55, rotation: -0.28 },
+        { time: 0.85, rotation: -0.12 },
+      ],
+      // Footwork: step into the blow for weight and commitment
+      left_leg: [
+        { time: 0.00, rotation: -0.15 },   // fighting stance
+        { time: 0.20, rotation: -0.28 },   // load weight back
+        { time: 0.35, rotation: -0.02 },   // step forward into slash
+        { time: 0.85, rotation: -0.15 },
+      ],
+      right_leg: [
+        { time: 0.00, rotation:  0.15 },
+        { time: 0.20, rotation:  0.28 },   // push-off leg extends
+        { time: 0.35, rotation:  0.10 },
+        { time: 0.85, rotation:  0.15 },
+      ],
+      left_shin:  [{ time: 0.00, rotation: 0.14 }, { time: 0.20, rotation: 0.10 }, { time: 0.35, rotation: 0.22 }, { time: 0.85, rotation: 0.14 }],
+      right_shin: [{ time: 0.00, rotation: 0.14 }, { time: 0.20, rotation: 0.38 }, { time: 0.35, rotation: 0.16 }, { time: 0.85, rotation: 0.14 }],
+      left_foot:  [{ time: 0.00, rotation:-0.05 }, { time: 0.85, rotation:-0.05 }],
+      right_foot: [{ time: 0.00, rotation: 0.05 }, { time: 0.85, rotation: 0.05 }],
+    },
+  },
+
+};
+
+export const WEAPON_ANIMATION_SETS = {
+  none:  ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'carry_walk'],
+  sword: ['sword_idle', 'sword_walk', 'sword_slash'],
+  rifle: ['rifle_idle', 'rifle_walk', 'rifle_run', 'rifle', 'full_auto'],
+};
+
+export const WEAPON_DEFAULT_ANIMATIONS = {
+  none:  'idle',
+  sword: 'sword_idle',
+  rifle: 'rifle_idle',
 };
 
 function lerp(a, b, t) {

@@ -180,25 +180,6 @@ export const CHARACTER_PARTS = {
           ctx.fill();
         },
       },
-      staff: {
-        label: 'Staff',
-        draw(ctx) {
-          ctx.fillStyle = '#7B5E2A';
-          ctx.fillRect(-3, 14, 6, 80);
-          ctx.fillStyle = '#4A3010';
-          ctx.beginPath();
-          ctx.arc(0, 10, 10, 0, Math.PI * 2);
-          ctx.fill();
-          const grad = ctx.createRadialGradient(-3, 6, 2, 0, 10, 10);
-          grad.addColorStop(0, '#A0E8FF');
-          grad.addColorStop(0.6, '#4488CC');
-          grad.addColorStop(1, '#1A2A66');
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(0, 10, 9, 0, Math.PI * 2);
-          ctx.fill();
-        },
-      },
       rifle: {
         label: 'Rifle',
         draw(ctx) {

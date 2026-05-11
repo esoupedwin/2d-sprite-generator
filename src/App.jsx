@@ -3,13 +3,13 @@ import { CharacterCanvas } from './components/CharacterCanvas.jsx';
 import { CharacterBuilder } from './components/CharacterBuilder.jsx';
 import { AnimationControls } from './components/AnimationControls.jsx';
 import { PoseEditor } from './components/PoseEditor.jsx';
-import { DEFAULT_CHARACTER } from './data/characterParts.js';
+import { CHARACTER_PARTS, DEFAULT_CHARACTER } from './data/characterParts.js';
 import {
   DEFAULT_BUILD_COLORS,
   DEFAULT_BUILD_BONE_OFFSETS,
   DEFAULT_BUILD_SKIN_OVERRIDES,
 } from './data/defaultBuild.js';
-import { ANIMATIONS } from './systems/AnimationSystem.js';
+import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
@@ -207,11 +207,14 @@ export default function App() {
   const updatePart = useCallback((partKey, optionKey) => {
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
-      // Selecting a preset clears any custom color for that part
       const customColors = { ...(c.parts.customColors ?? {}) };
       delete customColors[partKey];
       return { ...c, parts: { ...c.parts, [partKey]: optionKey, customColors } };
     }));
+    if (partKey === 'weapon') {
+      setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[optionKey] ?? 'idle');
+      setIsPlaying(true);
+    }
   }, [activeCharId]);
 
   const updateColor = useCallback((partKey, hexColor) => {
@@ -383,9 +386,9 @@ export default function App() {
 
   // ── Animation callbacks ───────────────────────────────────────────────────────
   const handleAnimationComplete = useCallback((animKey) => {
-    if (animKey === 'jump' || !ANIMATIONS[animKey]) {
-      setCurrentAnimation('idle');
-    }
+    if (animKey === 'jump') { setCurrentAnimation('idle'); return; }
+    if (animKey === 'sword_slash') { setCurrentAnimation('sword_idle'); return; }
+    if (!ANIMATIONS[animKey]) { setCurrentAnimation('idle'); }
   }, []);
 
   const handleAnimationChange = useCallback((key) => {
@@ -469,7 +472,18 @@ export default function App() {
             onDuplicateCharacter={duplicateCharacter}
           />
 
-          <main className="flex-1 flex items-center justify-center p-6 overflow-auto">
+          <main className="flex-1 flex items-center justify-center p-6 overflow-auto relative">
+              <button
+                onClick={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
+                className={cn(
+                  'absolute top-4 right-4 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors z-10',
+                  currentAnimation === 'edit'
+                    ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
+                    : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
+                )}
+              >
+                Edit
+              </button>
             <div className="flex flex-col items-start">
               {currentAnimation === 'edit' && (
                 <div className="bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
@@ -510,9 +524,50 @@ export default function App() {
           </main>
 
           <aside className="w-80 shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
+            {/* Weapon */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <SectionTitle>Weapon</SectionTitle>
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => updatePartScale('weapon', Math.max(0.5, +((( activeChar.parts.partScales?.weapon ?? 1) - 0.1).toFixed(2))))}
+                    disabled={(activeChar.parts.partScales?.weapon ?? 1) <= 0.5}
+                    className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                  >−</button>
+                  <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs((activeChar.parts.partScales?.weapon ?? 1) - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                    {Math.round((activeChar.parts.partScales?.weapon ?? 1) * 100)}%
+                  </span>
+                  <button
+                    onClick={() => updatePartScale('weapon', Math.min(3.0, +((( activeChar.parts.partScales?.weapon ?? 1) + 0.1).toFixed(2))))}
+                    disabled={(activeChar.parts.partScales?.weapon ?? 1) >= 3.0}
+                    className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                  >+</button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(CHARACTER_PARTS.weapon.options).map(([key, opt]) => (
+                  <button
+                    key={key}
+                    onClick={() => updatePart('weapon', key)}
+                    className={cn(
+                      'px-2.5 py-1 rounded text-xs whitespace-nowrap border transition-colors',
+                      activeChar.parts.weapon === key
+                        ? 'bg-primary border-primary text-primary-foreground font-semibold'
+                        : 'bg-secondary border-border text-foreground hover:border-primary',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Separator />
+
             <AnimationControls
               currentAnimation={currentAnimation}
               isPlaying={isPlaying}
+              weapon={activeChar.parts.weapon}
               showBones={showBones}
               showVectors={showVectors}
               ragdoll={ragdoll}

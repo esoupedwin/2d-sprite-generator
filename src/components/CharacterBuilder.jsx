@@ -27,7 +27,7 @@ export function CharacterBuilder({
       />
       <Separator className="my-2" />
       <SectionTitle className="text-[13px] mb-2">Parts</SectionTitle>
-      {Object.entries(CHARACTER_PARTS).map(([partKey, partDef]) => {
+      {Object.entries(CHARACTER_PARTS).filter(([k]) => k !== 'weapon').map(([partKey, partDef]) => {
         const customColor  = character.customColors?.[partKey] ?? null;
         const presetColor  = CHARACTER_PARTS[partKey].options[character[partKey]]?.color ?? '#888888';
         const currentColor = customColor ?? presetColor;

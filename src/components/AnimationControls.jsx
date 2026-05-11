@@ -1,4 +1,5 @@
-import { ANIMATIONS } from '../systems/AnimationSystem.js';
+import { ANIMATIONS, WEAPON_ANIMATION_SETS } from '../systems/AnimationSystem.js';
+import { SectionTitle } from '@/components/ui/section-title';
 import { SKIN_COLORS } from '../systems/VectorEditor.js';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -67,7 +68,7 @@ function ToggleRow({ checked, onChange, label, disabled, title }) {
 }
 
 export function AnimationControls({
-  currentAnimation, isPlaying,
+  currentAnimation, isPlaying, weapon,
   showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
   customAnimations, poseEditorOpen,
   onAnimationChange, onPlayPause, onToggleBones, onToggleVectors,
@@ -78,12 +79,15 @@ export function AnimationControls({
   const editDisabled = !isEdit || poseEditorOpen;
   const editTitle   = !isEdit ? 'Switch to Edit mode first' : poseEditorOpen ? 'Close pose editor first' : '';
 
+  const allowedKeys = WEAPON_ANIMATION_SETS[weapon ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
+
   return (
     <div className="flex flex-col gap-3 w-full">
 
       {/* ── Zone 1: Animation selection ───────────────────────────────────────── */}
+      <SectionTitle>Animation</SectionTitle>
       <div className="flex flex-wrap gap-1.5">
-        {Object.entries(ANIMATIONS).map(([key, anim]) => (
+        {Object.entries(ANIMATIONS).filter(([key]) => allowedKeys.includes(key)).map(([key, anim]) => (
           <AnimChip key={key} active={currentAnimation === key} disabled={poseEditorOpen} onClick={() => onAnimationChange(key)}>
             {anim.name}{!anim.loop && <OnceTag />}
           </AnimChip>
