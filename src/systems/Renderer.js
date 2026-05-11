@@ -27,6 +27,11 @@ function drawPart(ctx, partKey, character, worldTransforms) {
   ctx.translate(bone.x, bone.y);
   ctx.rotate(bone.rotation);
   if (s !== 1) ctx.scale(s, s);
+  if (partKey === 'weapon') {
+    const wo = character.weaponOffset;
+    if (wo?.x || wo?.y)       ctx.translate(wo.x ?? 0, wo.y ?? 0);
+    if (wo?.rotation)          ctx.rotate(wo.rotation);
+  }
   option.draw(ctx);
   ctx.restore();
 }

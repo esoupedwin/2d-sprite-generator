@@ -70,14 +70,17 @@ function ToggleRow({ checked, onChange, label, disabled, title }) {
 export function AnimationControls({
   currentAnimation, isPlaying, weapon,
   showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
+  editAnimPose, hasAnimPoseEdits,
   customAnimations, poseEditorOpen,
   onAnimationChange, onPlayPause, onToggleBones, onToggleVectors,
   onToggleRagdoll, onToggleEditStructure, onToggleRebindMode, onToggleBinds,
   onSkinChange, onNewAnimation, onDeleteAnimation,
+  onEditAnimPoseToggle, onResetAnimPose,
 }) {
   const isEdit      = currentAnimation === 'edit';
   const editDisabled = !isEdit || poseEditorOpen;
   const editTitle   = !isEdit ? 'Switch to Edit mode first' : poseEditorOpen ? 'Close pose editor first' : '';
+  const editAnimPoseDisabled = isEdit || poseEditorOpen;
 
   const allowedKeys = WEAPON_ANIMATION_SETS[weapon ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
 
@@ -124,6 +127,29 @@ export function AnimationControls({
         >
           {poseEditorOpen ? 'Editing…' : '+ New'}
         </Button>
+      </div>
+
+      {/* Edit Pose row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <ModeBtn
+          active={editAnimPose}
+          disabled={editAnimPoseDisabled}
+          onClick={onEditAnimPoseToggle}
+        >
+          Edit Pose
+        </ModeBtn>
+        {editAnimPose && hasAnimPoseEdits && (
+          <button
+            type="button"
+            onClick={onResetAnimPose}
+            className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+          >
+            Reset
+          </button>
+        )}
+        {editAnimPose && (
+          <span className="text-[10px] text-teal-400/70 font-mono">drag bones to adjust</span>
+        )}
       </div>
 
       <Separator />

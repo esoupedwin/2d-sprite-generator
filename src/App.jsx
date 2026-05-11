@@ -34,11 +34,12 @@ function newCharacter(name) {
   return {
     id: genId(),
     name,
-    parts: { ...DEFAULT_CHARACTER, customColors: { ...DEFAULT_BUILD_COLORS } },
+    parts: { ...DEFAULT_CHARACTER, customColors: { ...DEFAULT_BUILD_COLORS }, weaponOffset: { x: 0, y: 0, rotation: 0 } },
     boneOffsets,
     skinOverrides,
     defaultBoneOffsets:   Object.fromEntries(Object.entries(DEFAULT_BUILD_BONE_OFFSETS).map(([k, v]) => [k, { ...v }])),
     defaultSkinOverrides: cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES),
+    animBoneOffsets: {},
   };
 }
 
@@ -82,6 +83,7 @@ export default function App() {
 
   const [currentAnimation, setCurrentAnimation] = useState('idle');
   const [isPlaying,    setIsPlaying]    = useState(true);
+  const [editAnimPose, setEditAnimPose] = useState(false);
   const [showBones,    setShowBones]    = useState(false);
   const [showVectors,  setShowVectors]  = useState(false);
   const [ragdoll,       setRagdoll]       = useState(false);
@@ -89,6 +91,8 @@ export default function App() {
   const [rebindMode,    setRebindMode]    = useState(false);
   const [showBinds,     setShowBinds]     = useState(false);
   const [selectedSkin,  setSelectedSkin]  = useState('all');
+
+  const charCanvasRef = useRef(null);
 
   // ── Pose editor ───────────────────────────────────────────────────────────────
   const [poseEditorOpen,  setPoseEditorOpen]  = useState(false);
@@ -181,6 +185,7 @@ export default function App() {
     setActiveCharId(id);
     setCurrentAnimation('idle');
     setShowVectors(false);
+    setEditAnimPose(false);
   }, []);
 
   const duplicateCharacter = useCallback((id) => {
@@ -191,12 +196,13 @@ export default function App() {
         ...src,
         id:   genId(),
         name: `${src.name} copy`,
-        parts:                { ...src.parts, customColors: { ...(src.parts.customColors ?? {}) }, partScales: { ...(src.parts.partScales ?? {}) } },
+        parts:                { ...src.parts, customColors: { ...(src.parts.customColors ?? {}) }, partScales: { ...(src.parts.partScales ?? {}) }, weaponOffset: { ...(src.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 }) } },
         boneOffsets:          { ...src.boneOffsets },
         skinOverrides:        Object.fromEntries(Object.entries(src.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
         defaultBoneOffsets:   { ...src.defaultBoneOffsets },
         defaultSkinOverrides: Object.fromEntries(Object.entries(src.defaultSkinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
         customAnimations:     (src.customAnimations ?? []).map(a => ({ ...a, tracks: Object.fromEntries(Object.entries(a.tracks).map(([k, kfs]) => [k, kfs.map(kf => ({ ...kf }))])) })),
+        animBoneOffsets:      Object.fromEntries(Object.entries(src.animBoneOffsets ?? {}).map(([anim, boneMap]) => [anim, Object.fromEntries(Object.entries(boneMap).map(([b, v]) => [b, { ...v }]))])),
       };
       setActiveCharId(copy.id);
       return [...prev, copy];
@@ -261,6 +267,35 @@ export default function App() {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, boneOffsets: newOffsets } : c
     ));
+  }, [activeCharId]);
+
+  const updateWeaponOffset = useCallback((axis, delta) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const wo = c.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 };
+      return { ...c, parts: { ...c.parts, weaponOffset: { ...wo, [axis]: (wo[axis] || 0) + delta } } };
+    }));
+  }, [activeCharId]);
+
+  const resetWeaponOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, parts: { ...c.parts, weaponOffset: { x: 0, y: 0, rotation: 0 } } } : c
+    ));
+  }, [activeCharId]);
+
+  const updateAnimBoneOffsets = useCallback((newAnimBoneOffsets) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, animBoneOffsets: newAnimBoneOffsets } : c
+    ));
+  }, [activeCharId]);
+
+  const resetAnimPose = useCallback((animKey) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const { [animKey]: _, ...rest } = c.animBoneOffsets ?? {};
+      return { ...c, animBoneOffsets: rest };
+    }));
+    charCanvasRef.current?.resetAnimBoneOffsets(animKey);
   }, [activeCharId]);
 
   const updateSkinOverrides = useCallback((newSkins) => {
@@ -436,6 +471,7 @@ export default function App() {
       }
       return key;
     });
+    setEditAnimPose(false);
     setIsPlaying(true);
     if (key !== 'edit') {
       setShowVectors(false);
@@ -490,19 +526,28 @@ export default function App() {
                   Edit Mode
                 </div>
               )}
+              {editAnimPose && currentAnimation !== 'edit' && (
+                <div className="bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
+                  Pose Edit — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
+                </div>
+              )}
               <div className={cn(
                   'rounded-lg border overflow-hidden shadow-2xl transition-colors duration-200',
                   currentAnimation === 'edit'
                     ? 'border-yellow-400 shadow-[0_0_24px_rgba(250,204,21,0.25)] rounded-tl-none'
+                    : editAnimPose
+                    ? 'border-teal-400 shadow-[0_0_24px_rgba(45,212,191,0.2)] rounded-tl-none'
                     : 'border-border',
                 )}>
               <CharacterCanvas
+                ref={charCanvasRef}
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
                 character={activeChar.parts}
                 boneOffsets={poseEditorOpen ? (poseFrames[activePoseFrame]?.boneOffsets ?? {}) : activeChar.boneOffsets}
                 skinOverrides={activeChar.skinOverrides}
                 defaultBoneOffsets={activeChar.defaultBoneOffsets}
                 defaultSkinOverrides={activeChar.defaultSkinOverrides}
+                animBoneOffsets={poseEditorOpen ? {} : (activeChar.animBoneOffsets ?? {})}
                 currentAnimation={currentAnimation}
                 isPlaying={isPlaying}
                 showBones={showBones}
@@ -512,11 +557,13 @@ export default function App() {
                 rebindMode={poseEditorOpen ? false : rebindMode}
                 showBinds={poseEditorOpen ? false : showBinds}
                 selectedSkin={selectedSkin}
+                editAnimPose={poseEditorOpen ? false : editAnimPose}
                 customAnimations={activeChar.customAnimations}
                 onAnimationComplete={handleAnimationComplete}
                 onBoneOffsetsChange={poseEditorOpen ? updatePoseFrameBones : updateBoneOffsets}
                 onSkinOverridesChange={updateSkinOverrides}
                 onRagdollOverlayChange={poseEditorOpen ? handlePoseRagdollOverlayChange : undefined}
+                onAnimBoneOffsetsChange={poseEditorOpen ? undefined : updateAnimBoneOffsets}
                 onSaveDefault={saveCharacterDefault}
               />
             </div>
@@ -560,6 +607,54 @@ export default function App() {
                   </button>
                 ))}
               </div>
+
+              {/* Weapon anchor offset controls — only shown when a weapon is equipped */}
+              {activeChar.parts.weapon !== 'none' && (() => {
+                const wo = activeChar.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 };
+                const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
+                const btnCls = 'w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 transition-colors';
+                const valCls = 'font-mono text-[11px] min-w-[30px] text-center';
+                const STEP_PX  = 2;
+                const STEP_DEG = 5 * Math.PI / 180;
+                return (
+                  <div className="flex flex-col gap-1 mt-0.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* X offset */}
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-[10px] text-muted-foreground w-4">X</span>
+                        <button className={btnCls} onClick={() => updateWeaponOffset('x', -STEP_PX)}>−</button>
+                        <span className={cn(valCls, wo.x ? 'text-primary' : 'text-muted-foreground')}>{Math.round(wo.x ?? 0)}</span>
+                        <button className={btnCls} onClick={() => updateWeaponOffset('x',  STEP_PX)}>+</button>
+                      </div>
+                      {/* Y offset */}
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-[10px] text-muted-foreground w-4">Y</span>
+                        <button className={btnCls} onClick={() => updateWeaponOffset('y', -STEP_PX)}>−</button>
+                        <span className={cn(valCls, wo.y ? 'text-primary' : 'text-muted-foreground')}>{Math.round(wo.y ?? 0)}</span>
+                        <button className={btnCls} onClick={() => updateWeaponOffset('y',  STEP_PX)}>+</button>
+                      </div>
+                      {/* Rotation */}
+                      <div className="flex items-center gap-0.5">
+                        <span className="text-[10px] text-muted-foreground w-4">°</span>
+                        <button className={btnCls} onClick={() => updateWeaponOffset('rotation', -STEP_DEG)}>−</button>
+                        <span className={cn(valCls, wo.rotation ? 'text-primary' : 'text-muted-foreground')}>
+                          {Math.round((wo.rotation ?? 0) * 180 / Math.PI)}°
+                        </span>
+                        <button className={btnCls} onClick={() => updateWeaponOffset('rotation',  STEP_DEG)}>+</button>
+                      </div>
+                      {isDirty && (
+                        <button
+                          onClick={resetWeaponOffset}
+                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors ml-auto"
+                          title="Reset weapon offset"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             <Separator />
@@ -575,6 +670,8 @@ export default function App() {
               rebindMode={rebindMode}
               showBinds={showBinds}
               selectedSkin={selectedSkin}
+              editAnimPose={editAnimPose}
+              hasAnimPoseEdits={Object.keys((activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}).length > 0}
               customAnimations={activeChar.customAnimations}
               poseEditorOpen={poseEditorOpen}
               onAnimationChange={handleAnimationChange}
@@ -588,6 +685,13 @@ export default function App() {
               onSkinChange={setSelectedSkin}
               onNewAnimation={openPoseEditor}
               onDeleteAnimation={deleteCustomAnimation}
+              onEditAnimPoseToggle={() => {
+                setEditAnimPose(p => {
+                  if (!p) setIsPlaying(false);
+                  return !p;
+                });
+              }}
+              onResetAnimPose={() => resetAnimPose(currentAnimation)}
             />
 
             <Separator />
