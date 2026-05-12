@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
-import { ANIMATIONS, getPoseAtTime } from '../systems/AnimationSystem.js';
+import { ANIMATIONS, getPoseAtTime, resolveAnimation, keyframeTimeKey } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { renderCharacter } from '../systems/Renderer.js';
 import {
@@ -41,6 +41,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   defaultBoneOffsets:   initialDefaultBoneOffsets,
   defaultSkinOverrides: initialDefaultSkinOverrides,
   animBoneOffsets:      initialAnimBoneOffsets,
+  animKeyframeOverrides: animKeyframeOverridesProp,
+  activeKeyframe,
+  onKeyframeOverrideChange,
   currentAnimation, isPlaying,
   showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
   editAnimPose,
@@ -72,6 +75,10 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         const { [animKey]: _, ...rest } = prev;
         return rest;
       });
+    },
+    seekTime(t) {
+      stateRef.current.time = t;
+      stateRef.current.lastTimestamp = null;
     },
   }));
 
@@ -114,6 +121,16 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.ragdollOverlay   = ragdollOverlay;
   stateRef.current.animBoneOffsets  = animBoneOffsets;
   stateRef.current.customAnimations = customAnimations;
+  stateRef.current.animKeyframeOverrides = animKeyframeOverridesProp ?? {};
+  stateRef.current.activeKeyframe   = activeKeyframe ?? null;
+
+  // When a keyframe row is clicked, snap to its time and lock there.
+  useEffect(() => {
+    if (activeKeyframe) {
+      stateRef.current.time = activeKeyframe.time;
+      stateRef.current.lastTimestamp = null;
+    }
+  }, [activeKeyframe?.boneId, activeKeyframe?.time]);
 
   // Notify parent of bone/skin/overlay changes (skip the very first render)
   const firstRender = useRef(true);
@@ -198,8 +215,12 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const delta = Math.min((timestamp - s.lastTimestamp) / 1000, 0.05);
     s.lastTimestamp = timestamp;
 
-    const anim = ANIMATIONS[s.currentAnimation]
+    const rawAnim = ANIMATIONS[s.currentAnimation]
       ?? s.customAnimations?.find(a => a.id === s.currentAnimation);
+    // Apply per-keyframe overrides for this animation.
+    const anim = rawAnim
+      ? resolveAnimation(rawAnim, (s.animKeyframeOverrides ?? {})[s.currentAnimation] ?? null)
+      : null;
     if (anim && s.isPlaying) {
       s.time += delta;
       if (anim.loop)                       s.time %= anim.duration;
@@ -555,25 +576,59 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         }));
       } else if (s.editAnimPose) {
         // IK against the full current pose (animPose + boneOffsets + animBoneOffsets)
-        // so the drag feels natural. Store deltas in animBoneOffsets only.
-        setAnimBoneOffsets(prev => {
-          const curAnimOff = prev[s.currentAnimation] ?? {};
-          const combined   = mergeOffsets(mergeOffsets(s.lastAnimPose, s.boneOffsets), curAnimOff);
-          const next       = solveIK(combined, drag.boneId, charPos.x, charPos.y);
-          const out        = { ...curAnimOff };
+        // so the drag feels natural.
+        const curAnimOff   = s.animBoneOffsets[s.currentAnimation] ?? {};
+        const combined     = mergeOffsets(mergeOffsets(s.lastAnimPose, s.boneOffsets), curAnimOff);
+        const next         = solveIK(combined, drag.boneId, charPos.x, charPos.y);
+        const activeKf     = s.activeKeyframe;
+        const animOvAll    = s.animKeyframeOverrides ?? {};
+        const animOvForCur = animOvAll[s.currentAnimation] ?? {};
+        const rawAnim      = ANIMATIONS[s.currentAnimation]
+                           ?? s.customAnimations?.find(a => a.id === s.currentAnimation);
+
+        if (activeKf && onKeyframeOverrideChange) {
+          // Active keyframe path: bake EVERY bone touched by the IK into the
+          // override at activeKf.time so the curve actually deforms at that
+          // one time point only. animBoneOffsets is left alone.
+          const timeKey = keyframeTimeKey(activeKf.time);
           for (const id of Object.keys(next)) {
-            const o = combined[id] || {};
-            const n = next[id]     || {};
+            const o  = combined[id] || {};
+            const n  = next[id]     || {};
             const dx = (n.x        || 0) - (o.x        || 0);
             const dy = (n.y        || 0) - (o.y        || 0);
             const dr = (n.rotation || 0) - (o.rotation || 0);
-            if (Math.abs(dx) > 1e-9 || Math.abs(dy) > 1e-9 || Math.abs(dr) > 1e-9) {
-              const cur = out[id] || {};
-              out[id] = { x: (cur.x || 0) + dx, y: (cur.y || 0) + dy, rotation: (cur.rotation || 0) + dr };
-            }
+            if (Math.abs(dx) <= 1e-9 && Math.abs(dy) <= 1e-9 && Math.abs(dr) <= 1e-9) continue;
+
+            const existing = animOvForCur[id]?.[timeKey] ?? {};
+            const srcKf    = rawAnim?.tracks?.[id]?.find(k => keyframeTimeKey(k.time) === timeKey) ?? {};
+            const oldRot = existing.rotation !== undefined ? existing.rotation : (srcKf.rotation ?? 0);
+            const oldX   = existing.x        !== undefined ? existing.x        : (srcKf.x        ?? 0);
+            const oldY   = existing.y        !== undefined ? existing.y        : (srcKf.y        ?? 0);
+            onKeyframeOverrideChange(s.currentAnimation, id, activeKf.time, {
+              rotation: oldRot + dr,
+              ...(Math.abs(dx) > 1e-9 ? { x: oldX + dx } : {}),
+              ...(Math.abs(dy) > 1e-9 ? { y: oldY + dy } : {}),
+            });
           }
-          return { ...prev, [s.currentAnimation]: out };
-        });
+        } else {
+          // No active keyframe — fall back to time-invariant animBoneOffsets.
+          const newAnimOff = { ...curAnimOff };
+          for (const id of Object.keys(next)) {
+            const o  = combined[id] || {};
+            const n  = next[id]     || {};
+            const dx = (n.x        || 0) - (o.x        || 0);
+            const dy = (n.y        || 0) - (o.y        || 0);
+            const dr = (n.rotation || 0) - (o.rotation || 0);
+            if (Math.abs(dx) <= 1e-9 && Math.abs(dy) <= 1e-9 && Math.abs(dr) <= 1e-9) continue;
+            const cur = newAnimOff[id] || {};
+            newAnimOff[id] = {
+              x:        (cur.x        || 0) + dx,
+              y:        (cur.y        || 0) + dy,
+              rotation: (cur.rotation || 0) + dr,
+            };
+          }
+          setAnimBoneOffsets(prev => ({ ...prev, [s.currentAnimation]: newAnimOff }));
+        }
       } else {
         // Ragdoll: solve on combined (persistent + overlay), apply only the delta
         // to the ephemeral overlay so persistent boneOffsets stay untouched.
@@ -750,7 +805,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         ref={canvasRef}
         width={CANVAS_W}
         height={CANVAS_H}
-        className="block rounded-lg"
+        className="block rounded-lg max-w-full"
+        style={{ height: '80vh', width: 'auto', aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDrag}

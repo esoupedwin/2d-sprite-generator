@@ -3,13 +3,15 @@ import { CharacterCanvas } from './components/CharacterCanvas.jsx';
 import { CharacterBuilder } from './components/CharacterBuilder.jsx';
 import { AnimationControls } from './components/AnimationControls.jsx';
 import { PoseEditor } from './components/PoseEditor.jsx';
+import { ExportMenu } from './components/ExportMenu.jsx';
+import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { CHARACTER_PARTS, DEFAULT_CHARACTER } from './data/characterParts.js';
 import {
   DEFAULT_BUILD_COLORS,
   DEFAULT_BUILD_BONE_OFFSETS,
   DEFAULT_BUILD_SKIN_OVERRIDES,
 } from './data/defaultBuild.js';
-import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS } from './systems/AnimationSystem.js';
+import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
@@ -40,6 +42,7 @@ function newCharacter(name) {
     defaultBoneOffsets:   Object.fromEntries(Object.entries(DEFAULT_BUILD_BONE_OFFSETS).map(([k, v]) => [k, { ...v }])),
     defaultSkinOverrides: cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES),
     animBoneOffsets: {},
+    animKeyframeOverrides: {},
   };
 }
 
@@ -93,6 +96,11 @@ export default function App() {
   const [selectedSkin,  setSelectedSkin]  = useState('all');
 
   const charCanvasRef = useRef(null);
+
+  // ── Animation keyframe editing ───────────────────────────────────────────────
+  // When set, the canvas pauses + seeks to this time. Drags on the named bone
+  // write back to character.animKeyframeOverrides[currentAnimation][bone][time].
+  const [activeKeyframe, setActiveKeyframe] = useState(null); // { boneId, time } | null
 
   // ── Pose editor ───────────────────────────────────────────────────────────────
   const [poseEditorOpen,  setPoseEditorOpen]  = useState(false);
@@ -203,6 +211,7 @@ export default function App() {
         defaultSkinOverrides: Object.fromEntries(Object.entries(src.defaultSkinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
         customAnimations:     (src.customAnimations ?? []).map(a => ({ ...a, tracks: Object.fromEntries(Object.entries(a.tracks).map(([k, kfs]) => [k, kfs.map(kf => ({ ...kf }))])) })),
         animBoneOffsets:      Object.fromEntries(Object.entries(src.animBoneOffsets ?? {}).map(([anim, boneMap]) => [anim, Object.fromEntries(Object.entries(boneMap).map(([b, v]) => [b, { ...v }]))])),
+        animKeyframeOverrides:Object.fromEntries(Object.entries(src.animKeyframeOverrides ?? {}).map(([anim, boneMap]) => [anim, Object.fromEntries(Object.entries(boneMap).map(([b, timeMap]) => [b, Object.fromEntries(Object.entries(timeMap).map(([t, v]) => [t, { ...v }]))]))])),
       };
       setActiveCharId(copy.id);
       return [...prev, copy];
@@ -297,6 +306,34 @@ export default function App() {
     }));
     charCanvasRef.current?.resetAnimBoneOffsets(animKey);
   }, [activeCharId]);
+
+  // Per-keyframe override: replace a specific (anim, bone, time) keyframe's
+  // values. Values: { rotation?, x?, y? } merged into the existing override.
+  const updateAnimKeyframeOverride = useCallback((animId, boneId, time, values) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const ov     = { ...(c.animKeyframeOverrides ?? {}) };
+      const animOv = { ...(ov[animId] ?? {}) };
+      const boneOv = { ...(animOv[boneId] ?? {}) };
+      const key    = Number(time).toFixed(2);
+      boneOv[key]  = { ...(boneOv[key] ?? {}), ...values };
+      animOv[boneId] = boneOv;
+      ov[animId]     = animOv;
+      return { ...c, animKeyframeOverrides: ov };
+    }));
+  }, [activeCharId]);
+
+  // Click on a keyframe row in the curve panel: pause + seek + remember which
+  // keyframe is "active" so ragdoll drags route to it.
+  const onKeyframeClick = useCallback((boneId, time) => {
+    setIsPlaying(false);
+    setActiveKeyframe({ boneId, time });
+    charCanvasRef.current?.seekTime?.(time);
+  }, []);
+
+  // Switching animation tabs or leaving Edit Pose mode clears the active keyframe.
+  useEffect(() => { setActiveKeyframe(null); }, [currentAnimation]);
+  useEffect(() => { if (!editAnimPose) setActiveKeyframe(null); }, [editAnimPose]);
 
   const updateSkinOverrides = useCallback((newSkins) => {
     setCharacters(prev => prev.map(c =>
@@ -487,6 +524,12 @@ export default function App() {
         <h1 className="text-sm font-semibold text-foreground">2D Character Generator</h1>
         <span className="text-muted-foreground/30 select-none">·</span>
         <span className="text-xs text-muted-foreground">Skeletal animation · Modular parts · Export ready</span>
+        <div className="ml-auto">
+          <ExportMenu
+            onSpriteSheet={() => exportSpriteSheet(activeChar.parts, currentAnimation, activeChar.boneOffsets, activeChar.skinOverrides)}
+            onAnimationJSON={() => exportAnimationJSON(currentAnimation)}
+          />
+        </div>
       </header>
 
       <div className="flex flex-col flex-1 overflow-hidden">
@@ -548,6 +591,9 @@ export default function App() {
                 defaultBoneOffsets={activeChar.defaultBoneOffsets}
                 defaultSkinOverrides={activeChar.defaultSkinOverrides}
                 animBoneOffsets={poseEditorOpen ? {} : (activeChar.animBoneOffsets ?? {})}
+                animKeyframeOverrides={poseEditorOpen ? {} : (activeChar.animKeyframeOverrides ?? {})}
+                activeKeyframe={activeKeyframe}
+                onKeyframeOverrideChange={updateAnimKeyframeOverride}
                 currentAnimation={currentAnimation}
                 isPlaying={isPlaying}
                 showBones={showBones}
@@ -687,34 +733,31 @@ export default function App() {
               onDeleteAnimation={deleteCustomAnimation}
               onEditAnimPoseToggle={() => {
                 setEditAnimPose(p => {
-                  if (!p) setIsPlaying(false);
+                  // Enter pose-edit → pause so the user has a stable target to drag.
+                  // Exit pose-edit → resume so they can see the edited animation play.
+                  setIsPlaying(p ? true : false);
                   return !p;
                 });
               }}
               onResetAnimPose={() => resetAnimPose(currentAnimation)}
             />
 
-            <Separator />
-
-            <div className="flex flex-col gap-2">
-              <SectionTitle>Export</SectionTitle>
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  variant="outline"
-                  className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
-                  onClick={() => exportSpriteSheet(activeChar.parts, currentAnimation, activeChar.boneOffsets, activeChar.skinOverrides)}
-                >
-                  Sprite Sheet (PNG)
-                </Button>
-                <Button
-                  variant="outline"
-                  className="justify-start text-muted-foreground hover:text-foreground hover:border-emerald-500/60 hover:text-emerald-500"
-                  onClick={() => exportAnimationJSON(currentAnimation)}
-                >
-                  Animation Data (JSON)
-                </Button>
-              </div>
-            </div>
+            {editAnimPose && !poseEditorOpen && (
+              <>
+                <Separator />
+                <AnimationCurvePanel
+                  animation={resolveAnimation(
+                    ANIMATIONS[currentAnimation]
+                    ?? activeChar.customAnimations?.find(a => a.id === currentAnimation),
+                    (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {},
+                  )}
+                  offsets={(activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}}
+                  overrides={(activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {}}
+                  activeKeyframe={activeKeyframe}
+                  onKeyframeClick={onKeyframeClick}
+                />
+              </>
+            )}
           </aside>
         </div>
 

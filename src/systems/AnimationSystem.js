@@ -1089,8 +1089,11 @@ export const ANIMATIONS = {
 
   sword_slash: {
     name: 'Slash',
-    duration: 0.85,
-    loop: false,
+    // Cycle = 0.85 s of slashing + ~1 s held in rest before repeating.
+    // Keyframes only go to t=0.85; sampling past that clamps to the last
+    // keyframe values, holding the rest stance until the next loop.
+    duration: 1.85,
+    loop: true,
     tracks: {
       // Torso: wind back CW → snap forward CCW → recover
       torso: [
@@ -1221,4 +1224,63 @@ export function getPoseAtTime(animation, time) {
     };
   }
   return pose;
+}
+
+/**
+ * Time keys are stored as fixed-2-decimal strings, e.g. "0.35", so JSON
+ * persistence and lookups don't need fuzzy float comparison.
+ */
+export function keyframeTimeKey(time) {
+  return Number(time).toFixed(2);
+}
+
+/**
+ * Returns a copy of `animation` with per-keyframe overrides merged in.
+ * For each bone track:
+ *   - keyframes whose time matches an override get the override's fields
+ *     merged in (rotation/x/y replace the source values).
+ *   - override times that don't match any existing keyframe are inserted
+ *     as NEW keyframes, sorted by time. This makes the override storage
+ *     fully expressive — editing a bone at any time creates a keyframe.
+ *
+ * overrides shape: { [boneId]: { [timeKey]: { x?, y?, rotation? } } }
+ */
+export function resolveAnimation(animation, overrides) {
+  if (!animation || !overrides) return animation;
+  if (Object.keys(overrides).length === 0) return animation;
+  const tracks = {};
+
+  // Pass 1 — bones that exist in the source animation
+  for (const [boneId, kfs] of Object.entries(animation.tracks)) {
+    const boneOv = overrides[boneId];
+    if (!boneOv) { tracks[boneId] = kfs; continue; }
+
+    const covered = new Set();
+    const merged = kfs.map(kf => {
+      const k = keyframeTimeKey(kf.time);
+      covered.add(k);
+      const o = boneOv[k];
+      return o ? { ...kf, ...o } : kf;
+    });
+
+    const extras = [];
+    for (const [tk, vals] of Object.entries(boneOv)) {
+      if (covered.has(tk)) continue;
+      extras.push({ time: Number(tk), ...vals });
+    }
+    tracks[boneId] = extras.length
+      ? [...merged, ...extras].sort((a, b) => a.time - b.time)
+      : merged;
+  }
+
+  // Pass 2 — bones with overrides but no source track at all
+  for (const [boneId, boneOv] of Object.entries(overrides)) {
+    if (tracks[boneId]) continue;
+    const kfs = Object.entries(boneOv)
+      .map(([tk, vals]) => ({ time: Number(tk), ...vals }))
+      .sort((a, b) => a.time - b.time);
+    if (kfs.length) tracks[boneId] = kfs;
+  }
+
+  return { ...animation, tracks };
 }
