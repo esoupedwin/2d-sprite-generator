@@ -11,6 +11,11 @@ import {
   DEFAULT_BUILD_COLORS,
   DEFAULT_BUILD_BONE_OFFSETS,
   DEFAULT_BUILD_SKIN_OVERRIDES,
+  DEFAULT_ANIM_BONE_OFFSETS,
+  DEFAULT_ANIM_KEYFRAME_OVERRIDES,
+  DEFAULT_WEAPON_OFFSETS,
+  DEFAULT_WEAPON_ANIM_OFFSETS,
+  DEFAULT_WEAPON_SCALES,
 } from './data/defaultBuild.js';
 import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
@@ -32,19 +37,36 @@ function cloneSkinOverrides(src) {
   return Object.fromEntries(Object.entries(src).map(([k, pts]) => [k, pts.map(p => [...p])]));
 }
 
+// Deep-clone nested {anim: {bone: {x,y,rotation}}} or similar 2/3-level dicts
+// so each new character starts with its own copy of the defaults.
+function cloneNested(src, depth = 2) {
+  if (src == null) return src;
+  if (depth === 0) return Array.isArray(src) ? src.slice() : { ...src };
+  return Object.fromEntries(
+    Object.entries(src).map(([k, v]) => [k, cloneNested(v, depth - 1)])
+  );
+}
+
 function newCharacter(name) {
   const boneOffsets   = Object.fromEntries(Object.entries(DEFAULT_BUILD_BONE_OFFSETS).map(([k, v]) => [k, { ...v }]));
   const skinOverrides = cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES);
   return {
     id: genId(),
     name,
-    parts: { ...DEFAULT_CHARACTER, customColors: { ...DEFAULT_BUILD_COLORS }, weaponOffset: { x: 0, y: 0, rotation: 0 } },
+    parts: {
+      ...DEFAULT_CHARACTER,
+      customColors:  { ...DEFAULT_BUILD_COLORS },
+      weaponOffset:  { x: 0, y: 0, rotation: 0 },
+      weaponOffsets:     cloneNested(DEFAULT_WEAPON_OFFSETS,      1),
+      weaponAnimOffsets: cloneNested(DEFAULT_WEAPON_ANIM_OFFSETS, 2),
+      weaponScales:      { ...DEFAULT_WEAPON_SCALES },
+    },
     boneOffsets,
     skinOverrides,
-    defaultBoneOffsets:   Object.fromEntries(Object.entries(DEFAULT_BUILD_BONE_OFFSETS).map(([k, v]) => [k, { ...v }])),
-    defaultSkinOverrides: cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES),
-    animBoneOffsets: {},
-    animKeyframeOverrides: {},
+    defaultBoneOffsets:    Object.fromEntries(Object.entries(DEFAULT_BUILD_BONE_OFFSETS).map(([k, v]) => [k, { ...v }])),
+    defaultSkinOverrides:  cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES),
+    animBoneOffsets:       cloneNested(DEFAULT_ANIM_BONE_OFFSETS,       2),
+    animKeyframeOverrides: cloneNested(DEFAULT_ANIM_KEYFRAME_OVERRIDES, 3),
   };
 }
 

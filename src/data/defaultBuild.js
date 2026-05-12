@@ -584,3 +584,83 @@ export const DEFAULT_BUILD_SKIN_OVERRIDES = {
     ]
   ]
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Animation defaults — applied to every new character so weapon poses, slash
+// keyframes, and weapon anchors come "tuned" out of the gate.
+
+export const DEFAULT_ANIM_BONE_OFFSETS = {
+  sword_idle: {
+    right_leg:     { x: 0,                  y: 0,                   rotation: -0.2604418006072097  },
+    right_shin:    { x: 0,                  y: 0,                   rotation: -0.24968827956372813 },
+    left_leg:      { x: 1.2525131116893178, y: 2.2295001034680197,  rotation:  0.0717299385344379  },
+    left_shin:     { x: 0,                  y: 0,                   rotation: -0.23235541950416874 },
+    lower_torso:   { x: 2.567864227811834,  y: -0.09385354023409631, rotation: 0                    },
+    left_arm:      { x: 0,                  y: 0,                   rotation: -5.912542162802528   },
+    right_arm:     { x: 0,                  y: 0,                   rotation:  0.08691240898679964 },
+    right_forearm: { x: 0,                  y: 0,                   rotation: -0.14887754490980598 },
+    head:          { x: -5.581960518213576, y: -0.09265180651318872, rotation: 0                    },
+  },
+  sword_walk: {
+    right_arm:     { x: 0,                  y: 0,                   rotation:  1.485306522678347   },
+    right_forearm: { x: 0,                  y: 0,                   rotation: -0.4664963647903044  },
+    left_arm:      { x: 0,                  y: 0,                   rotation:  0.6103330968226534  },
+    left_forearm:  { x: 0,                  y: 0,                   rotation: -0.6899668323360145  },
+    head:          { x: -3.739580898105421, y: -0.1295079687231464,  rotation: 0                    },
+  },
+  sword_slash: {
+    right_arm:     { x: 0, y: 0, rotation:  0.8218444899408878 },
+    right_leg:     { x: 0, y: 0, rotation: -0.988640437867376  },
+    right_shin:    { x: 0, y: 0, rotation:  0.27465868431415774 },
+    right_forearm: { x: 0, y: 0, rotation:  0.05749571134893694 },
+    left_arm:      { x: 0, y: 0, rotation:  0.656600544375531   },
+    left_forearm:  { x: 0, y: 0, rotation:  0.20945244653957673 },
+  },
+  rifle: {
+    left_arm:      { x: 0, y: 0, rotation:  1.3572684483284077  },
+    left_forearm:  { x: 0, y: 0, rotation: -1.3228339516956054  },
+    right_arm:     { x: 0, y: 0, rotation: -0.35641431631337783 },
+    right_forearm: { x: 0, y: 0, rotation:  0.4777356787124558  },
+  },
+  rifle_idle: {
+    left_arm:      { x: 0,                  y: 0,                    rotation:  0.5252968361152407  },
+    left_forearm:  { x: 0,                  y: 0,                    rotation: -1.3141224670024099  },
+    head:          { x: -3.2045909344845005, y: -0.12776893023711722, rotation: 0                    },
+  },
+  rifle_walk: {
+    left_arm:      { x: 0, y: 0, rotation:  1.090310266934617   },
+    left_forearm:  { x: 0, y: 0, rotation: -1.6766142033093252  },
+  },
+};
+
+export const DEFAULT_ANIM_KEYFRAME_OVERRIDES = {
+  sword_slash: {
+    left_arm: {
+      '0.00': { rotation: -1.7121168154193471 },
+      '0.85': { rotation: -1.696516228411686  },
+    },
+    left_forearm: {
+      '0.00': { rotation: -1.2088787243852654 },
+      '0.85': { rotation: -1.2392915390062784 },
+    },
+  },
+};
+
+export const DEFAULT_WEAPON_OFFSETS = {
+  rifle: { x:   4, y: -46, rotation:  0.08726646259971645 },
+  sword: { x: -12, y:  -4, rotation: -1.308996938995747   },
+};
+
+export const DEFAULT_WEAPON_ANIM_OFFSETS = {
+  sword: {
+    sword_idle: { x: -10, y:  -4, rotation: -1.308996938995747   },
+  },
+  rifle: {
+    rifle:      { x: -10, y: -54, rotation: -0.17453292519943298 },
+    rifle_walk: { x:   4, y: -52, rotation:  0.08726646259971645 },
+  },
+};
+
+export const DEFAULT_WEAPON_SCALES = {
+  rifle: 1.7,
+};
