@@ -5,6 +5,7 @@ import { AnimationControls } from './components/AnimationControls.jsx';
 import { PoseEditor } from './components/PoseEditor.jsx';
 import { ExportMenu } from './components/ExportMenu.jsx';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
+import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
 import { CHARACTER_PARTS, DEFAULT_CHARACTER } from './data/characterParts.js';
 import {
   DEFAULT_BUILD_COLORS,
@@ -19,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
+import { ImageUp, X } from 'lucide-react';
 
 const CHARS_STORAGE = '2dsprite:characters';
 
@@ -96,6 +98,9 @@ export default function App() {
   const [selectedSkin,  setSelectedSkin]  = useState('all');
 
   const charCanvasRef = useRef(null);
+
+  // Weapon PNG upload dialog
+  const [weaponUploadOpen, setWeaponUploadOpen] = useState(false);
 
   // ── Animation keyframe editing ───────────────────────────────────────────────
   // When set, the canvas pauses + seeks to this time. Drags on the named bone
@@ -204,7 +209,7 @@ export default function App() {
         ...src,
         id:   genId(),
         name: `${src.name} copy`,
-        parts:                { ...src.parts, customColors: { ...(src.parts.customColors ?? {}) }, partScales: { ...(src.parts.partScales ?? {}) }, weaponOffset: { ...(src.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 }) } },
+        parts:                { ...src.parts, customColors: { ...(src.parts.customColors ?? {}) }, partScales: { ...(src.parts.partScales ?? {}) }, weaponOffset: { ...(src.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 }) }, weaponOffsets: Object.fromEntries(Object.entries(src.parts.weaponOffsets ?? {}).map(([k, v]) => [k, { ...v }])), weaponAnimOffsets: Object.fromEntries(Object.entries(src.parts.weaponAnimOffsets ?? {}).map(([w, m]) => [w, Object.fromEntries(Object.entries(m).map(([a, v]) => [a, { ...v }]))])), weaponScales: { ...(src.parts.weaponScales ?? {}) }, weaponImages: { ...(src.parts.weaponImages ?? {}) } },
         boneOffsets:          { ...src.boneOffsets },
         skinOverrides:        Object.fromEntries(Object.entries(src.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
         defaultBoneOffsets:   { ...src.defaultBoneOffsets },
@@ -272,24 +277,73 @@ export default function App() {
     }));
   }, [activeCharId]);
 
+  const updateWeaponImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const weapon = c.parts.weapon;
+      if (!weapon || weapon === 'none') return c;
+      const images = { ...(c.parts.weaponImages ?? {}) };
+      if (dataUrl) images[weapon] = dataUrl;
+      else         delete images[weapon];
+      return { ...c, parts: { ...c.parts, weaponImages: images } };
+    }));
+  }, [activeCharId]);
+
   const updateBoneOffsets = useCallback((newOffsets) => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, boneOffsets: newOffsets } : c
     ));
   }, [activeCharId]);
 
+  // Offsets are stored per-(weapon × animation). Falls back through:
+  //   parts.weaponAnimOffsets[weapon][anim]
+  //   parts.weaponOffsets[weapon]
+  //   parts.weaponOffset
+  //   { x:0, y:0, rotation:0 }
   const updateWeaponOffset = useCallback((axis, delta) => {
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
-      const wo = c.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 };
-      return { ...c, parts: { ...c.parts, weaponOffset: { ...wo, [axis]: (wo[axis] || 0) + delta } } };
+      const weapon = c.parts.weapon;
+      if (!weapon || weapon === 'none') return c;
+      const anim = currentAnimation;
+      const animOffsets = { ...(c.parts.weaponAnimOffsets ?? {}) };
+      const weaponMap   = { ...(animOffsets[weapon] ?? {}) };
+      const cur = weaponMap[anim]
+              ?? c.parts.weaponOffsets?.[weapon]
+              ?? c.parts.weaponOffset
+              ?? { x: 0, y: 0, rotation: 0 };
+      weaponMap[anim] = { ...cur, [axis]: (cur[axis] || 0) + delta };
+      animOffsets[weapon] = weaponMap;
+      return { ...c, parts: { ...c.parts, weaponAnimOffsets: animOffsets } };
     }));
-  }, [activeCharId]);
+  }, [activeCharId, currentAnimation]);
 
   const resetWeaponOffset = useCallback(() => {
-    setCharacters(prev => prev.map(c =>
-      c.id === activeCharId ? { ...c, parts: { ...c.parts, weaponOffset: { x: 0, y: 0, rotation: 0 } } } : c
-    ));
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const weapon = c.parts.weapon;
+      if (!weapon || weapon === 'none') return c;
+      const anim = currentAnimation;
+      const animOffsets = { ...(c.parts.weaponAnimOffsets ?? {}) };
+      const weaponMap   = { ...(animOffsets[weapon] ?? {}) };
+      // Delete the per-animation entry so the weapon default takes over again.
+      delete weaponMap[anim];
+      if (Object.keys(weaponMap).length === 0) delete animOffsets[weapon];
+      else                                      animOffsets[weapon] = weaponMap;
+      return { ...c, parts: { ...c.parts, weaponAnimOffsets: animOffsets } };
+    }));
+  }, [activeCharId, currentAnimation]);
+
+  const updateWeaponScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const weapon = c.parts.weapon;
+      if (!weapon || weapon === 'none') return c;
+      const scales = { ...(c.parts.weaponScales ?? {}) };
+      if (Math.abs(newScale - 1) < 0.001) delete scales[weapon];
+      else                                 scales[weapon] = newScale;
+      return { ...c, parts: { ...c.parts, weaponScales: scales } };
+    }));
   }, [activeCharId]);
 
   const updateAnimBoneOffsets = useCallback((newAnimBoneOffsets) => {
@@ -458,7 +512,9 @@ export default function App() {
 
   // ── Animation callbacks ───────────────────────────────────────────────────────
   const handleAnimationComplete = useCallback((animKey) => {
-    if (animKey === 'jump') { setCurrentAnimation('idle'); return; }
+    if (animKey === 'jump')        { setCurrentAnimation('idle');       return; }
+    if (animKey === 'sword_jump')  { setCurrentAnimation('sword_idle'); return; }
+    if (animKey === 'rifle_jump')  { setCurrentAnimation('rifle_idle'); return; }
     if (animKey === 'sword_slash') { setCurrentAnimation('sword_idle'); return; }
     if (!ANIMATIONS[animKey]) { setCurrentAnimation('idle'); }
   }, []);
@@ -619,24 +675,32 @@ export default function App() {
           <aside className="w-80 shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
             {/* Weapon */}
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <SectionTitle>Weapon</SectionTitle>
-                <div className="flex items-center gap-0.5">
-                  <button
-                    onClick={() => updatePartScale('weapon', Math.max(0.5, +((( activeChar.parts.partScales?.weapon ?? 1) - 0.1).toFixed(2))))}
-                    disabled={(activeChar.parts.partScales?.weapon ?? 1) <= 0.5}
-                    className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                  >−</button>
-                  <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs((activeChar.parts.partScales?.weapon ?? 1) - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                    {Math.round((activeChar.parts.partScales?.weapon ?? 1) * 100)}%
-                  </span>
-                  <button
-                    onClick={() => updatePartScale('weapon', Math.min(3.0, +((( activeChar.parts.partScales?.weapon ?? 1) + 0.1).toFixed(2))))}
-                    disabled={(activeChar.parts.partScales?.weapon ?? 1) >= 3.0}
-                    className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                  >+</button>
-                </div>
-              </div>
+              {(() => {
+                const w = activeChar.parts.weapon;
+                const curScale = activeChar.parts.weaponScales?.[w]
+                              ?? activeChar.parts.partScales?.weapon
+                              ?? 1;
+                return (
+                  <div className="flex items-center justify-between">
+                    <SectionTitle>Weapon</SectionTitle>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        onClick={() => updateWeaponScale(Math.max(0.5, +((curScale - 0.1).toFixed(2))))}
+                        disabled={curScale <= 0.5 || w === 'none'}
+                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                      >−</button>
+                      <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                        {Math.round(curScale * 100)}%
+                      </span>
+                      <button
+                        onClick={() => updateWeaponScale(Math.min(3.0, +((curScale + 0.1).toFixed(2))))}
+                        disabled={curScale >= 3.0 || w === 'none'}
+                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                      >+</button>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="flex flex-wrap gap-1">
                 {Object.entries(CHARACTER_PARTS.weapon.options).map(([key, opt]) => (
                   <button
@@ -654,9 +718,40 @@ export default function App() {
                 ))}
               </div>
 
+              {/* User-uploaded PNG that replaces the procedural weapon drawing.
+                  Stored per-weapon at parts.weaponImages[currentWeapon] so
+                  swapping Sword ↔ Rifle keeps each one's image. */}
+              {activeChar.parts.weapon !== 'none' && (() => {
+                const currentWeaponImage = activeChar.parts.weaponImages?.[activeChar.parts.weapon];
+                return (
+                  <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                    <button
+                      onClick={() => setWeaponUploadOpen(true)}
+                      title={currentWeaponImage ? `Replace ${activeChar.parts.weapon} PNG` : `Upload a PNG to skin the ${activeChar.parts.weapon}`}
+                      className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <ImageUp className="h-3.5 w-3.5" />
+                      <span>{currentWeaponImage ? 'Replace PNG' : 'Upload PNG'}</span>
+                    </button>
+                    {currentWeaponImage && (
+                      <button
+                        onClick={() => updateWeaponImage(null)}
+                        title={`Remove ${activeChar.parts.weapon} image (revert to procedural)`}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Weapon anchor offset controls — only shown when a weapon is equipped */}
               {activeChar.parts.weapon !== 'none' && (() => {
-                const wo = activeChar.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 };
+                const wo = activeChar.parts.weaponAnimOffsets?.[activeChar.parts.weapon]?.[currentAnimation]
+                        ?? activeChar.parts.weaponOffsets?.[activeChar.parts.weapon]
+                        ?? activeChar.parts.weaponOffset
+                        ?? { x: 0, y: 0, rotation: 0 };
                 const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
                 const btnCls = 'w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 transition-colors';
                 const valCls = 'font-mono text-[11px] min-w-[30px] text-center';
@@ -784,6 +879,14 @@ export default function App() {
           </div>
         )}
       </div>
+
+      <WeaponUploadDialog
+        open={weaponUploadOpen}
+        weaponType={activeChar.parts.weapon}
+        currentImage={activeChar.parts.weaponImages?.[activeChar.parts.weapon]}
+        onPick={updateWeaponImage}
+        onClose={() => setWeaponUploadOpen(false)}
+      />
     </div>
   );
 }

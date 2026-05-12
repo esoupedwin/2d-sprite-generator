@@ -12,27 +12,56 @@ function getColor(character, partKey) {
 }
 
 function getScale(character, partKey) {
+  if (partKey === 'weapon') {
+    // Per-weapon scale wins; falls back to legacy partScales.weapon, then 1.
+    return character.weaponScales?.[character.weapon]
+        ?? character.partScales?.weapon
+        ?? 1;
+  }
   return character.partScales?.[partKey] ?? 1;
 }
 
-function drawPart(ctx, partKey, character, worldTransforms) {
+// Longest-dimension target for user-uploaded weapon PNGs (bone-local units).
+// partScales.weapon multiplies on top of this so the user can tune size.
+const WEAPON_IMAGE_TARGET = 80;
+
+function drawPart(ctx, partKey, character, worldTransforms, weaponImage, animation) {
   const partDef = CHARACTER_PARTS[partKey];
   if (!partDef) return;
   const option = partDef.options[character[partKey]];
-  if (!option?.draw) return;
   const bone = worldTransforms[partDef.boneId];
   if (!bone) return;
+
+  const useWeaponImage = partKey === 'weapon' && weaponImage;
+  if (!useWeaponImage && !option?.draw) return;
+
   const s = getScale(character, partKey);
   ctx.save();
   ctx.translate(bone.x, bone.y);
   ctx.rotate(bone.rotation);
   if (s !== 1) ctx.scale(s, s);
   if (partKey === 'weapon') {
-    const wo = character.weaponOffset;
+    // Priority: per-(weapon × animation) > per-weapon default > legacy single.
+    const wo = character.weaponAnimOffsets?.[character.weapon]?.[animation]
+            ?? character.weaponOffsets?.[character.weapon]
+            ?? character.weaponOffset;
     if (wo?.x || wo?.y)       ctx.translate(wo.x ?? 0, wo.y ?? 0);
     if (wo?.rotation)          ctx.rotate(wo.rotation);
   }
-  option.draw(ctx);
+  if (useWeaponImage) {
+    // Convention: user uploads a PNG with the weapon's blade/muzzle pointing
+    // UP in image space and the handle at the bottom-center. We rotate π and
+    // anchor the image so its post-rotation top is at the bone origin (grip)
+    // and the rest extends in +Y bone-local (the "forward" direction shared
+    // with the procedural weapons).
+    const factor = WEAPON_IMAGE_TARGET / Math.max(weaponImage.naturalWidth, weaponImage.naturalHeight);
+    const w = weaponImage.naturalWidth  * factor;
+    const h = weaponImage.naturalHeight * factor;
+    ctx.rotate(Math.PI);
+    ctx.drawImage(weaponImage, -w / 2, -h, w, h);
+  } else {
+    option.draw(ctx);
+  }
   ctx.restore();
 }
 
@@ -57,16 +86,19 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   const {
     originX = 0, originY = 0, scale = 1,
     showBones = false, highlightBone = null,
-    skins = {}, bodyImage = null, headImage = null,
+    skins = {}, bodyImage = null, headImage = null, weaponImage = null,
+    animation = '',
   } = options;
 
   ctx.save();
   ctx.translate(originX, originY);
   ctx.scale(scale, scale);
 
-  // Back to front: right arm + weapon → legs → lower torso → body → head → left arm → prop
+  // Back to front: right arm → legs → body → weapon → head → left arm → prop.
+  // Weapons sit above right arm + body (visible in front of the torso) but
+  // below the left arm (so the left hand can read as gripping the front of
+  // the weapon).
   drawSkin(ctx, skins.right_arm   || RIGHT_ARM_SKIN,   worldTransforms, getColor(character, 'right_arm'),   getScale(character, 'right_arm'));
-  drawPart(ctx, 'weapon', character, worldTransforms);
   drawSkin(ctx, skins.left_leg    || LEFT_LEG_SKIN,    worldTransforms, getColor(character, 'left_leg'),    getScale(character, 'left_leg'));
   drawSkin(ctx, skins.right_leg   || RIGHT_LEG_SKIN,   worldTransforms, getColor(character, 'right_leg'),   getScale(character, 'right_leg'));
   {
@@ -78,6 +110,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
     }
   }
+  drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
   {
     const headTmpl  = skins.head || HEAD_SKIN;
     const headScale = getScale(character, 'head');

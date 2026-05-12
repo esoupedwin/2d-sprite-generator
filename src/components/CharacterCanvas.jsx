@@ -87,8 +87,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   const viewRef    = useRef({ zoom: 1, panX: 0, panY: 0 });
   // Decoded HTMLImageElements for character.bodyImage / character.headImage
   // (data URLs). Reload whenever the prop changes; null while loading.
-  const bodyImageRef = useRef(null);
-  const headImageRef = useRef(null);
+  const bodyImageRef   = useRef(null);
+  const headImageRef   = useRef(null);
+  const weaponImageRef = useRef(null);
 
   // Undo history — session-only, capped at 60 entries
   const historyRef = useRef([]);
@@ -184,6 +185,18 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     return () => { img.onload = img.onerror = null; };
   }, [character?.headImage]);
 
+  // …and the weapon image (user-uploaded PNG that overrides the procedural weapon).
+  // Stored per-weapon, so swapping Sword/Rifle/Staff picks up that weapon's PNG.
+  const weaponImageUrl = character?.weaponImages?.[character?.weapon];
+  useEffect(() => {
+    if (!weaponImageUrl) { weaponImageRef.current = null; return; }
+    const img = new Image();
+    img.onload = () => { weaponImageRef.current = img; };
+    img.onerror = () => { weaponImageRef.current = null; };
+    img.src = weaponImageUrl;
+    return () => { img.onload = img.onerror = null; };
+  }, [weaponImageUrl]);
+
   // ── Wheel zoom ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -277,6 +290,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       animation:     s.currentAnimation,
       bodyImage:     bodyImageRef.current,
       headImage:     headImageRef.current,
+      weaponImage:   weaponImageRef.current,
     });
 
     if (s.showVectors) {
