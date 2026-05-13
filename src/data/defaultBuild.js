@@ -619,8 +619,8 @@ export const DEFAULT_ANIM_BONE_OFFSETS = {
   rifle: {
     left_arm:      { x: 0, y: 0, rotation:  1.3572684483284077  },
     left_forearm:  { x: 0, y: 0, rotation: -1.3228339516956054  },
-    right_arm:     { x: 0, y: 0, rotation: -0.35641431631337783 },
-    right_forearm: { x: 0, y: 0, rotation:  0.4777356787124558  },
+    right_arm:     { x: 0, y: 0, rotation: -0.32534365102856155 },
+    right_forearm: { x: 0, y: 0, rotation:  0.46247645179699015 },
   },
   rifle_idle: {
     left_arm:      { x: 0,                  y: 0,                    rotation:  0.5252968361152407  },
@@ -642,6 +642,36 @@ export const DEFAULT_ANIM_KEYFRAME_OVERRIDES = {
     left_forearm: {
       '0.00': { rotation: -1.2088787243852654 },
       '0.85': { rotation: -1.2392915390062784 },
+    },
+  },
+  rifle: {
+    right_arm: {
+      '0.00': { rotation:  1.592159785564626  },
+      '0.03': { rotation:  2.0830570066086347 },
+      '0.18': { rotation:  1.7466203231171793 },
+      '0.60': { rotation:  1.447801091252431  },
+    },
+    right_forearm: {
+      '0.00': { rotation: -1.5132975062487741 },
+      '0.03': { rotation: -2.14262878193862   },
+      '0.18': { rotation: -1.8247695349077155 },
+      '0.60': { rotation: -1.3785746426731436 },
+    },
+    left_arm: {
+      '0.03': { rotation: -1.9681593909763444 },
+    },
+    left_forearm: {
+      '0.03': { rotation: -0.010417541001352615 },
+    },
+    right_leg: {
+      '0.00': { rotation: -0.2122328857437434  },
+      '0.40': { rotation: -0.25322291587984064 },
+      '0.60': { rotation: -0.23806702042643232 },
+    },
+    right_shin: {
+      '0.00': { rotation: -0.09024074309744834 },
+      '0.40': { rotation: -0.09024074309744767 },
+      '0.60': { rotation: -0.0902407430974479  },
     },
   },
 };

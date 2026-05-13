@@ -21,6 +21,7 @@ import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation } from './syste
 import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
+import { resolveWeaponOffset } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -28,6 +29,23 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { ImageUp, X } from 'lucide-react';
 
 const CHARS_STORAGE = '2dsprite:characters';
+
+// Weapon scale clamps (matched by the −/+ buttons and the input).
+const MIN_WEAPON_SCALE = 0.5;
+const MAX_WEAPON_SCALE = 3.0;
+const WEAPON_SCALE_STEP = 0.1;
+
+// When a one-shot animation finishes, where to land. Looping animations never
+// trigger onAnimationComplete, so entries for loop:true animations are harmless
+// (they sit dormant unless someone flips the animation back to one-shot).
+const ANIMATION_COMPLETE_TARGETS = {
+  jump:         'idle',
+  sword_jump:   'sword_idle',
+  sword_slash:  'sword_idle',
+  rifle_jump:   'rifle_idle',
+  rocket_jump:  'rocket_idle',
+  rocket_fire:  'rocket_idle',
+};
 
 function genId() {
   return Math.random().toString(36).slice(2, 9);
@@ -231,14 +249,26 @@ export default function App() {
         ...src,
         id:   genId(),
         name: `${src.name} copy`,
-        parts:                { ...src.parts, customColors: { ...(src.parts.customColors ?? {}) }, partScales: { ...(src.parts.partScales ?? {}) }, weaponOffset: { ...(src.parts.weaponOffset ?? { x: 0, y: 0, rotation: 0 }) }, weaponOffsets: Object.fromEntries(Object.entries(src.parts.weaponOffsets ?? {}).map(([k, v]) => [k, { ...v }])), weaponAnimOffsets: Object.fromEntries(Object.entries(src.parts.weaponAnimOffsets ?? {}).map(([w, m]) => [w, Object.fromEntries(Object.entries(m).map(([a, v]) => [a, { ...v }]))])), weaponScales: { ...(src.parts.weaponScales ?? {}) }, weaponImages: { ...(src.parts.weaponImages ?? {}) } },
+        parts: {
+          ...src.parts,
+          customColors:      { ...(src.parts.customColors      ?? {}) },
+          partScales:        { ...(src.parts.partScales        ?? {}) },
+          weaponOffset:      { ...(src.parts.weaponOffset      ?? { x: 0, y: 0, rotation: 0 }) },
+          weaponOffsets:     cloneNested(src.parts.weaponOffsets     ?? {}, 1),
+          weaponAnimOffsets: cloneNested(src.parts.weaponAnimOffsets ?? {}, 2),
+          weaponScales:      { ...(src.parts.weaponScales      ?? {}) },
+          weaponImages:      { ...(src.parts.weaponImages      ?? {}) },
+        },
         boneOffsets:          { ...src.boneOffsets },
-        skinOverrides:        Object.fromEntries(Object.entries(src.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
+        skinOverrides:        cloneSkinOverrides(src.skinOverrides),
         defaultBoneOffsets:   { ...src.defaultBoneOffsets },
-        defaultSkinOverrides: Object.fromEntries(Object.entries(src.defaultSkinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
-        customAnimations:     (src.customAnimations ?? []).map(a => ({ ...a, tracks: Object.fromEntries(Object.entries(a.tracks).map(([k, kfs]) => [k, kfs.map(kf => ({ ...kf }))])) })),
-        animBoneOffsets:      Object.fromEntries(Object.entries(src.animBoneOffsets ?? {}).map(([anim, boneMap]) => [anim, Object.fromEntries(Object.entries(boneMap).map(([b, v]) => [b, { ...v }]))])),
-        animKeyframeOverrides:Object.fromEntries(Object.entries(src.animKeyframeOverrides ?? {}).map(([anim, boneMap]) => [anim, Object.fromEntries(Object.entries(boneMap).map(([b, timeMap]) => [b, Object.fromEntries(Object.entries(timeMap).map(([t, v]) => [t, { ...v }]))]))])),
+        defaultSkinOverrides: cloneSkinOverrides(src.defaultSkinOverrides),
+        customAnimations:     (src.customAnimations ?? []).map(a => ({
+          ...a,
+          tracks: Object.fromEntries(Object.entries(a.tracks).map(([k, kfs]) => [k, kfs.map(kf => ({ ...kf }))])),
+        })),
+        animBoneOffsets:       cloneNested(src.animBoneOffsets       ?? {}, 2),
+        animKeyframeOverrides: cloneNested(src.animKeyframeOverrides ?? {}, 3),
       };
       setActiveCharId(copy.id);
       return [...prev, copy];
@@ -330,10 +360,7 @@ export default function App() {
       const anim = currentAnimation;
       const animOffsets = { ...(c.parts.weaponAnimOffsets ?? {}) };
       const weaponMap   = { ...(animOffsets[weapon] ?? {}) };
-      const cur = weaponMap[anim]
-              ?? c.parts.weaponOffsets?.[weapon]
-              ?? c.parts.weaponOffset
-              ?? { x: 0, y: 0, rotation: 0 };
+      const cur = resolveWeaponOffset(c.parts, anim);
       weaponMap[anim] = { ...cur, [axis]: (cur[axis] || 0) + delta };
       animOffsets[weapon] = weaponMap;
       return { ...c, parts: { ...c.parts, weaponAnimOffsets: animOffsets } };
@@ -534,11 +561,9 @@ export default function App() {
 
   // ── Animation callbacks ───────────────────────────────────────────────────────
   const handleAnimationComplete = useCallback((animKey) => {
-    if (animKey === 'jump')        { setCurrentAnimation('idle');       return; }
-    if (animKey === 'sword_jump')  { setCurrentAnimation('sword_idle'); return; }
-    if (animKey === 'rifle_jump')  { setCurrentAnimation('rifle_idle'); return; }
-    if (animKey === 'sword_slash') { setCurrentAnimation('sword_idle'); return; }
-    if (!ANIMATIONS[animKey]) { setCurrentAnimation('idle'); }
+    const next = ANIMATION_COMPLETE_TARGETS[animKey];
+    if (next) { setCurrentAnimation(next); return; }
+    if (!ANIMATIONS[animKey]) setCurrentAnimation('idle');
   }, []);
 
   const handleAnimationChange = useCallback((key) => {
@@ -707,16 +732,16 @@ export default function App() {
                     <SectionTitle>Weapon</SectionTitle>
                     <div className="flex items-center gap-0.5">
                       <button
-                        onClick={() => updateWeaponScale(Math.max(0.5, +((curScale - 0.1).toFixed(2))))}
-                        disabled={curScale <= 0.5 || w === 'none'}
+                        onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
+                        disabled={curScale <= MIN_WEAPON_SCALE || w === 'none'}
                         className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                       >−</button>
                       <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
                         {Math.round(curScale * 100)}%
                       </span>
                       <button
-                        onClick={() => updateWeaponScale(Math.min(3.0, +((curScale + 0.1).toFixed(2))))}
-                        disabled={curScale >= 3.0 || w === 'none'}
+                        onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
+                        disabled={curScale >= MAX_WEAPON_SCALE || w === 'none'}
                         className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                       >+</button>
                     </div>
@@ -770,10 +795,7 @@ export default function App() {
 
               {/* Weapon anchor offset controls — only shown when a weapon is equipped */}
               {activeChar.parts.weapon !== 'none' && (() => {
-                const wo = activeChar.parts.weaponAnimOffsets?.[activeChar.parts.weapon]?.[currentAnimation]
-                        ?? activeChar.parts.weaponOffsets?.[activeChar.parts.weapon]
-                        ?? activeChar.parts.weaponOffset
-                        ?? { x: 0, y: 0, rotation: 0 };
+                const wo = resolveWeaponOffset(activeChar.parts, currentAnimation);
                 const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
                 const btnCls = 'w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 transition-colors';
                 const valCls = 'font-mono text-[11px] min-w-[30px] text-center';

@@ -1403,18 +1403,210 @@ export const ANIMATIONS = {
     },
   },
 
+  // ── Rocket launcher animations ───────────────────────────────────────────────
+  // Shoulder-fired heavy weapon. Forward lean to carry the weight; both hands
+  // grip the launcher (trigger hand + forward support hand).
+
+  rocket_idle: {
+    name: 'Idle',
+    duration: 2.0,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.0, y: 0,  rotation: 0.10 },          // strong forward lean
+        { time: 1.0, y: -2, rotation: 0.11 },
+        { time: 2.0, y: 0,  rotation: 0.10 },
+      ],
+      lower_torso: [
+        { time: 0.0, y: 0 },
+        { time: 1.0, y: -1 },
+        { time: 2.0, y: 0 },
+      ],
+      head: [
+        { time: 0.0, rotation: -0.04 },
+        { time: 1.5, rotation:  0.00 },
+        { time: 2.0, rotation: -0.04 },
+      ],
+      // Trigger hand on the pistol grip — similar to rifle but slightly
+      // higher to support the launcher on the shoulder.
+      right_arm:    [{ time: 0.0, rotation: 1.15 }, { time: 1.0, rotation: 1.13 }, { time: 2.0, rotation: 1.15 }],
+      right_forearm:[{ time: 0.0, rotation:-1.45 }, { time: 1.0, rotation:-1.43 }, { time: 2.0, rotation:-1.45 }],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 2.0, rotation: 0.00 }],
+      // Support hand reaches forward to the front grip.
+      left_arm:     [{ time: 0.0, rotation:-2.05 }, { time: 1.0, rotation:-2.07 }, { time: 2.0, rotation:-2.05 }],
+      left_forearm: [{ time: 0.0, rotation:-0.20 }, { time: 1.0, rotation:-0.22 }, { time: 2.0, rotation:-0.20 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 2.0, rotation: 0.00 }],
+      // Wide braced stance to carry the weight.
+      left_leg:     [{ time: 0.0, rotation:-0.16 }, { time: 2.0, rotation:-0.16 }],
+      right_leg:    [{ time: 0.0, rotation: 0.16 }, { time: 2.0, rotation: 0.16 }],
+      left_shin:    [{ time: 0.0, rotation: 0.18 }, { time: 1.0, rotation: 0.20 }, { time: 2.0, rotation: 0.18 }],
+      right_shin:   [{ time: 0.0, rotation: 0.18 }, { time: 1.0, rotation: 0.20 }, { time: 2.0, rotation: 0.18 }],
+      left_foot:    [{ time: 0.0, rotation:-0.05 }, { time: 2.0, rotation:-0.05 }],
+      right_foot:   [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+    },
+  },
+
+  rocket_walk: {
+    name: 'Walk',
+    duration: 0.80,                         // slower than rifle walk — heavy weapon
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.00, y:  0, rotation: 0.13 },
+        { time: 0.20, y: -4, rotation: 0.14 },
+        { time: 0.40, y:  0, rotation: 0.13 },
+        { time: 0.60, y: -4, rotation: 0.14 },
+        { time: 0.80, y:  0, rotation: 0.13 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.10 },
+        { time: 0.20, rotation:  0.00 },
+        { time: 0.40, rotation: -0.10 },
+        { time: 0.60, rotation:  0.00 },
+        { time: 0.80, rotation:  0.10 },
+      ],
+      head: [
+        { time: 0.00, rotation: -0.04 },
+        { time: 0.40, rotation: -0.06 },
+        { time: 0.80, rotation: -0.04 },
+      ],
+      right_arm:    [{ time: 0.00, rotation: 1.15 }, { time: 0.40, rotation: 1.13 }, { time: 0.80, rotation: 1.15 }],
+      right_forearm:[{ time: 0.00, rotation:-1.45 }, { time: 0.40, rotation:-1.43 }, { time: 0.80, rotation:-1.45 }],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 0.80, rotation: 0.00 }],
+      left_arm:     [{ time: 0.00, rotation:-2.05 }, { time: 0.40, rotation:-2.07 }, { time: 0.80, rotation:-2.05 }],
+      left_forearm: [{ time: 0.00, rotation:-0.20 }, { time: 0.40, rotation:-0.22 }, { time: 0.80, rotation:-0.20 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 0.80, rotation: 0.00 }],
+      // Shorter, heavier stride.
+      left_leg:  [{ time: 0.00, rotation:-0.30 }, { time: 0.40, rotation: 0.30 }, { time: 0.80, rotation:-0.30 }],
+      left_shin: [{ time: 0.00, rotation:0.14 }, { time: 0.20, rotation:0.12 }, { time: 0.40, rotation:0.20 }, { time: 0.60, rotation:0.55 }, { time: 0.80, rotation:0.14 }],
+      left_foot: [{ time: 0.00, rotation:-0.15 }, { time: 0.20, rotation:0.00 }, { time: 0.40, rotation:0.20 }, { time: 0.60, rotation:-0.05 }, { time: 0.80, rotation:-0.15 }],
+      right_leg:  [{ time: 0.00, rotation: 0.30 }, { time: 0.40, rotation:-0.30 }, { time: 0.80, rotation: 0.30 }],
+      right_shin: [{ time: 0.00, rotation:0.20 }, { time: 0.20, rotation:0.55 }, { time: 0.40, rotation:0.14 }, { time: 0.60, rotation:0.12 }, { time: 0.80, rotation:0.20 }],
+      right_foot: [{ time: 0.00, rotation:0.20 }, { time: 0.20, rotation:-0.05 }, { time: 0.40, rotation:-0.15 }, { time: 0.60, rotation:0.00 }, { time: 0.80, rotation:0.20 }],
+    },
+  },
+
+  rocket_fire: {
+    name: 'Fire',
+    duration: 1.6,                          // long single shot — slow reload feel
+    loop: true,
+    tracks: {
+      // Aim → TRIGGER → big backward shove → recover → settle. The rocket has
+      // hefty back-blast: torso slams back along -X by ~14 then drifts forward.
+      torso: [
+        { time: 0.00, x:   0, y:  0, rotation:  0.13 },   // aim
+        { time: 0.08, x: -14, y:  0, rotation:  0.05 },   // FIRE — body shoves back
+        { time: 0.25, x:  -8, y:  0, rotation:  0.10 },   // still pushed back
+        { time: 0.45, x:   2, y:  0, rotation:  0.15 },   // forward overshoot
+        { time: 0.70, x:   0, y:  0, rotation:  0.13 },   // settle
+        { time: 1.60, x:   0, y:  0, rotation:  0.13 },   // hold until next loop
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.10 },
+        { time: 0.08, rotation: -0.06 },   // hips absorb the kick
+        { time: 0.35, rotation:  0.10 },
+        { time: 1.60, rotation:  0.10 },
+      ],
+      head: [
+        { time: 0.00, rotation: -0.04 },
+        { time: 0.12, rotation:  0.04 },   // jolts back briefly
+        { time: 0.35, rotation: -0.06 },   // refocuses
+        { time: 1.60, rotation: -0.04 },
+      ],
+      // Trigger arm — small upward kick on fire, settles.
+      right_arm:    [
+        { time: 0.00, rotation: 1.15 },
+        { time: 0.08, rotation: 1.05 },
+        { time: 0.30, rotation: 1.18 },
+        { time: 1.60, rotation: 1.15 },
+      ],
+      right_forearm:[
+        { time: 0.00, rotation:-1.45 },
+        { time: 0.08, rotation:-1.58 },    // muzzle ticks up slightly
+        { time: 0.30, rotation:-1.42 },
+        { time: 1.60, rotation:-1.45 },
+      ],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 0.08, rotation: 0.12 }, { time: 0.40, rotation: 0.00 }, { time: 1.60, rotation: 0.00 }],
+      // Support arm bracing for backblast.
+      left_arm:     [
+        { time: 0.00, rotation:-2.05 },
+        { time: 0.08, rotation:-2.00 },
+        { time: 0.30, rotation:-2.08 },
+        { time: 1.60, rotation:-2.05 },
+      ],
+      left_forearm: [
+        { time: 0.00, rotation:-0.20 },
+        { time: 0.08, rotation:-0.32 },
+        { time: 0.30, rotation:-0.18 },
+        { time: 1.60, rotation:-0.20 },
+      ],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 1.60, rotation: 0.00 }],
+      // Wide braced stance (legs absorb the kick).
+      left_leg:   [{ time: 0.0, rotation:-0.16 }, { time: 0.08, rotation:-0.22 }, { time: 0.40, rotation:-0.16 }, { time: 1.6, rotation:-0.16 }],
+      left_shin:  [{ time: 0.0, rotation: 0.18 }, { time: 0.08, rotation: 0.32 }, { time: 0.40, rotation: 0.18 }, { time: 1.6, rotation: 0.18 }],
+      left_foot:  [{ time: 0.0, rotation:-0.05 }, { time: 1.6, rotation:-0.05 }],
+      right_leg:  [{ time: 0.0, rotation: 0.16 }, { time: 0.08, rotation: 0.22 }, { time: 0.40, rotation: 0.16 }, { time: 1.6, rotation: 0.16 }],
+      right_shin: [{ time: 0.0, rotation: 0.18 }, { time: 0.08, rotation: 0.32 }, { time: 0.40, rotation: 0.18 }, { time: 1.6, rotation: 0.18 }],
+      right_foot: [{ time: 0.0, rotation: 0.05 }, { time: 1.6, rotation: 0.05 }],
+    },
+  },
+
+  rocket_jump: {
+    name: 'Jump',
+    duration: 1.9,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.0,  y:   0, rotation: 0.13 },
+        { time: 0.12, y:  26, rotation: 0.10 },
+        { time: 0.35, y: -88, rotation: 0.08 },
+        { time: 0.58, y: -16, rotation: 0.11 },
+        { time: 0.68, y:  16, rotation: 0.10 },
+        { time: 0.80, y:  -2, rotation: 0.12 },
+        { time: 0.9,  y:   0, rotation: 0.13 },
+      ],
+      lower_torso: [
+        { time: 0.0,  y:  0 },
+        { time: 0.12, y:  6 },
+        { time: 0.35, y: -6 },
+        { time: 0.68, y:  4 },
+        { time: 0.9,  y:  0 },
+      ],
+      head: [
+        { time: 0.0,  rotation: -0.04 },
+        { time: 0.35, rotation: -0.10 },
+        { time: 0.68, rotation:  0.00 },
+        { time: 0.9,  rotation: -0.04 },
+      ],
+      right_arm:    [{ time: 0.0, rotation: 1.15 }, { time: 0.35, rotation: 1.05 }, { time: 0.68, rotation: 1.20 }, { time: 0.9, rotation: 1.15 }],
+      right_forearm:[{ time: 0.0, rotation:-1.45 }, { time: 0.35, rotation:-1.55 }, { time: 0.9, rotation:-1.45 }],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 0.9, rotation: 0.00 }],
+      left_arm:     [{ time: 0.0, rotation:-2.05 }, { time: 0.35, rotation:-2.15 }, { time: 0.68, rotation:-2.00 }, { time: 0.9, rotation:-2.05 }],
+      left_forearm: [{ time: 0.0, rotation:-0.20 }, { time: 0.35, rotation:-0.28 }, { time: 0.9, rotation:-0.20 }],
+      left_hand:    [{ time: 0.0, rotation: 0.00 }, { time: 0.9, rotation: 0.00 }],
+      left_leg:  [{ time: 0.0, rotation:-0.16 }, { time: 0.12, rotation:-0.45 }, { time: 0.35, rotation:-0.55 }, { time: 0.58, rotation: 0.00 }, { time: 0.68, rotation:-0.30 }, { time: 0.9, rotation:-0.16 }],
+      right_leg: [{ time: 0.0, rotation: 0.16 }, { time: 0.12, rotation: 0.45 }, { time: 0.35, rotation: 0.55 }, { time: 0.58, rotation: 0.00 }, { time: 0.68, rotation: 0.30 }, { time: 0.9, rotation: 0.16 }],
+      left_shin: [{ time: 0.0, rotation: 0.18 }, { time: 0.12, rotation: 0.65 }, { time: 0.35, rotation: 0.10 }, { time: 0.68, rotation: 0.55 }, { time: 0.9, rotation: 0.18 }],
+      right_shin:[{ time: 0.0, rotation: 0.18 }, { time: 0.12, rotation: 0.65 }, { time: 0.35, rotation: 0.10 }, { time: 0.68, rotation: 0.55 }, { time: 0.9, rotation: 0.18 }],
+      left_foot: [{ time: 0.0, rotation:-0.05 }, { time: 0.12, rotation:-0.20 }, { time: 0.35, rotation: 0.35 }, { time: 0.68, rotation: 0.10 }, { time: 0.9, rotation:-0.05 }],
+      right_foot:[{ time: 0.0, rotation: 0.05 }, { time: 0.12, rotation:-0.20 }, { time: 0.35, rotation: 0.35 }, { time: 0.68, rotation: 0.10 }, { time: 0.9, rotation: 0.05 }],
+    },
+  },
+
 };
 
 export const WEAPON_ANIMATION_SETS = {
-  none:  ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'carry_walk'],
-  sword: ['sword_idle', 'sword_walk', 'sword_slash', 'sword_jump'],
-  rifle: ['rifle_idle', 'rifle_walk', 'rifle_run', 'rifle_jump', 'rifle', 'full_auto'],
+  none:   ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'carry_walk'],
+  sword:  ['sword_idle', 'sword_walk', 'sword_slash', 'sword_jump'],
+  rifle:  ['rifle_idle', 'rifle_walk', 'rifle_run', 'rifle_jump', 'rifle', 'full_auto'],
+  rocket: ['rocket_idle', 'rocket_walk', 'rocket_fire', 'rocket_jump'],
 };
 
 export const WEAPON_DEFAULT_ANIMATIONS = {
-  none:  'idle',
-  sword: 'sword_idle',
-  rifle: 'rifle_idle',
+  none:   'idle',
+  sword:  'sword_idle',
+  rifle:  'rifle_idle',
+  rocket: 'rocket_idle',
 };
 
 function lerp(a, b, t) {

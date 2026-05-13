@@ -209,6 +209,84 @@ export const CHARACTER_PARTS = {
           ctx.fillRect(-3, 46, 6, 6);
         },
       },
+      rocket: {
+        label: 'Rocket',
+        // Renders ABOVE the head — the launcher tube passes in front of the
+        // cheek when held on the shoulder.
+        aboveHead: true,
+        draw(ctx) {
+          // Shoulder-fired launcher. Fatter tube than the rifle, extends both
+          // behind the hand (back-blast) and forward (muzzle). +Y = forward,
+          // +X = top of tube, -X = grip side.
+          const STEEL    = '#3a3a3a';
+          const STEEL_DK = '#1a1a1a';
+          const WOOD     = '#5c4530';
+          const ACCENT   = '#9a9a9a';
+          const FUEL     = '#b94a2a';
+
+          // Rear back-blast collar (fattest part)
+          ctx.fillStyle = STEEL_DK;
+          ctx.beginPath();
+          ctx.moveTo( 0, -34);
+          ctx.lineTo(20, -34);
+          ctx.lineTo(22, -28);
+          ctx.lineTo(-2, -28);
+          ctx.closePath();
+          ctx.fill();
+
+          // Main tube body
+          ctx.fillStyle = STEEL;
+          ctx.fillRect(2, -28, 18, 76);   // tube from rear collar to muzzle
+
+          // Top highlight stripe (gives the tube some volume)
+          ctx.fillStyle = ACCENT;
+          ctx.fillRect(3, -26, 2, 72);
+
+          // Warhead nose ring (forward)
+          ctx.fillStyle = STEEL_DK;
+          ctx.fillRect(0, 48, 22, 6);
+
+          // Painted hazard stripe near the warhead
+          ctx.fillStyle = FUEL;
+          ctx.fillRect(4, 38, 14, 6);
+
+          // Carry / cheek grip on top
+          ctx.fillStyle = STEEL_DK;
+          ctx.fillRect(8, -14, 6, 4);
+
+          // Rear iron sight bump
+          ctx.fillStyle = STEEL_DK;
+          ctx.fillRect(20, -10, 3, 5);
+          // Front iron sight bump
+          ctx.fillRect(20, 22, 3, 5);
+
+          // Pistol grip (where the trigger hand wraps the bone origin)
+          ctx.fillStyle = WOOD;
+          ctx.beginPath();
+          ctx.moveTo(-5, -2);
+          ctx.lineTo( 2, -2);
+          ctx.lineTo( 3,  9);
+          ctx.lineTo(-6, 10);
+          ctx.closePath();
+          ctx.fill();
+          // Grip ridges
+          ctx.strokeStyle = '#3a2a18';
+          ctx.lineWidth   = 0.5;
+          ctx.beginPath(); ctx.moveTo(-3, 1); ctx.lineTo(-3, 7); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-1, 1); ctx.lineTo(-1, 8); ctx.stroke();
+
+          // Trigger guard
+          ctx.strokeStyle = STEEL;
+          ctx.lineWidth   = 1.2;
+          ctx.beginPath();
+          ctx.arc(-1, 5, 3.5, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Forward support grip (for support hand)
+          ctx.fillStyle = WOOD;
+          ctx.fillRect(-4, 22, 6, 12);
+        },
+      },
     },
   },
 };

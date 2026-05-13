@@ -50,11 +50,23 @@ export function WeaponUploadDialog({ open, onClose, onPick, currentImage, weapon
         {/* Body */}
         <div className="p-4 flex flex-col gap-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Draw your {weaponType === 'rifle' ? 'rifle' : weaponType === 'staff' ? 'staff' : 'weapon'} with the
-            <strong className="text-foreground"> {weaponType === 'rifle' ? 'muzzle' : 'tip'} pointing UP</strong> and the
-            <strong className="text-foreground"> {weaponType === 'rifle' ? 'stock' : 'handle'} at the bottom-center</strong> of the image.
-            The renderer rotates and anchors the PNG so the {weaponType === 'rifle' ? 'stock' : 'handle'} lands in the hand
-            and the {weaponType === 'rifle' ? 'barrel' : 'tip'} extends along the weapon's forward direction.
+            Draw your {
+              weaponType === 'rifle' ? 'rifle'
+              : weaponType === 'rocket' ? 'rocket launcher'
+              : 'weapon'
+            } with the
+            <strong className="text-foreground"> {weaponType === 'rifle' || weaponType === 'rocket' ? 'muzzle' : 'tip'} pointing UP</strong> and the
+            <strong className="text-foreground"> {
+              weaponType === 'rifle' ? 'stock'
+              : weaponType === 'rocket' ? 'back-blast vent'
+              : 'handle'
+            } at the bottom-center</strong> of the image.
+            The renderer rotates and anchors the PNG so the {
+              weaponType === 'rifle' ? 'stock'
+              : weaponType === 'rocket' ? 'grip'
+              : 'handle'
+            } lands in the hand
+            and the {weaponType === 'rifle' || weaponType === 'rocket' ? 'barrel' : 'tip'} extends along the weapon's forward direction.
           </p>
 
           <div className="flex items-center justify-center gap-6 py-2 bg-secondary/40 rounded-md border border-border">
@@ -110,19 +122,19 @@ function OrientationDiagram({ weaponType }) {
       <polygon points="1,25 4,18 7,25" fill="rgb(45, 212, 191)" />
       <text x="4" y="148" fontSize="9" fill="rgb(45, 212, 191)" textAnchor="middle" fontFamily="monospace">UP</text>
 
-      {weaponType === 'rifle' && <RifleSilhouette />}
-      {weaponType === 'staff' && <StaffSilhouette />}
-      {(weaponType === 'sword' || (weaponType !== 'rifle' && weaponType !== 'staff')) && <SwordSilhouette />}
+      {weaponType === 'rifle'  && <RifleSilhouette />}
+      {weaponType === 'rocket' && <RocketSilhouette />}
+      {(weaponType === 'sword' || !['rifle', 'rocket'].includes(weaponType)) && <SwordSilhouette />}
 
       {/* Tip / handle callouts (shared across weapon types) */}
       <line x1="68" y1="26" x2="84" y2="26" stroke="rgb(113, 113, 122)" strokeWidth="1" />
       <text x="86" y="29" fontSize="9" fill="rgb(212, 212, 216)" fontFamily="monospace">
-        {weaponType === 'rifle' ? 'muzzle' : 'tip'}
+        {weaponType === 'rifle' || weaponType === 'rocket' ? 'muzzle' : 'tip'}
       </text>
 
       <line x1="68" y1="120" x2="84" y2="120" stroke="rgb(113, 113, 122)" strokeWidth="1" />
       <text x="86" y="123" fontSize="9" fill="rgb(212, 212, 216)" fontFamily="monospace">
-        {weaponType === 'rifle' ? 'stock' : 'handle'}
+        {weaponType === 'rifle' ? 'stock' : weaponType === 'rocket' ? 'back-blast' : 'handle'}
       </text>
     </svg>
   );
@@ -167,16 +179,26 @@ function RifleSilhouette() {
   );
 }
 
-function StaffSilhouette() {
+function RocketSilhouette() {
+  // Vertical rocket launcher: warhead/muzzle at top, back-blast vent at
+  // bottom, fat tube body, pistol grip on the side near the bottom.
   return (
     <g>
-      {/* Crystal orb at the tip */}
-      <circle cx="55" cy="26" r="7" fill="rgb(120, 180, 230)" />
-      <circle cx="55" cy="26" r="9" fill="none" stroke="rgb(60, 70, 90)" strokeWidth="1.5" />
-      {/* Shaft */}
-      <rect x="52" y="34" width="6" height="80" fill="rgb(120, 90, 50)" />
-      {/* Grip wrap near bottom */}
-      <rect x="50" y="100" width="10" height="20" fill="rgb(70, 50, 25)" />
+      {/* Warhead nose ring */}
+      <rect x="46" y="20" width="18" height="6" fill="rgb(40, 40, 40)" />
+      {/* Hazard band */}
+      <rect x="48" y="26" width="14" height="6" fill="rgb(185, 74, 42)" />
+      {/* Tube body */}
+      <rect x="46" y="32" width="18" height="68" fill="rgb(58, 58, 58)" />
+      {/* Top highlight */}
+      <rect x="48" y="34" width="2" height="64" fill="rgb(150, 150, 150)" />
+      {/* Carry handle on top */}
+      <rect x="51" y="60" width="8" height="4" fill="rgb(30, 30, 30)" />
+      {/* Rear back-blast collar */}
+      <rect x="44" y="100" width="22" height="8" fill="rgb(20, 20, 20)" />
+      {/* Pistol grip */}
+      <rect x="40" y="86" width="6" height="14" fill="rgb(120, 80, 40)" />
     </g>
   );
 }
+

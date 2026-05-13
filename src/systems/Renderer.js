@@ -1,4 +1,5 @@
 import { CHARACTER_PARTS } from '../data/characterParts.js';
+import { resolveWeaponOffset, resolveWeaponScale } from '../utils/weaponSettings.js';
 import {
   drawSkin, drawSkinImage, drawSkinPinned,
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
@@ -12,12 +13,7 @@ function getColor(character, partKey) {
 }
 
 function getScale(character, partKey) {
-  if (partKey === 'weapon') {
-    // Per-weapon scale wins; falls back to legacy partScales.weapon, then 1.
-    return character.weaponScales?.[character.weapon]
-        ?? character.partScales?.weapon
-        ?? 1;
-  }
+  if (partKey === 'weapon') return resolveWeaponScale(character);
   return character.partScales?.[partKey] ?? 1;
 }
 
@@ -41,12 +37,9 @@ function drawPart(ctx, partKey, character, worldTransforms, weaponImage, animati
   ctx.rotate(bone.rotation);
   if (s !== 1) ctx.scale(s, s);
   if (partKey === 'weapon') {
-    // Priority: per-(weapon × animation) > per-weapon default > legacy single.
-    const wo = character.weaponAnimOffsets?.[character.weapon]?.[animation]
-            ?? character.weaponOffsets?.[character.weapon]
-            ?? character.weaponOffset;
-    if (wo?.x || wo?.y)       ctx.translate(wo.x ?? 0, wo.y ?? 0);
-    if (wo?.rotation)          ctx.rotate(wo.rotation);
+    const wo = resolveWeaponOffset(character, animation);
+    if (wo.x || wo.y)  ctx.translate(wo.x, wo.y);
+    if (wo.rotation)   ctx.rotate(wo.rotation);
   }
   if (useWeaponImage) {
     // Convention: user uploads a PNG with the weapon's blade/muzzle pointing
@@ -110,7 +103,11 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
     }
   }
-  drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
+  // Some weapons (e.g. rocket launcher on the shoulder) render ABOVE the
+  // head so the tube passes in front of the cheek. Flagged on the weapon
+  // option's part def — see CHARACTER_PARTS.weapon.options.*.aboveHead.
+  const weaponAboveHead = !!CHARACTER_PARTS.weapon.options[character.weapon]?.aboveHead;
+  if (!weaponAboveHead) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
   {
     const headTmpl  = skins.head || HEAD_SKIN;
     const headScale = getScale(character, 'head');
@@ -123,6 +120,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       drawExtras(ctx, 'head', character, worldTransforms);
     }
   }
+  if (weaponAboveHead) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
   drawSkin(ctx, skins.left_arm    || LEFT_ARM_SKIN,    worldTransforms, getColor(character, 'left_arm'),    getScale(character, 'left_arm'));
   drawPart(ctx, 'head_prop', character, worldTransforms);
 
