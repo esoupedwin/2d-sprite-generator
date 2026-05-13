@@ -629,8 +629,8 @@ export default function App() {
         <span className="text-xs text-muted-foreground">Skeletal animation · Modular parts · Export ready</span>
         <div className="ml-auto">
           <ExportMenu
-            onSpriteSheet={() => exportSpriteSheet(activeChar.parts, currentAnimation, activeChar.boneOffsets, activeChar.skinOverrides)}
-            onAnimationJSON={() => exportAnimationJSON(currentAnimation)}
+            onSpriteSheet={() => exportSpriteSheet(activeChar, currentAnimation)}
+            onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
           />
         </div>
       </header>
