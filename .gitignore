@@ -2,4 +2,5 @@ node_modules/
 dist/
 .claude/*
 !.claude/skills/
+.playwright-mcp/
 *.local

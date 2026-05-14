@@ -4,6 +4,7 @@ import { CharacterBuilder } from './components/CharacterBuilder.jsx';
 import { AnimationControls } from './components/AnimationControls.jsx';
 import { PoseEditor } from './components/PoseEditor.jsx';
 import { ExportMenu } from './components/ExportMenu.jsx';
+import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
 import { CHARACTER_PARTS, DEFAULT_CHARACTER } from './data/characterParts.js';
@@ -559,6 +560,25 @@ export default function App() {
     setCurrentAnimation(cur => cur === animId ? 'idle' : cur);
   }, [activeCharId]);
 
+  // ── Workspace save/load ───────────────────────────────────────────────────────
+  const loadWorkspace = useCallback(({ characters: newChars, activeCharId: newActive, uiState }) => {
+    if (!Array.isArray(newChars) || newChars.length === 0) return;
+    setCharacters(newChars);
+    setActiveCharId(newActive ?? newChars[0].id);
+    if (uiState && typeof uiState === 'object') {
+      if (typeof uiState.currentAnimation === 'string') setCurrentAnimation(uiState.currentAnimation);
+      if (typeof uiState.isPlaying === 'boolean')       setIsPlaying(uiState.isPlaying);
+      if (typeof uiState.showBones === 'boolean')       setShowBones(uiState.showBones);
+    }
+    // Make sure we land in a clean, non-Edit state so the loaded character is
+    // playing animations by default.
+    setEditAnimPose(false);
+    setRagdoll(false);
+    setEditStructure(false);
+    setShowVectors(false);
+    setActiveKeyframe(null);
+  }, []);
+
   // ── Animation callbacks ───────────────────────────────────────────────────────
   const handleAnimationComplete = useCallback((animKey) => {
     const next = ANIMATION_COMPLETE_TARGETS[animKey];
@@ -627,7 +647,13 @@ export default function App() {
         <h1 className="text-sm font-semibold text-foreground">2D Character Generator</h1>
         <span className="text-muted-foreground/30 select-none">·</span>
         <span className="text-xs text-muted-foreground">Skeletal animation · Modular parts · Export ready</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <WorkspaceMenu
+            characters={characters}
+            activeCharId={activeCharId}
+            uiState={{ currentAnimation, isPlaying, showBones }}
+            onLoad={loadWorkspace}
+          />
           <ExportMenu
             onSpriteSheet={() => exportSpriteSheet(activeChar, currentAnimation)}
             onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
