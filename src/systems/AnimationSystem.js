@@ -1885,6 +1885,174 @@ export const ANIMATIONS = {
     },
   },
 
+  // ─── Bow animations ───────────────────────────────────────────────────────
+  // Right arm = bow arm (grip, extended toward target at rotation ≈ 0).
+  // Left arm  = draw arm (anchor hold near cheek, then release follow-through).
+
+  bow_idle: {
+    name: 'Idle',
+    duration: 2.0,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.0, y: 0,  rotation: 0.06 },
+        { time: 1.0, y: -2, rotation: 0.07 },
+        { time: 2.0, y: 0,  rotation: 0.06 },
+      ],
+      lower_torso: [
+        { time: 0.0, y: 0 },
+        { time: 1.0, y: -1 },
+        { time: 2.0, y: 0 },
+      ],
+      head: [
+        { time: 0.0, rotation: -0.05 },
+        { time: 1.5, rotation:  0.01 },
+        { time: 2.0, rotation: -0.05 },
+      ],
+      // Bow arm: right arm extended horizontally toward target
+      right_arm:    [{ time: 0.0, rotation: -0.05 }, { time: 1.0, rotation: -0.07 }, { time: 2.0, rotation: -0.05 }],
+      right_forearm:[{ time: 0.0, rotation: -0.12 }, { time: 1.0, rotation: -0.10 }, { time: 2.0, rotation: -0.12 }],
+      right_hand:   [{ time: 0.0, rotation:  0.00 }, { time: 2.0, rotation:  0.00 }],
+      // Draw arm: left arm raised with forearm bent back, hand at cheek anchor
+      left_arm:     [{ time: 0.0, rotation: -2.55 }, { time: 1.0, rotation: -2.57 }, { time: 2.0, rotation: -2.55 }],
+      left_forearm: [{ time: 0.0, rotation:  1.25 }, { time: 1.0, rotation:  1.22 }, { time: 2.0, rotation:  1.25 }],
+      left_hand:    [{ time: 0.0, rotation:  0.00 }, { time: 2.0, rotation:  0.00 }],
+      left_shin:    [{ time: 0.0, rotation: 0.10 }, { time: 1.0, rotation: 0.12 }, { time: 2.0, rotation: 0.10 }],
+      right_shin:   [{ time: 0.0, rotation: 0.10 }, { time: 1.0, rotation: 0.12 }, { time: 2.0, rotation: 0.10 }],
+      left_foot:    [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+      right_foot:   [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+    },
+  },
+
+  bow_walk: {
+    name: 'Walk',
+    duration: 0.72,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.00, y:  0, rotation: 0.10 },
+        { time: 0.18, y: -6, rotation: 0.12 },
+        { time: 0.36, y:  0, rotation: 0.10 },
+        { time: 0.54, y: -6, rotation: 0.12 },
+        { time: 0.72, y:  0, rotation: 0.10 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.14 },
+        { time: 0.18, rotation:  0.00 },
+        { time: 0.36, rotation: -0.14 },
+        { time: 0.54, rotation:  0.00 },
+        { time: 0.72, rotation:  0.14 },
+      ],
+      head: [
+        { time: 0.00, rotation: -0.04 },
+        { time: 0.22, rotation:  0.01 },
+        { time: 0.36, rotation: -0.04 },
+        { time: 0.58, rotation:  0.01 },
+        { time: 0.72, rotation: -0.04 },
+      ],
+      // Bow arm stays aimed — very slight bob with stride
+      right_arm:    [{ time: 0.00, rotation: -0.05 }, { time: 0.18, rotation: -0.07 }, { time: 0.36, rotation: -0.05 }, { time: 0.54, rotation: -0.07 }, { time: 0.72, rotation: -0.05 }],
+      right_forearm:[{ time: 0.00, rotation: -0.12 }, { time: 0.18, rotation: -0.10 }, { time: 0.36, rotation: -0.12 }, { time: 0.54, rotation: -0.10 }, { time: 0.72, rotation: -0.12 }],
+      right_hand:   [{ time: 0.00, rotation:  0.00 }, { time: 0.72, rotation:  0.00 }],
+      // Draw arm held at anchor throughout
+      left_arm:     [{ time: 0.00, rotation: -2.55 }, { time: 0.18, rotation: -2.57 }, { time: 0.36, rotation: -2.55 }, { time: 0.54, rotation: -2.57 }, { time: 0.72, rotation: -2.55 }],
+      left_forearm: [{ time: 0.00, rotation:  1.25 }, { time: 0.18, rotation:  1.22 }, { time: 0.36, rotation:  1.25 }, { time: 0.54, rotation:  1.22 }, { time: 0.72, rotation:  1.25 }],
+      left_hand:    [{ time: 0.00, rotation:  0.00 }, { time: 0.72, rotation:  0.00 }],
+      left_leg:   [{ time: 0.00, rotation: -0.42 }, { time: 0.36, rotation:  0.42 }, { time: 0.72, rotation: -0.42 }],
+      left_shin:  [{ time: 0.00, rotation: 0.10 }, { time: 0.18, rotation: 0.08 }, { time: 0.36, rotation: 0.18 }, { time: 0.54, rotation: 0.65 }, { time: 0.72, rotation: 0.10 }],
+      left_foot:  [{ time: 0.00, rotation: -0.22 }, { time: 0.18, rotation: 0.00 }, { time: 0.36, rotation: 0.30 }, { time: 0.54, rotation: -0.10 }, { time: 0.72, rotation: -0.22 }],
+      right_leg:  [{ time: 0.00, rotation:  0.42 }, { time: 0.36, rotation: -0.42 }, { time: 0.72, rotation:  0.42 }],
+      right_shin: [{ time: 0.00, rotation: 0.18 }, { time: 0.18, rotation: 0.65 }, { time: 0.36, rotation: 0.10 }, { time: 0.54, rotation: 0.08 }, { time: 0.72, rotation: 0.18 }],
+      right_foot: [{ time: 0.00, rotation: 0.30 }, { time: 0.18, rotation: -0.10 }, { time: 0.36, rotation: -0.22 }, { time: 0.54, rotation: 0.00 }, { time: 0.72, rotation: 0.30 }],
+    },
+  },
+
+  bow_fire: {
+    name: 'Fire',
+    duration: 1.30,
+    loop: false,
+    tracks: {
+      torso: [
+        { time: 0.00, y: 0, rotation:  0.06 },   // aim
+        { time: 0.18, y: 0, rotation:  0.09 },   // full draw — torso braces
+        { time: 0.35, y: 0, rotation:  0.01 },   // RELEASE — torso uncoils slightly
+        { time: 0.55, y: 0, rotation:  0.04 },   // follow-through
+        { time: 1.10, y: 0, rotation:  0.06 },   // recover
+        { time: 1.30, y: 0, rotation:  0.06 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.04 },
+        { time: 0.18, rotation:  0.06 },
+        { time: 0.35, rotation: -0.02 },
+        { time: 0.70, rotation:  0.04 },
+        { time: 1.30, rotation:  0.04 },
+      ],
+      head: [
+        { time: 0.00, rotation: -0.05 },
+        { time: 0.18, rotation: -0.07 },   // aims harder
+        { time: 0.38, rotation: -0.02 },   // follows arrow
+        { time: 0.70, rotation: -0.05 },
+        { time: 1.30, rotation: -0.05 },
+      ],
+      // Bow arm — holds steady; slight absorb on release
+      right_arm:    [{ time: 0.00, rotation: -0.05 }, { time: 0.18, rotation: -0.03 }, { time: 0.35, rotation: -0.12 }, { time: 0.65, rotation: -0.06 }, { time: 1.10, rotation: -0.05 }, { time: 1.30, rotation: -0.05 }],
+      right_forearm:[{ time: 0.00, rotation: -0.12 }, { time: 0.18, rotation: -0.10 }, { time: 0.35, rotation: -0.22 }, { time: 0.65, rotation: -0.13 }, { time: 1.10, rotation: -0.12 }, { time: 1.30, rotation: -0.12 }],
+      right_hand:   [{ time: 0.00, rotation:  0.00 }, { time: 1.30, rotation:  0.00 }],
+      // Draw arm — pulls further back, then snaps out on release (elbow kicks back)
+      left_arm:     [{ time: 0.00, rotation: -2.55 }, { time: 0.18, rotation: -2.38 }, { time: 0.35, rotation: -2.72 }, { time: 0.60, rotation: -2.62 }, { time: 1.10, rotation: -2.55 }, { time: 1.30, rotation: -2.55 }],
+      left_forearm: [{ time: 0.00, rotation:  1.25 }, { time: 0.18, rotation:  1.50 }, { time: 0.35, rotation:  0.60 }, { time: 0.60, rotation:  0.88 }, { time: 1.10, rotation:  1.25 }, { time: 1.30, rotation:  1.25 }],
+      left_hand:    [{ time: 0.00, rotation:  0.00 }, { time: 0.35, rotation:  0.20 }, { time: 0.70, rotation:  0.00 }, { time: 1.30, rotation:  0.00 }],
+      left_leg:     [{ time: 0.0, rotation: -0.16 }, { time: 1.30, rotation: -0.16 }],
+      right_leg:    [{ time: 0.0, rotation:  0.16 }, { time: 1.30, rotation:  0.16 }],
+      left_shin:    [{ time: 0.0, rotation:  0.12 }, { time: 1.30, rotation:  0.12 }],
+      right_shin:   [{ time: 0.0, rotation:  0.12 }, { time: 1.30, rotation:  0.12 }],
+    },
+  },
+
+  bow_jump: {
+    name: 'Jump',
+    duration: 0.90,
+    loop: false,
+    tracks: {
+      torso: [
+        { time: 0.0,  y:   0, rotation:  0.08 },
+        { time: 0.10, y:  22, rotation:  0.05 },
+        { time: 0.32, y: -75, rotation:  0.03 },
+        { time: 0.55, y: -10, rotation:  0.07 },
+        { time: 0.70, y:  14, rotation:  0.06 },
+        { time: 0.80, y:  -2, rotation:  0.08 },
+        { time: 0.90, y:   0, rotation:  0.08 },
+      ],
+      lower_torso: [
+        { time: 0.0,  y:  0 },
+        { time: 0.10, y:  5 },
+        { time: 0.32, y: -5 },
+        { time: 0.65, y:  3 },
+        { time: 0.90, y:  0 },
+      ],
+      head: [
+        { time: 0.0,  rotation: -0.03 },
+        { time: 0.32, rotation: -0.08 },
+        { time: 0.65, rotation:  0.00 },
+        { time: 0.90, rotation: -0.03 },
+      ],
+      // Bow arm tucks slightly during jump, re-extends at apex
+      right_arm:    [{ time: 0.0, rotation: -0.05 }, { time: 0.32, rotation: -0.20 }, { time: 0.60, rotation: -0.08 }, { time: 0.90, rotation: -0.05 }],
+      right_forearm:[{ time: 0.0, rotation: -0.12 }, { time: 0.32, rotation: -0.35 }, { time: 0.60, rotation: -0.14 }, { time: 0.90, rotation: -0.12 }],
+      right_hand:   [{ time: 0.0, rotation:  0.00 }, { time: 0.90, rotation:  0.00 }],
+      // Draw arm stays near anchor through jump
+      left_arm:     [{ time: 0.0, rotation: -2.55 }, { time: 0.32, rotation: -2.40 }, { time: 0.60, rotation: -2.50 }, { time: 0.90, rotation: -2.55 }],
+      left_forearm: [{ time: 0.0, rotation:  1.25 }, { time: 0.32, rotation:  1.10 }, { time: 0.60, rotation:  1.20 }, { time: 0.90, rotation:  1.25 }],
+      left_hand:    [{ time: 0.0, rotation:  0.00 }, { time: 0.90, rotation:  0.00 }],
+      left_leg:   [{ time: 0.0, rotation: -0.16 }, { time: 0.10, rotation: -0.42 }, { time: 0.32, rotation: -0.52 }, { time: 0.55, rotation:  0.00 }, { time: 0.65, rotation: -0.28 }, { time: 0.90, rotation: -0.16 }],
+      right_leg:  [{ time: 0.0, rotation:  0.16 }, { time: 0.10, rotation:  0.42 }, { time: 0.32, rotation:  0.52 }, { time: 0.55, rotation:  0.00 }, { time: 0.65, rotation:  0.28 }, { time: 0.90, rotation:  0.16 }],
+      left_shin:  [{ time: 0.0, rotation: 0.18 }, { time: 0.10, rotation: 0.60 }, { time: 0.32, rotation: 0.10 }, { time: 0.65, rotation: 0.52 }, { time: 0.90, rotation: 0.18 }],
+      right_shin: [{ time: 0.0, rotation: 0.18 }, { time: 0.10, rotation: 0.60 }, { time: 0.32, rotation: 0.10 }, { time: 0.65, rotation: 0.52 }, { time: 0.90, rotation: 0.18 }],
+      left_foot:  [{ time: 0.0, rotation: -0.05 }, { time: 0.10, rotation: -0.18 }, { time: 0.32, rotation:  0.32 }, { time: 0.65, rotation:  0.08 }, { time: 0.90, rotation: -0.05 }],
+      right_foot: [{ time: 0.0, rotation:  0.05 }, { time: 0.10, rotation: -0.18 }, { time: 0.32, rotation:  0.32 }, { time: 0.65, rotation:  0.08 }, { time: 0.90, rotation:  0.05 }],
+    },
+  },
+
 };
 
 export const WEAPON_ANIMATION_SETS = {
@@ -1892,6 +2060,7 @@ export const WEAPON_ANIMATION_SETS = {
   sword:  ['sword_idle', 'sword_walk', 'sword_walk_slash', 'sword_slash', 'sword_jump'],
   rifle:  ['rifle_idle', 'rifle_walk', 'rifle_walk_shoot', 'rifle_run', 'rifle_jump', 'rifle', 'full_auto'],
   rocket: ['rocket_idle', 'rocket_walk', 'rocket_walk_fire', 'rocket_fire', 'rocket_jump'],
+  bow:    ['bow_idle', 'bow_walk', 'bow_fire', 'bow_jump'],
 };
 
 export const WEAPON_DEFAULT_ANIMATIONS = {
@@ -1899,6 +2068,7 @@ export const WEAPON_DEFAULT_ANIMATIONS = {
   sword:  'sword_idle',
   rifle:  'rifle_idle',
   rocket: 'rocket_idle',
+  bow:    'bow_idle',
 };
 
 function lerp(a, b, t) {

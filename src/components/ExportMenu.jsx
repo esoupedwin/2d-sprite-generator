@@ -1,45 +1,48 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/utils.js';
 
-export function ExportMenu({ onSpriteSheet, onAnimationJSON }) {
-  const [open, setOpen] = useState(false);
+export function ExportMenu({ onSpriteSheet, onAnimationJSON, open: openProp, onClose }) {
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp !== undefined ? openProp : openInternal;
   const wrapRef = useRef(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || openProp !== undefined) return;
     const onDocClick = (e) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) { setOpenInternal(false); }
     };
-    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpenInternal(false); };
     document.addEventListener('mousedown', onDocClick);
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, openProp]);
 
-  const pick = (fn) => () => { fn(); setOpen(false); };
+  const pick = (fn) => () => { fn(); onClose?.(); setOpenInternal(false); };
 
   return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className={cn(
-          'flex items-center gap-1 rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-semibold transition-colors',
-          open
-            ? 'border-emerald-500/60 text-emerald-500'
-            : 'text-muted-foreground hover:border-emerald-500/60 hover:text-emerald-500',
-        )}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        Export
-        <svg width="10" height="10" viewBox="0 0 10 10" className="opacity-70">
-          <path d="M2 4 L5 7 L8 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
+    <div ref={wrapRef} className={openProp !== undefined ? undefined : 'relative'}>
+      {openProp === undefined && (
+        <button
+          type="button"
+          onClick={() => setOpenInternal(o => !o)}
+          className={cn(
+            'flex items-center gap-1 rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-semibold transition-colors',
+            open
+              ? 'border-emerald-500/60 text-emerald-500'
+              : 'text-muted-foreground hover:border-emerald-500/60 hover:text-emerald-500',
+          )}
+          aria-haspopup="menu"
+          aria-expanded={open}
+        >
+          Export
+          <svg width="10" height="10" viewBox="0 0 10 10" className="opacity-70">
+            <path d="M2 4 L5 7 L8 4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
       {open && (
         <div
           role="menu"

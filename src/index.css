@@ -52,11 +52,12 @@
 @layer base {
   *, *::before, *::after { @apply box-border; }
   * { margin: 0; padding: 0; }
+  html { font-size: 125%; } /* scales all rem-based Tailwind utilities (text, icons, spacing) */
   html, body, #root { height: 100%; }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Segoe UI', system-ui, sans-serif;
-    font-size: 14px;
+    font-size: 36.288px; /* 24.192 × 1.5 */
     line-height: 1.5;
   }
 
@@ -71,3 +72,4 @@
   input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   input[type='number'] { -moz-appearance: textfield; }
 }
+

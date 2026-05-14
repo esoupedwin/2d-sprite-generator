@@ -156,6 +156,7 @@ export const CHARACTER_PARTS = {
       },
       sword: {
         label: 'Sword',
+        aboveHead: true,
         draw(ctx) {
           // Handle at y≈16 (hand level near bottom of forearm blob)
           ctx.fillStyle = '#7B4F2E';
@@ -208,6 +209,80 @@ export const CHARACTER_PARTS = {
           // Muzzle
           ctx.fillStyle = '#111';
           ctx.fillRect(-3, 46, 6, 6);
+        },
+      },
+      bow: {
+        label: 'Bow',
+        aboveHead: true,
+        draw(ctx) {
+          const LIMB    = '#7B5218';
+          const LIMB_DK = '#5C3A0A';
+          const SINEW   = '#DDD0A8';
+          const SHAFT   = '#C8A840';
+          const TIP     = '#B0B0C8';
+          const VANE    = '#EFE0C0';
+
+          // Grip at origin (right_hand bone = bow arm hand).
+          // Limbs extend in ±X (up/down in world when arm aims right).
+          // Arrow points in +Y (toward target). String pulled back in -Y.
+          const limbLen  = 50;   // grip → limb tip distance (X axis)
+          const tipY     = -8;   // tips lean back toward string side
+          const pullY    = -22;  // string drawn back to this -Y position
+          const arrowLen = 55;
+
+          // Upper limb
+          ctx.strokeStyle = LIMB;
+          ctx.lineWidth = 5;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(0, 4);
+          ctx.bezierCurveTo(-limbLen * 0.45, 8, -limbLen * 0.85, tipY + 6, -limbLen, tipY);
+          ctx.stroke();
+          // Lower limb
+          ctx.beginPath();
+          ctx.moveTo(0, 4);
+          ctx.bezierCurveTo(limbLen * 0.45, 8, limbLen * 0.85, tipY + 6, limbLen, tipY);
+          ctx.stroke();
+
+          // Grip wrap
+          ctx.strokeStyle = LIMB_DK;
+          ctx.lineWidth = 7;
+          ctx.beginPath();
+          ctx.moveTo(0, -4);
+          ctx.lineTo(0, 12);
+          ctx.stroke();
+
+          // Bowstring V — from upper tip, pulled to draw point, to lower tip
+          ctx.strokeStyle = SINEW;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(-limbLen, tipY);
+          ctx.lineTo(0, pullY);
+          ctx.lineTo(limbLen, tipY);
+          ctx.stroke();
+
+          // Arrow shaft (nocked at pullY, tip at +Y)
+          ctx.strokeStyle = SHAFT;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, pullY);
+          ctx.lineTo(0, arrowLen);
+          ctx.stroke();
+
+          // Arrowhead
+          ctx.fillStyle = TIP;
+          ctx.beginPath();
+          ctx.moveTo(-3, arrowLen);
+          ctx.lineTo( 3, arrowLen);
+          ctx.lineTo( 0, arrowLen + 12);
+          ctx.closePath();
+          ctx.fill();
+
+          // Fletching (two vanes at nock)
+          ctx.strokeStyle = VANE;
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(0, pullY); ctx.lineTo(-6, pullY - 14); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, pullY); ctx.lineTo( 6, pullY - 14); ctx.stroke();
         },
       },
       rocket: {

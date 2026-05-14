@@ -27,7 +27,8 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
-import { ImageUp, X } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Bone, ImageUp, Pencil, X } from 'lucide-react';
 
 const CHARS_STORAGE = '2dsprite:characters';
 
@@ -46,6 +47,8 @@ const ANIMATION_COMPLETE_TARGETS = {
   rifle_jump:   'rifle_idle',
   rocket_jump:  'rocket_idle',
   rocket_fire:  'rocket_idle',
+  bow_fire:     'bow_idle',
+  bow_jump:     'bow_idle',
 };
 
 function genId() {
@@ -131,6 +134,7 @@ export default function App() {
   const [isPlaying,    setIsPlaying]    = useState(true);
   const [editAnimPose, setEditAnimPose] = useState(false);
   const [showBones,    setShowBones]    = useState(false);
+  const [headerTab,    setHeaderTab]    = useState('');
   const [showVectors,  setShowVectors]  = useState(false);
   const [ragdoll,       setRagdoll]       = useState(false);
   const [editStructure, setEditStructure] = useState(false);
@@ -139,6 +143,7 @@ export default function App() {
   const [selectedSkin,  setSelectedSkin]  = useState('all');
 
   const charCanvasRef = useRef(null);
+  const headerMenuRef = useRef(null);
 
   // Weapon PNG upload dialog
   const [weaponUploadOpen, setWeaponUploadOpen] = useState(false);
@@ -186,6 +191,21 @@ export default function App() {
   }, []);
 
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
+
+  // Close header menu on outside click or Escape
+  useEffect(() => {
+    if (!headerTab) return;
+    const onDown = (e) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target)) setHeaderTab('');
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setHeaderTab(''); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [headerTab]);
 
   // Debounced persist on every characters change
   const saveTimer = useRef(null);
@@ -662,16 +682,32 @@ export default function App() {
         <h1 className="text-sm font-semibold text-foreground">2D Character Generator</h1>
         <span className="text-muted-foreground/30 select-none">·</span>
         <span className="text-xs text-muted-foreground">Skeletal animation · Modular parts · Export ready</span>
-        <div className="ml-auto flex items-center gap-2">
+        <div ref={headerMenuRef} className="ml-auto relative flex items-end">
+          <Tabs value={headerTab} onValueChange={setHeaderTab}>
+            <TabsList variant="line">
+              <TabsTrigger value="workspace" variant="line"
+                onClick={() => headerTab === 'workspace' && setHeaderTab('')}>
+                Workspace
+              </TabsTrigger>
+              <TabsTrigger value="export" variant="line"
+                onClick={() => headerTab === 'export' && setHeaderTab('')}>
+                Export
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
           <WorkspaceMenu
             characters={characters}
             activeCharId={activeCharId}
             uiState={{ currentAnimation, isPlaying, showBones }}
             onLoad={loadWorkspace}
+            open={headerTab === 'workspace'}
+            onClose={() => setHeaderTab('')}
           />
           <ExportMenu
             onSpriteSheet={() => exportSpriteSheet(activeChar, currentAnimation)}
             onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
+            open={headerTab === 'export'}
+            onClose={() => setHeaderTab('')}
           />
         </div>
       </header>
@@ -702,24 +738,24 @@ export default function App() {
                   type="button"
                   onClick={() => setShowBones(p => !p)}
                   className={cn(
-                    'px-2.5 py-1.5 text-xs rounded-md border transition-colors',
+                    'px-2.5 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap inline-flex items-center',
                     showBones
                       ? 'bg-primary/20 border-primary text-primary font-medium'
                       : 'bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
                   )}
                 >
-                  Show Bones
+                  <Bone className="h-3 w-3 mr-1.5" />Show Bones
                 </button>
                 <button
                   onClick={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
                   className={cn(
-                    'px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors',
+                    'px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors inline-flex items-center',
                     currentAnimation === 'edit'
                       ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
                       : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
                   )}
                 >
-                  Edit Body
+                  <Pencil className="h-3 w-3 mr-1.5" />Edit Body
                 </button>
               </div>
             <div className="flex flex-col items-start">
