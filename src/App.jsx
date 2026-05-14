@@ -368,6 +368,20 @@ export default function App() {
     }));
   }, [activeCharId, currentAnimation]);
 
+  const setWeaponOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const weapon = c.parts.weapon;
+      if (!weapon || weapon === 'none') return c;
+      const anim = currentAnimation;
+      const animOffsets = { ...(c.parts.weaponAnimOffsets ?? {}) };
+      const weaponMap   = { ...(animOffsets[weapon] ?? {}) };
+      weaponMap[anim] = { x: newOffset.x ?? 0, y: newOffset.y ?? 0, rotation: newOffset.rotation ?? 0 };
+      animOffsets[weapon] = weaponMap;
+      return { ...c, parts: { ...c.parts, weaponAnimOffsets: animOffsets } };
+    }));
+  }, [activeCharId, currentAnimation]);
+
   const resetWeaponOffset = useCallback(() => {
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
@@ -617,6 +631,7 @@ export default function App() {
           // Bone-local rotations: world minus parent's world.
           return {
             ...c,
+            parts: { ...c.parts, weapon: 'none' },
             boneOffsets: {
               ...off,
               left_arm:      { ...(off.left_arm      ?? {}), rotation: leftArmWorld   },
@@ -668,6 +683,7 @@ export default function App() {
             character={activeChar.parts}
             characters={characters}
             activeCharId={activeCharId}
+            currentAnimation={currentAnimation}
             onPartChange={updatePart}
             onColorChange={updateColor}
             onScaleChange={updatePartScale}
@@ -681,26 +697,40 @@ export default function App() {
           />
 
           <main className="flex-1 flex items-center justify-center p-6 overflow-auto relative">
-              <button
-                onClick={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
-                className={cn(
-                  'absolute top-4 right-4 px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors z-10',
-                  currentAnimation === 'edit'
-                    ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
-                    : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
-                )}
-              >
-                Edit
-              </button>
+              <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                <button
+                  type="button"
+                  onClick={() => setShowBones(p => !p)}
+                  className={cn(
+                    'px-2.5 py-1.5 text-xs rounded-md border transition-colors',
+                    showBones
+                      ? 'bg-primary/20 border-primary text-primary font-medium'
+                      : 'bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
+                  )}
+                >
+                  Show Bones
+                </button>
+                <button
+                  onClick={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors',
+                    currentAnimation === 'edit'
+                      ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
+                      : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
+                  )}
+                >
+                  Edit Body
+                </button>
+              </div>
             <div className="flex flex-col items-start">
               {currentAnimation === 'edit' && (
                 <div className="bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
-                  Edit Mode
+                  Edit Body Mode
                 </div>
               )}
               {editAnimPose && currentAnimation !== 'edit' && (
                 <div className="bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
-                  Pose Edit — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
+                  Edit Animation — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
                 </div>
               )}
               <div className={cn(
@@ -740,6 +770,8 @@ export default function App() {
                 onRagdollOverlayChange={poseEditorOpen ? handlePoseRagdollOverlayChange : undefined}
                 onAnimBoneOffsetsChange={poseEditorOpen ? undefined : updateAnimBoneOffsets}
                 onSaveDefault={saveCharacterDefault}
+                weaponOffset={resolveWeaponOffset(activeChar.parts, currentAnimation)}
+                onWeaponOffsetSet={setWeaponOffsetAbsolute}
               />
             </div>
             </div>
@@ -755,22 +787,24 @@ export default function App() {
                               ?? 1;
                 return (
                   <div className="flex items-center justify-between">
-                    <SectionTitle>Weapon</SectionTitle>
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
-                        disabled={curScale <= MIN_WEAPON_SCALE || w === 'none'}
-                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                      >−</button>
-                      <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                        {Math.round(curScale * 100)}%
-                      </span>
-                      <button
-                        onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
-                        disabled={curScale >= MAX_WEAPON_SCALE || w === 'none'}
-                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                      >+</button>
-                    </div>
+                    <SectionTitle>Weapon Mode</SectionTitle>
+                    {editAnimPose && w !== 'none' && (
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale <= MIN_WEAPON_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >−</button>
+                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                          {Math.round(curScale * 100)}%
+                        </span>
+                        <button
+                          onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale >= MAX_WEAPON_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >+</button>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -819,52 +853,19 @@ export default function App() {
                 );
               })()}
 
-              {/* Weapon anchor offset controls — only shown when a weapon is equipped */}
-              {activeChar.parts.weapon !== 'none' && (() => {
+              {/* Reset weapon offset — shown in Edit Animation mode when offset is non-zero */}
+              {activeChar.parts.weapon !== 'none' && editAnimPose && (() => {
                 const wo = resolveWeaponOffset(activeChar.parts, currentAnimation);
                 const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
-                const btnCls = 'w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 transition-colors';
-                const valCls = 'font-mono text-[11px] min-w-[30px] text-center';
-                const STEP_PX  = 2;
-                const STEP_DEG = 5 * Math.PI / 180;
-                return (
-                  <div className="flex flex-col gap-1 mt-0.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* X offset */}
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-[10px] text-muted-foreground w-4">X</span>
-                        <button className={btnCls} onClick={() => updateWeaponOffset('x', -STEP_PX)}>−</button>
-                        <span className={cn(valCls, wo.x ? 'text-primary' : 'text-muted-foreground')}>{Math.round(wo.x ?? 0)}</span>
-                        <button className={btnCls} onClick={() => updateWeaponOffset('x',  STEP_PX)}>+</button>
-                      </div>
-                      {/* Y offset */}
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-[10px] text-muted-foreground w-4">Y</span>
-                        <button className={btnCls} onClick={() => updateWeaponOffset('y', -STEP_PX)}>−</button>
-                        <span className={cn(valCls, wo.y ? 'text-primary' : 'text-muted-foreground')}>{Math.round(wo.y ?? 0)}</span>
-                        <button className={btnCls} onClick={() => updateWeaponOffset('y',  STEP_PX)}>+</button>
-                      </div>
-                      {/* Rotation */}
-                      <div className="flex items-center gap-0.5">
-                        <span className="text-[10px] text-muted-foreground w-4">°</span>
-                        <button className={btnCls} onClick={() => updateWeaponOffset('rotation', -STEP_DEG)}>−</button>
-                        <span className={cn(valCls, wo.rotation ? 'text-primary' : 'text-muted-foreground')}>
-                          {Math.round((wo.rotation ?? 0) * 180 / Math.PI)}°
-                        </span>
-                        <button className={btnCls} onClick={() => updateWeaponOffset('rotation',  STEP_DEG)}>+</button>
-                      </div>
-                      {isDirty && (
-                        <button
-                          onClick={resetWeaponOffset}
-                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors ml-auto"
-                          title="Reset weapon offset"
-                        >
-                          Reset
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
+                return isDirty ? (
+                  <button
+                    onClick={resetWeaponOffset}
+                    className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                    title="Reset weapon offset"
+                  >
+                    Reset offset
+                  </button>
+                ) : null;
               })()}
             </div>
 
@@ -874,7 +875,6 @@ export default function App() {
               currentAnimation={currentAnimation}
               isPlaying={isPlaying}
               weapon={activeChar.parts.weapon}
-              showBones={showBones}
               showVectors={showVectors}
               ragdoll={ragdoll}
               editStructure={editStructure}
@@ -887,7 +887,6 @@ export default function App() {
               poseEditorOpen={poseEditorOpen}
               onAnimationChange={handleAnimationChange}
               onPlayPause={() => setIsPlaying(p => !p)}
-              onToggleBones={() => setShowBones(p => !p)}
               onToggleVectors={() => setShowVectors(p => !p)}
               onToggleRagdoll={toggleRagdoll}
               onToggleEditStructure={toggleEditStructure}

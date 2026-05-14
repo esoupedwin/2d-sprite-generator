@@ -69,10 +69,10 @@ function ToggleRow({ checked, onChange, label, disabled, title }) {
 
 export function AnimationControls({
   currentAnimation, isPlaying, weapon,
-  showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
+  showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
   editAnimPose, hasAnimPoseEdits,
   customAnimations, poseEditorOpen,
-  onAnimationChange, onPlayPause, onToggleBones, onToggleVectors,
+  onAnimationChange, onPlayPause, onToggleVectors,
   onToggleRagdoll, onToggleEditStructure, onToggleRebindMode, onToggleBinds,
   onSkinChange, onNewAnimation, onDeleteAnimation,
   onEditAnimPoseToggle, onResetAnimPose,
@@ -88,7 +88,27 @@ export function AnimationControls({
     <div className="flex flex-col gap-3 w-full">
 
       {/* ── Zone 1: Animation selection ───────────────────────────────────────── */}
-      <SectionTitle>Animation</SectionTitle>
+      <div className="flex items-center justify-between">
+        <SectionTitle>Animation</SectionTitle>
+        <div className="flex items-center gap-2">
+          {editAnimPose && hasAnimPoseEdits && (
+            <button
+              type="button"
+              onClick={onResetAnimPose}
+              className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+            >
+              Reset
+            </button>
+          )}
+          <ModeBtn
+            active={editAnimPose}
+            disabled={editAnimPoseDisabled}
+            onClick={onEditAnimPoseToggle}
+          >
+            Edit Animation
+          </ModeBtn>
+        </div>
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {Object.entries(ANIMATIONS).filter(([key]) => allowedKeys.includes(key)).map(([key, anim]) => (
           <AnimChip key={key} active={currentAnimation === key} disabled={poseEditorOpen} onClick={() => onAnimationChange(key)}>
@@ -129,94 +149,73 @@ export function AnimationControls({
         </Button>
       </div>
 
-      {/* Edit Pose row */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <ModeBtn
-          active={editAnimPose}
-          disabled={editAnimPoseDisabled}
-          onClick={onEditAnimPoseToggle}
+      {/* Playback */}
+      <div className="flex flex-col items-start gap-0.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onPlayPause}
+          disabled={poseEditorOpen}
+          className="rounded-full px-4"
         >
-          Edit Pose
-        </ModeBtn>
-        {editAnimPose && hasAnimPoseEdits && (
-          <button
-            type="button"
-            onClick={onResetAnimPose}
-            className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
-          >
-            Reset
-          </button>
-        )}
-        {editAnimPose && (
-          <span className="text-[10px] text-teal-400/70 font-mono">drag bones to adjust</span>
-        )}
+          {isPlaying
+            ? <><Pause className="h-3 w-3 mr-1.5" />Pause Animation</>
+            : <><Play  className="h-3 w-3 mr-1.5" />Play Animation</>
+          }
+        </Button>
+        <span className="text-[10px] font-mono text-muted-foreground/40 pl-1">Space</span>
       </div>
 
+      {editAnimPose && (
+        <span className="text-[10px] text-teal-400/70 font-mono">drag bones to adjust</span>
+      )}
+
+      {/* ── Zone 3: Edit Body Controls ───────────────────────────────────────── */}
+      {isEdit && (
+      <>
       <Separator />
-
-      {/* ── Zone 2: Canvas controls ───────────────────────────────────────────── */}
+      <SectionTitle>Edit Body Controls</SectionTitle>
       <div className="flex flex-col gap-2.5">
-        {/* Playback + Show Bones */}
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex flex-col items-start gap-0.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onPlayPause}
-              disabled={poseEditorOpen}
-              className="rounded-full px-4"
-            >
-              {isPlaying
-                ? <><Pause className="h-3 w-3 mr-1.5" />Pause</>
-                : <><Play  className="h-3 w-3 mr-1.5" />Play</>
-              }
-            </Button>
-            <span className="text-[10px] font-mono text-muted-foreground/40 pl-1">Space</span>
-          </div>
-
-          <ToggleRow checked={!!showBones} onChange={onToggleBones} label="Show Bones" />
-        </div>
-
-        {/* Edit mode tools — no header, flows naturally under playback */}
         <div className="flex gap-1.5 flex-wrap" title={editTitle}>
           <ModeBtn active={!!ragdoll}       disabled={editDisabled} onClick={onToggleRagdoll}>Ragdoll</ModeBtn>
           <ModeBtn active={!!editStructure} disabled={editDisabled} onClick={onToggleEditStructure}>Structure</ModeBtn>
           <ModeBtn active={!!showVectors}   disabled={editDisabled} onClick={onToggleVectors}>Vectors</ModeBtn>
         </div>
+
+        {showVectors && (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-4 flex-wrap">
+              <ToggleRow checked={!!rebindMode} onChange={onToggleRebindMode} label="Rebind Anchor"
+                title="Drag an anchor to reattach it to the closest valid bone" />
+              <ToggleRow checked={!!showBinds} onChange={onToggleBinds} label="Show Binds"
+                title="Draw a line from each anchor to the joint it's bound to" />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Skin:</span>
+              {SKIN_OPTIONS.map(({ key, label, color }) => {
+                const active = selectedSkin === key;
+                return (
+                  <Button
+                    key={key}
+                    type="button"
+                    size="chip"
+                    variant="chip"
+                    onClick={() => onSkinChange(key)}
+                    style={!active && color ? { borderColor: color + '66' } : undefined}
+                    className={cn(active && 'bg-primary border-primary text-primary-foreground hover:bg-primary')}
+                  >
+                    {color && <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: color }} />}
+                    {label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* ── Zone 3: Vector extras (only when Vectors is active) ───────────────── */}
-      {showVectors && (
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-4 flex-wrap">
-            <ToggleRow checked={!!rebindMode} onChange={onToggleRebindMode} label="Rebind Anchor"
-              title="Drag an anchor to reattach it to the closest valid bone" />
-            <ToggleRow checked={!!showBinds} onChange={onToggleBinds} label="Show Binds"
-              title="Draw a line from each anchor to the joint it's bound to" />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Skin:</span>
-            {SKIN_OPTIONS.map(({ key, label, color }) => {
-              const active = selectedSkin === key;
-              return (
-                <Button
-                  key={key}
-                  type="button"
-                  size="chip"
-                  variant="chip"
-                  onClick={() => onSkinChange(key)}
-                  style={!active && color ? { borderColor: color + '66' } : undefined}
-                  className={cn(active && 'bg-primary border-primary text-primary-foreground hover:bg-primary')}
-                >
-                  {color && <span className="inline-block w-2 h-2 rounded-full mr-1.5" style={{ background: color }} />}
-                  {label}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
+      </>
       )}
 
     </div>

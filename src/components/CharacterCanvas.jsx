@@ -55,6 +55,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   onRagdollOverlayChange,
   onAnimBoneOffsetsChange,
   onSaveDefault,
+  weaponOffset,
+  onWeaponOffsetSet,
 }, ref) {
   const canvasRef = useRef(null);
 
@@ -105,6 +107,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     lastWorldTransforms: null, lastAnimPose: {},
     vectorHitTargets: [],
     rotateHitTargets: [],
+    weaponHitTargets: [],
+    weaponOffset: { x: 0, y: 0, rotation: 0 },
+    onWeaponOffsetSet: null,
   });
 
   stateRef.current.currentAnimation = currentAnimation;
@@ -125,6 +130,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.customAnimations = customAnimations;
   stateRef.current.animKeyframeOverrides = animKeyframeOverridesProp ?? {};
   stateRef.current.activeKeyframe   = activeKeyframe ?? null;
+  stateRef.current.weaponOffset     = weaponOffset ?? { x: 0, y: 0, rotation: 0 };
+  stateRef.current.onWeaponOffsetSet = onWeaponOffsetSet ?? null;
 
   // When a keyframe row is clicked, snap to its time and lock there.
   useEffect(() => {
@@ -315,6 +322,69 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       s.rotateHitTargets = [];
     }
 
+    // Weapon anchor + rotation handles (editAnimPose, weapon equipped)
+    if (s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none') {
+      const hand = worldTransforms['right_hand'];
+      if (hand) {
+        const wo   = s.weaponOffset;
+        const cosH = Math.cos(hand.rotation), sinH = Math.sin(hand.rotation);
+        const wax  = hand.x + cosH * wo.x - sinH * wo.y;
+        const way  = hand.y + sinH * wo.x + cosH * wo.y;
+        const weaponWorldRot = hand.rotation + wo.rotation;
+        const vs   = 1 / zoom;
+        const drag = dragRef.current;
+        const posActive = drag?.type === 'weapon-pos';
+        const rotActive = drag?.type === 'weapon-rot';
+
+        ctx.save();
+        ctx.translate(originX, originY);
+        ctx.scale(scale, scale);
+
+        // Dashed line from weapon anchor to rotation handle
+        const ROT_DIST = 20 * vs;
+        const rhAngle  = weaponWorldRot - Math.PI / 2;
+        const rhx = wax + Math.cos(rhAngle) * ROT_DIST;
+        const rhy = way + Math.sin(rhAngle) * ROT_DIST;
+        ctx.setLineDash([2 * vs, 2 * vs]);
+        ctx.strokeStyle = rotActive ? 'rgba(255,150,50,0.9)' : 'rgba(255,150,50,0.5)';
+        ctx.lineWidth   = vs;
+        ctx.beginPath(); ctx.moveTo(wax, way); ctx.lineTo(rhx, rhy); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Rotation handle (orange circle)
+        const rr = 3 * vs;
+        ctx.fillStyle   = rotActive ? '#FFF' : '#FF9632';
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth   = vs;
+        ctx.beginPath(); ctx.arc(rhx, rhy, rotActive ? rr * 1.4 : rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+        // Position handle (gold circle + crosshair)
+        const r = 4.5 * vs;
+        ctx.fillStyle   = posActive ? '#FFF' : '#FFD700';
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth   = vs;
+        ctx.beginPath(); ctx.arc(wax, way, posActive ? r * 1.3 : r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth   = 0.7 * vs;
+        const cr = r * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(wax - cr, way); ctx.lineTo(wax + cr, way);
+        ctx.moveTo(wax, way - cr); ctx.lineTo(wax, way + cr);
+        ctx.stroke();
+
+        ctx.restore();
+
+        s.weaponHitTargets = [
+          { type: 'weapon-pos', x: wax, y: way, wax, way },
+          { type: 'weapon-rot', x: rhx, y: rhy, wax, way },
+        ];
+      } else {
+        s.weaponHitTargets = [];
+      }
+    } else {
+      s.weaponHitTargets = [];
+    }
+
     if (anim) {
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
       ctx.font = '12px monospace';
@@ -364,6 +434,17 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       if (closest) return closest;
     }
     const wt = s.lastWorldTransforms;
+    // Weapon handles — checked before bone joints so the anchor doesn't get
+    // swallowed by the right_hand joint when wo is near zero.
+    if (wt && s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none') {
+      const r = hitRadius(JOINT_HIT_PX);
+      let closest = null, minDist = r;
+      for (const h of s.weaponHitTargets) {
+        const d = Math.hypot(h.x - x, h.y - y);
+        if (d < minDist) { minDist = d; closest = h; }
+      }
+      if (closest) return closest;
+    }
     if (wt && (s.ragdoll || s.editStructure || s.editAnimPose)) {
       const r = hitRadius(JOINT_HIT_PX);
       // Rotation handles take priority over joints (smaller, drawn on top).
@@ -440,7 +521,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         return;
       }
       pushHistory();
-      dragRef.current = target;
+      dragRef.current = target.type === 'weapon-pos'
+        ? { ...target, initCharX: charPos.x, initCharY: charPos.y }
+        : target;
       if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
       e.preventDefault();
     } else if (e.ctrlKey && stateRef.current.currentAnimation === 'edit') {
@@ -485,6 +568,35 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const s  = stateRef.current;
     const wt = s.lastWorldTransforms;
     if (!wt) return;
+
+    if (drag.type === 'weapon-pos') {
+      const hand = wt['right_hand'];
+      if (!hand) return;
+      const cosH = Math.cos(hand.rotation), sinH = Math.sin(hand.rotation);
+      // Keep the grab point fixed under the cursor
+      const desiredX = charPos.x - (drag.initCharX - drag.wax);
+      const desiredY = charPos.y - (drag.initCharY - drag.way);
+      const dx = desiredX - hand.x, dy = desiredY - hand.y;
+      const newX = cosH * dx + sinH * dy;
+      const newY = -sinH * dx + cosH * dy;
+      const cur = s.weaponOffset;
+      s.onWeaponOffsetSet?.({ ...cur, x: newX, y: newY });
+      return;
+    }
+
+    if (drag.type === 'weapon-rot') {
+      const hand = wt['right_hand'];
+      if (!hand) return;
+      const wo   = s.weaponOffset;
+      const cosH = Math.cos(hand.rotation), sinH = Math.sin(hand.rotation);
+      // Recompute anchor from current offset so rotation pivots correctly
+      const wax = hand.x + cosH * wo.x - sinH * wo.y;
+      const way = hand.y + sinH * wo.x + cosH * wo.y;
+      const angle = Math.atan2(charPos.y - way, charPos.x - wax);
+      // Handle sits at (weaponWorldRot - π/2) from anchor, so invert to get rotation
+      s.onWeaponOffsetSet?.({ ...wo, rotation: angle + Math.PI / 2 - hand.rotation });
+      return;
+    }
 
     if (drag.type === 'rotate') {
       const armBone = wt[drag.boneId];

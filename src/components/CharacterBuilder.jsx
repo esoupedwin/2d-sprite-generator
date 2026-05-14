@@ -8,12 +8,13 @@ import { cn } from '@/lib/utils';
 import { Copy, ImageUp, Pencil, Plus, RotateCcw, X } from 'lucide-react';
 
 export function CharacterBuilder({
-  character, characters, activeCharId,
+  character, characters, activeCharId, currentAnimation,
   onPartChange, onColorChange, onScaleChange,
   onBodyImageChange, onHeadImageChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter,
 }) {
+  const isEdit = currentAnimation === 'edit';
   return (
     <aside className="w-60 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-1">
       <CharacterList
@@ -25,6 +26,7 @@ export function CharacterBuilder({
         onRename={onRenameCharacter}
         onDuplicate={onDuplicateCharacter}
       />
+      {isEdit && (<>
       <Separator className="my-2" />
       <SectionTitle className="text-[13px] mb-2">Parts</SectionTitle>
       {Object.entries(CHARACTER_PARTS).filter(([k]) => k !== 'weapon').map(([partKey, partDef]) => {
@@ -57,6 +59,7 @@ export function CharacterBuilder({
           />
         );
       })}
+      </>)}
     </aside>
   );
 }

@@ -182,6 +182,7 @@ export const CHARACTER_PARTS = {
       },
       rifle: {
         label: 'Rifle',
+        aboveHead: true,
         draw(ctx) {
           // Barrel runs along Y axis (Y+ = muzzle/forward, Y- = stock/butt)
           ctx.fillStyle = '#1A1A1A';
