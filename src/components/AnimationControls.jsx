@@ -1,9 +1,8 @@
 import { ANIMATIONS, WEAPON_ANIMATION_SETS } from '../systems/AnimationSystem.js';
-import { SectionTitle } from '@/components/ui/section-title';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { Pause, Play, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 function AnimChip({ active, disabled, onClick, children }) {
   return (
@@ -28,62 +27,18 @@ function OnceTag() {
   );
 }
 
-function ModeBtn({ active, disabled, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        'px-2.5 py-1 text-xs rounded-md border transition-colors select-none',
-        active
-          ? 'bg-primary/20 border-primary text-primary font-medium'
-          : 'border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
-        disabled && 'opacity-35 pointer-events-none',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
 export function AnimationControls({
-  currentAnimation, isPlaying, weapon,
-  editAnimPose, hasAnimPoseEdits,
+  currentAnimation, weapon,
+  editAnimPose,
   customAnimations, poseEditorOpen,
-  onAnimationChange, onPlayPause,
+  onAnimationChange,
   onNewAnimation, onDeleteAnimation,
-  onEditAnimPoseToggle, onResetAnimPose,
 }) {
-  const isEdit = currentAnimation === 'edit';
-  const editAnimPoseDisabled = isEdit || poseEditorOpen;
-
   const allowedKeys = WEAPON_ANIMATION_SETS[weapon ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
 
   return (
     <div className="flex flex-col gap-3 w-full">
-      <div className="flex items-center justify-between">
-        <SectionTitle>Animation</SectionTitle>
-        <div className="flex items-center gap-2">
-          {editAnimPose && hasAnimPoseEdits && (
-            <button
-              type="button"
-              onClick={onResetAnimPose}
-              className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
-            >
-              Reset
-            </button>
-          )}
-          <ModeBtn
-            active={editAnimPose}
-            disabled={editAnimPoseDisabled}
-            onClick={onEditAnimPoseToggle}
-          >
-            Edit Animation
-          </ModeBtn>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5 border border-border rounded-md p-2">
         {Object.entries(ANIMATIONS).filter(([key]) => allowedKeys.includes(key)).map(([key, anim]) => (
           <AnimChip key={key} active={currentAnimation === key} disabled={poseEditorOpen} onClick={() => onAnimationChange(key)}>
             {anim.name}{!anim.loop && <OnceTag />}
@@ -120,23 +75,6 @@ export function AnimationControls({
         >
           {poseEditorOpen ? 'Editing…' : '+ New'}
         </Button>
-      </div>
-
-      <div className="flex flex-col items-start gap-0.5">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onPlayPause}
-          disabled={poseEditorOpen}
-          className="rounded-full px-4"
-        >
-          {isPlaying
-            ? <><Pause className="h-3 w-3 mr-1.5" />Pause Animation</>
-            : <><Play  className="h-3 w-3 mr-1.5" />Play Animation</>
-          }
-        </Button>
-        <span className="text-[10px] font-mono text-muted-foreground/40 pl-1">Space</span>
       </div>
 
       {editAnimPose && (

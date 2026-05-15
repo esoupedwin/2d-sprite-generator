@@ -13,10 +13,13 @@ import { mergeOffsets } from '../utils/transforms.js';
 import { useImageDataUrl } from '../hooks/useImageDataUrl.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
-const CANVAS_W   = 868;
-const CANVAS_H   = 896;
-const ORIGIN_X   = CANVAS_W / 2;
-const ORIGIN_Y   = 686;
+// The canvas backing buffer is sized to match its rendered container so the
+// drawing area always fills the center panel. Origin sits at horizontal
+// center; pushed below the canvas vertical center by ORIGIN_Y_OFFSET so the
+// character's visual midpoint (which sits well above the bone origin/feet for
+// our chars) lands near the canvas vertical center. Tuned for the default
+// character proportions; works reasonably across the range.
+const ORIGIN_Y_OFFSET = 170;
 const BASE_SCALE = 2.5;
 
 const VECTOR_HIT_PX = 10;
@@ -59,6 +62,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   onWeaponOffsetSet,
 }, ref) {
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const [canvasSize, setCanvasSize] = useState({ w: 868, h: 896 });
 
   // Reset targets (updated by "Save as Default")
   const defaultBoneOffsets  = useRef(initialDefaultBoneOffsets  ?? {});
@@ -110,7 +115,13 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     weaponHitTargets: [],
     weaponOffset: { x: 0, y: 0, rotation: 0 },
     onWeaponOffsetSet: null,
+    canvasW: 868, canvasH: 896, originX: 434, originY: 686,
   });
+
+  stateRef.current.canvasW = canvasSize.w;
+  stateRef.current.canvasH = canvasSize.h;
+  stateRef.current.originX = canvasSize.w / 2;
+  stateRef.current.originY = Math.round(canvasSize.h / 2 + ORIGIN_Y_OFFSET);
 
   stateRef.current.currentAnimation = currentAnimation;
   stateRef.current.isPlaying        = isPlaying;
@@ -173,24 +184,47 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
   // (Body/head/weapon image decoding lives in useImageDataUrl above.)
 
+  // ── Responsive sizing — backing buffer follows container size ─────────────────
+  // We measure via getBoundingClientRect (CSS pixels) and observe the container.
+  // ResizeObserver's contentRect can be misreported on some setups, so we read
+  // clientWidth/Height explicitly on each tick.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const apply = () => {
+      const w = Math.max(100, Math.round(el.clientWidth));
+      const h = Math.max(100, Math.round(el.clientHeight));
+      setCanvasSize(prev => prev.w === w && prev.h === h ? prev : { w, h });
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    window.addEventListener('resize', apply);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', apply);
+    };
+  }, []);
+
   // ── Wheel zoom ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const onWheel = (e) => {
       e.preventDefault();
+      const s      = stateRef.current;
       const rect   = canvas.getBoundingClientRect();
-      const ratio  = CANVAS_W / rect.width;
+      const ratio  = s.canvasW / rect.width;
       const cx     = (e.clientX - rect.left) * ratio;
       const cy     = (e.clientY - rect.top)  * ratio;
       const { zoom, panX, panY } = viewRef.current;
-      const originX = ORIGIN_X + panX, originY = ORIGIN_Y + panY;
+      const originX = s.originX + panX, originY = s.originY + panY;
       const scale   = BASE_SCALE * zoom;
       const charX   = (cx - originX) / scale, charY = (cy - originY) / scale;
       const factor  = e.deltaY < 0 ? 1.15 : 1 / 1.15;
       const newZoom = Math.max(0.25, Math.min(12, zoom * factor));
       const ns      = BASE_SCALE * newZoom;
-      viewRef.current = { zoom: newZoom, panX: cx - charX * ns - ORIGIN_X, panY: cy - charY * ns - ORIGIN_Y };
+      viewRef.current = { zoom: newZoom, panX: cx - charX * ns - s.originX, panY: cy - charY * ns - s.originY };
       setZoomPct(Math.round(newZoom * 100));
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
@@ -222,6 +256,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    const CANVAS_W = s.canvasW, CANVAS_H = s.canvasH;
 
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
@@ -232,7 +267,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     for (let y = 0; y < CANVAS_H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_W, y); ctx.stroke(); }
 
     const { zoom, panX, panY } = viewRef.current;
-    const originX = ORIGIN_X + panX, originY = ORIGIN_Y + panY;
+    const originX = s.originX + panX, originY = s.originY + panY;
     const scale   = BASE_SCALE * zoom;
 
     ctx.save();
@@ -403,22 +438,24 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   const getCharPos = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
+    const s     = stateRef.current;
     const rect  = canvas.getBoundingClientRect();
-    const ratio = CANVAS_W / rect.width;
+    const ratio = s.canvasW / rect.width;
     const cx    = (e.clientX - rect.left) * ratio;
     const cy    = (e.clientY - rect.top)  * ratio;
     const { zoom, panX, panY } = viewRef.current;
     return {
-      x: (cx - ORIGIN_X - panX) / (BASE_SCALE * zoom),
-      y: (cy - ORIGIN_Y - panY) / (BASE_SCALE * zoom),
+      x: (cx - s.originX - panX) / (BASE_SCALE * zoom),
+      y: (cy - s.originY - panY) / (BASE_SCALE * zoom),
     };
   }, []);
 
   const hitRadius = useCallback((screenPx) => {
     const canvas = canvasRef.current;
     if (!canvas) return screenPx;
+    const s     = stateRef.current;
     const rect  = canvas.getBoundingClientRect();
-    const ratio = CANVAS_W / rect.width;
+    const ratio = s.canvasW / rect.width;
     return screenPx * ratio / (BASE_SCALE * viewRef.current.zoom);
   }, []);
 
@@ -509,7 +546,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       return;
     }
     if (e.button !== 0) return;
-    if (stateRef.current.currentAnimation !== 'edit' && !stateRef.current.editAnimPose) return;
+    const s0 = stateRef.current;
+    if (s0.currentAnimation !== 'edit' && !s0.editAnimPose && !s0.ragdoll) return;
 
     const charPos = getCharPos(e);
     const target  = findTarget(charPos);
@@ -543,7 +581,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       const dp     = panDragRef.current;
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ratio  = CANVAS_W / canvas.getBoundingClientRect().width;
+      const ratio  = stateRef.current.canvasW / canvas.getBoundingClientRect().width;
       viewRef.current = {
         ...viewRef.current,
         panX: dp.startPanX + (e.clientX - dp.startClientX) * ratio,
@@ -557,7 +595,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
     if (!drag) {
       const s        = stateRef.current;
-      const isActive = s.currentAnimation === 'edit' || s.editAnimPose;
+      const isActive = s.currentAnimation === 'edit' || s.editAnimPose || s.ragdoll;
       const hovered  = isActive ? findTarget(charPos) : null;
       const addMode  = s.currentAnimation === 'edit' && s.showVectors && s.selectedSkin !== 'all' && e.ctrlKey;
       if (canvasRef.current)
@@ -785,14 +823,15 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
   // ── Zoom helpers ──────────────────────────────────────────────────────────────
   const stepZoom = useCallback((factor) => {
+    const s = stateRef.current;
     const { zoom, panX, panY } = viewRef.current;
-    const cx = CANVAS_W / 2, cy = CANVAS_H / 2;
-    const originX = ORIGIN_X + panX, originY = ORIGIN_Y + panY;
+    const cx = s.canvasW / 2, cy = s.canvasH / 2;
+    const originX = s.originX + panX, originY = s.originY + panY;
     const scale   = BASE_SCALE * zoom;
     const charX   = (cx - originX) / scale, charY = (cy - originY) / scale;
     const newZoom  = Math.max(0.25, Math.min(12, zoom * factor));
     const newScale = BASE_SCALE * newZoom;
-    viewRef.current = { zoom: newZoom, panX: cx - charX * newScale - ORIGIN_X, panY: cy - charY * newScale - ORIGIN_Y };
+    viewRef.current = { zoom: newZoom, panX: cx - charX * newScale - s.originX, panY: cy - charY * newScale - s.originY };
     setZoomPct(Math.round(newZoom * 100));
   }, []);
 
@@ -895,13 +934,12 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   const hasSkinEdits = JSON.stringify(skinOverrides) !== JSON.stringify(defaultSkinOverrides.current);
 
   return (
-    <div className="relative inline-block">
+    <div ref={containerRef} className="absolute inset-0">
       <canvas
         ref={canvasRef}
-        width={CANVAS_W}
-        height={CANVAS_H}
-        className="block rounded-lg max-w-full"
-        style={{ height: '80vh', width: 'auto', aspectRatio: `${CANVAS_W} / ${CANVAS_H}` }}
+        width={canvasSize.w}
+        height={canvasSize.h}
+        className="block w-full h-full"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDrag}

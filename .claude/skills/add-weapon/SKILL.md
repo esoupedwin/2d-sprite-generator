@@ -18,10 +18,24 @@ If the user hasn't said:
 - **Base for animations** — which existing weapon's animations to clone from
   (`'rifle'` for two-handed long guns, `'sword'` for melee, `'rocket'` for
   shoulder-fired heavy weapons). Default: `'rifle'`.
-- **Renders above head?** — set the `aboveHead` flag if the weapon is large
-  enough to occlude the head (rocket-style). Default: `false`.
 - **Has fire/attack animation?** — most do; named `<id>_fire` or `<id>_<verb>`.
   Default to mirroring the base's fire/slash animation.
+
+Note: **do not** ask about or set z-order flags. The renderer uses one
+universal order for every weapon. Described from the character's perspective:
+
+`legs → left arm → body → head → weapon → right arm → head_prop`
+
+So the weapon always sits between the head and the trigger (character's right)
+arm; the support (character's left) arm always hides behind the body.
+
+> The bone names in code are *mirrored* relative to the character: the bone
+> `right_arm` is the character's LEFT arm (support), and `left_arm` is the
+> character's RIGHT arm (trigger). The renderer's code order is therefore:
+> `left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop`.
+> Always discuss z-order in character-perspective terms with users.
+
+See CLAUDE.md "Z-draw order" for the full rationale.
 
 ## Files to update (in order)
 
@@ -32,7 +46,6 @@ Add an entry under `CHARACTER_PARTS.weapon.options`:
 ```js
 <id>: {
   label: '<Label>',
-  // aboveHead: true,  // only if it renders in front of the head
   draw(ctx) {
     // bone +Y = forward (muzzle), -Y = backward (stock/butt),
     // +X = top of weapon, -X = where the grip hangs.
@@ -41,6 +54,9 @@ Add an entry under `CHARACTER_PARTS.weapon.options`:
   },
 },
 ```
+
+No z-flags. The renderer's universal order puts every weapon between head
+and the trigger arm automatically.
 
 For the procedural draw, use the existing `rifle`/`sword`/`rocket` options as
 references for orientation conventions. Keep it recognizable as the weapon
@@ -121,9 +137,12 @@ weapon button should appear in the right panel's Weapon row automatically
   `ANIMATION_COMPLETE_TARGETS`. Use it consistently — no underscores in the
   weapon id itself, only in animation names (`spear_idle`, not `spear_t_idle`).
 
-- `aboveHead` is a property on the **option** entry, not on the weapon
-  registration map. The renderer reads
-  `CHARACTER_PARTS.weapon.options[character.weapon]?.aboveHead`.
+- No per-weapon z-order flags exist. The renderer (`src/systems/Renderer.js`)
+  uses one fixed order. Character-perspective:
+  `legs → left arm → body → head → weapon → right arm → head_prop`.
+  Code-perspective (mirrored bone names):
+  `left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop`.
+  If a weapon "looks behind" something, the fix is the pose, not the order.
 
 - The fire/attack animation conventionally uses `_fire` for ranged
   (`rifle`, `rocket_fire`, `full_auto`) and `_slash` / `_thrust` / etc.

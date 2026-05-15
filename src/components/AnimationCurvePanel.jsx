@@ -42,12 +42,12 @@ export function AnimationCurvePanel({
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <SectionTitle>Animation Data</SectionTitle>
-        <span className="text-[10px] text-muted-foreground font-mono">
+        <span className="text-[11px] text-muted-foreground font-mono">
           {animation.name} · {animation.duration?.toFixed?.(2) ?? animation.duration}s · {animation.loop ? 'loop' : 'once'}
         </span>
       </div>
 
-      <div className="text-[10px] text-muted-foreground/70 leading-tight">
+      <div className="text-xs text-muted-foreground/70 leading-snug">
         Click a <span className="font-mono">t=…</span> row to pause the animation at that
         time. Drag joints to retune that keyframe via ragdoll — the value is
         written to a per-character keyframe override.
@@ -55,7 +55,7 @@ export function AnimationCurvePanel({
 
       <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto pr-1 border-t border-border pt-2 font-mono">
         {boneIds.length === 0 && (
-          <div className="text-[11px] text-muted-foreground">No tracks.</div>
+          <div className="text-xs text-muted-foreground">No tracks.</div>
         )}
         {boneIds.map(boneId => {
           const kfs = tracks[boneId] ?? [];
@@ -63,15 +63,15 @@ export function AnimationCurvePanel({
           const boneOv = overrides?.[boneId] ?? null;
           return (
             <div key={boneId} className="flex flex-col gap-0.5">
-              <div className="flex items-center justify-between text-[11px]">
+              <div className="flex items-center justify-between text-xs">
                 <span className="text-foreground">{boneId}</span>
                 {off && (
-                  <span className="text-teal-400 text-[10px]" title="Edit Pose offset">
+                  <span className="text-teal-400 text-[11px]" title="Edit Pose offset">
                     Δ {off}
                   </span>
                 )}
               </div>
-              <div className="flex flex-col gap-px pl-2 text-[10px]">
+              <div className="flex flex-col gap-px pl-2 text-[11px]">
                 {kfs.map((kf, i) => {
                   const key = kf.time.toFixed(2);
                   const isActive  = activeKeyframe && activeKeyframe.boneId === boneId && activeKeyframe.time.toFixed(2) === key;

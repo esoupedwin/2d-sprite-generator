@@ -25,10 +25,11 @@ import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
 import { resolveWeaponOffset } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Bone, ImageUp, Pencil, X } from 'lucide-react';
+import { ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
 
 const CHARS_STORAGE = '2dsprite:characters';
 
@@ -41,14 +42,16 @@ const WEAPON_SCALE_STEP = 0.1;
 // trigger onAnimationComplete, so entries for loop:true animations are harmless
 // (they sit dormant unless someone flips the animation back to one-shot).
 const ANIMATION_COMPLETE_TARGETS = {
-  jump:         'idle',
-  sword_jump:   'sword_idle',
-  sword_slash:  'sword_idle',
-  rifle_jump:   'rifle_idle',
-  rocket_jump:  'rocket_idle',
-  rocket_fire:  'rocket_idle',
-  bow_fire:     'bow_idle',
-  bow_jump:     'bow_idle',
+  jump:                       'idle',
+  sword_jump:                 'sword_idle',
+  sword_slash:                'sword_idle',
+  rifle_jump:                 'rifle_idle',
+  rocket_jump:                'rocket_idle',
+  rocket_fire:                'rocket_idle',
+  bow_fire:                   'bow_idle',
+  bow_jump:                   'bow_idle',
+  grenade_launcher_fire:      'grenade_launcher_idle',
+  grenade_launcher_jump:      'grenade_launcher_idle',
 };
 
 function genId() {
@@ -218,11 +221,17 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [characters]);
 
-  // On mount: load from file — file wins over localStorage
+  // On mount: load from file — file wins over localStorage. If the user loads
+  // a workspace JSON before this fetch resolves, the in-flight response is
+  // dropped (otherwise the server's stale characters.json would clobber the
+  // freshly-loaded workspace data — same char IDs after a prior sync, so you'd
+  // silently see old joint positions).
+  const workspaceLoadedRef = useRef(false);
   useEffect(() => {
     fetch('/api/characters')
       .then(r => r.json())
       .then(data => {
+        if (workspaceLoadedRef.current) return;
         if (Array.isArray(data) && data.length > 0) {
           setCharacters(data);
           setActiveCharId(data[0].id);
@@ -600,6 +609,7 @@ export default function App() {
   // ── Workspace save/load ───────────────────────────────────────────────────────
   const loadWorkspace = useCallback(({ characters: newChars, activeCharId: newActive, uiState }) => {
     if (!Array.isArray(newChars) || newChars.length === 0) return;
+    workspaceLoadedRef.current = true;
     setCharacters(newChars);
     setActiveCharId(newActive ?? newChars[0].id);
     if (uiState && typeof uiState === 'object') {
@@ -733,36 +743,80 @@ export default function App() {
             onRenameCharacter={renameCharacter}
             onSelectCharacter={selectCharacter}
             onDuplicateCharacter={duplicateCharacter}
+            onEditBodyToggle={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
+            onToggleBones={() => setShowBones(p => !p)}
+            showBones={showBones}
+            onToggleRagdoll={toggleRagdoll}
+            ragdoll={ragdoll}
           >
             {currentAnimation !== 'edit' && (<>
-            {/* Weapon */}
+            {/* Weapon & Animation — combined since animations are weapon-specific */}
             <Separator className="my-2" />
-            <div className="flex flex-col gap-2">
+            <SectionTitle>Animations</SectionTitle>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setIsPlaying(p => !p)}
+                disabled={poseEditorOpen}
+                className={cn(
+                  'inline-flex items-center rounded-full border border-border bg-secondary px-4 py-1 text-xs font-medium transition-colors hover:bg-secondary/80 disabled:opacity-50',
+                )}
+              >
+                {isPlaying
+                  ? <><Pause className="h-3 w-3 mr-1.5" />Pause</>
+                  : <><Play  className="h-3 w-3 mr-1.5" />Play</>}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditAnimPose(p => {
+                    setIsPlaying(p ? true : false);
+                    return !p;
+                  });
+                }}
+                disabled={currentAnimation === 'edit' || poseEditorOpen}
+                className={cn(
+                  'inline-flex items-center rounded-full border px-4 py-1 text-xs font-medium transition-colors disabled:opacity-50',
+                  editAnimPose
+                    ? 'bg-teal-400 border-teal-400 text-black hover:bg-teal-400/90'
+                    : 'border-border bg-secondary text-foreground hover:bg-secondary/80',
+                )}
+              >
+                <Pencil className="h-3 w-3 mr-1.5" />Edit Animation
+              </button>
+              {editAnimPose && Object.keys((activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => resetAnimPose(currentAnimation)}
+                  className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-3 mt-4">
               {(() => {
                 const w = activeChar.parts.weapon;
                 const curScale = activeChar.parts.weaponScales?.[w]
                               ?? activeChar.parts.partScales?.weapon
                               ?? 1;
+                if (!editAnimPose || w === 'none') return null;
                 return (
-                  <div className="flex items-center justify-between">
-                    <SectionTitle>Weapon Mode</SectionTitle>
-                    {editAnimPose && w !== 'none' && (
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale <= MIN_WEAPON_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >−</button>
-                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                          {Math.round(curScale * 100)}%
-                        </span>
-                        <button
-                          onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale >= MAX_WEAPON_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >+</button>
-                      </div>
-                    )}
+                  <div className="flex items-center justify-end gap-0.5">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Weapon scale</span>
+                    <button
+                      onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
+                      disabled={curScale <= MIN_WEAPON_SCALE}
+                      className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                    >−</button>
+                    <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                      {Math.round(curScale * 100)}%
+                    </span>
+                    <button
+                      onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
+                      disabled={curScale >= MAX_WEAPON_SCALE}
+                      className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                    >+</button>
                   </div>
                 );
               })()}
@@ -789,23 +843,26 @@ export default function App() {
               {activeChar.parts.weapon !== 'none' && (() => {
                 const currentWeaponImage = activeChar.parts.weaponImages?.[activeChar.parts.weapon];
                 return (
-                  <div className="flex items-center gap-2 flex-wrap text-[11px]">
-                    <button
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setWeaponUploadOpen(true)}
                       title={currentWeaponImage ? `Replace ${activeChar.parts.weapon} PNG` : `Upload a PNG to skin the ${activeChar.parts.weapon}`}
-                      className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      <ImageUp className="h-3.5 w-3.5" />
-                      <span>{currentWeaponImage ? 'Replace PNG' : 'Upload PNG'}</span>
-                    </button>
+                      <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                      {currentWeaponImage ? "Edit Weapon's Skin" : 'Upload PNG'}
+                    </Button>
                     {currentWeaponImage && (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => updateWeaponImage(null)}
                         title={`Remove ${activeChar.parts.weapon} image (revert to procedural)`}
-                        className="text-muted-foreground hover:text-destructive transition-colors"
+                        className="text-muted-foreground hover:text-destructive"
                       >
-                        <X className="h-3 w-3" />
-                      </button>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
                     )}
                   </div>
                 );
@@ -827,78 +884,39 @@ export default function App() {
               })()}
             </div>
 
-            <Separator className="my-2" />
-
-            <AnimationControls
-              currentAnimation={currentAnimation}
-              isPlaying={isPlaying}
-              weapon={activeChar.parts.weapon}
-              editAnimPose={editAnimPose}
-              hasAnimPoseEdits={Object.keys((activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}).length > 0}
-              customAnimations={activeChar.customAnimations}
-              poseEditorOpen={poseEditorOpen}
-              onAnimationChange={handleAnimationChange}
-              onPlayPause={() => setIsPlaying(p => !p)}
-              onNewAnimation={openPoseEditor}
-              onDeleteAnimation={deleteCustomAnimation}
-              onEditAnimPoseToggle={() => {
-                setEditAnimPose(p => {
-                  // Enter pose-edit → pause so the user has a stable target to drag.
-                  // Exit pose-edit → resume so they can see the edited animation play.
-                  setIsPlaying(p ? true : false);
-                  return !p;
-                });
-              }}
-              onResetAnimPose={() => resetAnimPose(currentAnimation)}
-            />
+            <div className="mt-3">
+              <AnimationControls
+                currentAnimation={currentAnimation}
+                weapon={activeChar.parts.weapon}
+                editAnimPose={editAnimPose}
+                customAnimations={activeChar.customAnimations}
+                poseEditorOpen={poseEditorOpen}
+                onAnimationChange={handleAnimationChange}
+                onNewAnimation={openPoseEditor}
+                onDeleteAnimation={deleteCustomAnimation}
+              />
+            </div>
             </>)}
           </CharacterBuilder>
 
-          <main className="flex-1 flex items-center justify-center p-6 overflow-auto relative">
-              <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-                <button
-                  type="button"
-                  onClick={() => setShowBones(p => !p)}
-                  className={cn(
-                    'px-2.5 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap inline-flex items-center',
-                    showBones
-                      ? 'bg-primary/20 border-primary text-primary font-medium'
-                      : 'bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
-                  )}
-                >
-                  <Bone className="h-3 w-3 mr-1.5" />Show Bones
-                </button>
-                <button
-                  onClick={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors inline-flex items-center',
-                    currentAnimation === 'edit'
-                      ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
-                      : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
-                  )}
-                >
-                  <Pencil className="h-3 w-3 mr-1.5" />Edit Body
-                </button>
-              </div>
-            <div className="flex flex-col items-start">
+          <main className={cn(
+            'flex-1 relative overflow-hidden transition-colors duration-200 border-y',
+            currentAnimation === 'edit'
+              ? 'border-yellow-400 shadow-[inset_0_0_24px_rgba(250,204,21,0.18)]'
+              : editAnimPose
+              ? 'border-teal-400 shadow-[inset_0_0_24px_rgba(45,212,191,0.15)]'
+              : 'border-transparent',
+          )}>
               {currentAnimation === 'edit' && (
-                <div className="bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
+                <div className="absolute top-3 left-3 z-20 bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
                   Edit Body Mode
                 </div>
               )}
               {editAnimPose && currentAnimation !== 'edit' && (
-                <div className="bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
+                <div className="absolute top-3 left-3 z-20 bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
                   Edit Animation — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
                 </div>
               )}
-              <div className={cn(
-                  'rounded-lg border overflow-hidden shadow-2xl transition-colors duration-200',
-                  currentAnimation === 'edit'
-                    ? 'border-yellow-400 shadow-[0_0_24px_rgba(250,204,21,0.25)] rounded-tl-none'
-                    : editAnimPose
-                    ? 'border-teal-400 shadow-[0_0_24px_rgba(45,212,191,0.2)] rounded-tl-none'
-                    : 'border-border',
-                )}>
               <CharacterCanvas
                 ref={charCanvasRef}
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
@@ -931,8 +949,6 @@ export default function App() {
                 weaponOffset={resolveWeaponOffset(activeChar.parts, currentAnimation)}
                 onWeaponOffsetSet={setWeaponOffsetAbsolute}
               />
-            </div>
-            </div>
           </main>
 
           {((currentAnimation === 'edit') || (editAnimPose && !poseEditorOpen)) && (

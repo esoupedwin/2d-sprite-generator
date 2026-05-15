@@ -87,19 +87,17 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   ctx.translate(originX, originY);
   ctx.scale(scale, scale);
 
-  const weaponOpt       = CHARACTER_PARTS.weapon.options[character.weapon];
-  // aboveHead: weapon renders in front of the head (rocket, rifle).
-  // rightArmInFront: right arm is deferred so it renders in front of the
-  //   weapon (rifle — the hand visibly grips the stock).
-  const weaponAboveHead   = !!weaponOpt?.aboveHead;
-  const rightArmInFront   = !!weaponOpt?.rightArmInFront;
-
-  // Back to front: [right arm if not deferred] → legs → body →
-  //   [weapon if !aboveHead] → head → [weapon if aboveHead] →
-  //   [right arm if deferred] → left arm → prop.
-  if (!rightArmInFront) drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
-  drawSkin(ctx, skins.left_leg    || LEFT_LEG_SKIN,    worldTransforms, getColor(character, 'left_leg'),    getScale(character, 'left_leg'));
-  drawSkin(ctx, skins.right_leg   || RIGHT_LEG_SKIN,   worldTransforms, getColor(character, 'right_leg'),   getScale(character, 'right_leg'));
+  // Universal z-order, back → front (same for every weapon).
+  // Order is named from the CHARACTER'S perspective:
+  //   legs → left arm → body → head → weapon → right arm → head prop
+  // In this codebase the bone names are mirrored relative to the character
+  // (the bone called `right_arm` is on the character's LEFT side, and vice
+  // versa — see SkeletonSystem.js). So the *code* draws bones in this order:
+  //   left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop
+  drawSkin(ctx, skins.left_leg  || LEFT_LEG_SKIN,  worldTransforms, getColor(character, 'left_leg'),  getScale(character, 'left_leg'));
+  drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, worldTransforms, getColor(character, 'right_leg'), getScale(character, 'right_leg'));
+  // Character's LEFT arm (= bone right_arm) — sits behind the body.
+  drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
   {
     const bodyTmpl  = skins.body || BODY_SKIN;
     const bodyScale = getScale(character, 'body');
@@ -109,7 +107,6 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
     }
   }
-  if (!weaponAboveHead) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
   {
     const headTmpl  = skins.head || HEAD_SKIN;
     const headScale = getScale(character, 'head');
@@ -120,9 +117,10 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       drawExtras(ctx, 'head', character, worldTransforms);
     }
   }
-  if (weaponAboveHead) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
-  if (rightArmInFront) drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
-  drawSkin(ctx, skins.left_arm    || LEFT_ARM_SKIN,    worldTransforms, getColor(character, 'left_arm'),    getScale(character, 'left_arm'));
+  drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
+  // Character's RIGHT arm (= bone left_arm) — the trigger / dominant hand,
+  // always in front of the weapon so the grip is visible.
+  drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'),  getScale(character, 'left_arm'));
   drawPart(ctx, 'head_prop', character, worldTransforms);
 
   if (showBones) {

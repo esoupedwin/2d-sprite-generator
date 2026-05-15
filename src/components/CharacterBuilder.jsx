@@ -1,11 +1,10 @@
 import { useState, useRef } from 'react';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { CharacterManagerDialog } from './CharacterManagerDialog.jsx';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
-import { Copy, ImageUp, Pencil, Plus, RotateCcw, X } from 'lucide-react';
+import { Bone, ChevronDown, Hand, ImageUp, Pencil, RotateCcw, Users, X } from 'lucide-react';
 
 export function CharacterBuilder({
   character, characters, activeCharId, currentAnimation,
@@ -13,12 +12,36 @@ export function CharacterBuilder({
   onBodyImageChange, onHeadImageChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter,
+  onEditBodyToggle, onToggleBones, showBones,
+  onToggleRagdoll, ragdoll,
   children,
 }) {
   const isEdit = currentAnimation === 'edit';
+  const [managerOpen, setManagerOpen] = useState(false);
+  const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
   return (
     <aside className="w-72 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-1">
-      <CharacterList
+      <div className="flex flex-col gap-1.5 pb-1">
+        <SectionTitle>Characters</SectionTitle>
+        <button
+          type="button"
+          onClick={() => setManagerOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-secondary hover:border-primary/60 transition-colors text-sm group"
+          title="Open character manager"
+        >
+          <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          <span className="flex-1 text-left text-foreground font-semibold truncate">
+            {activeChar?.name ?? '—'}
+          </span>
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {characters.length}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+        </button>
+      </div>
+      <CharacterManagerDialog
+        open={managerOpen}
+        onClose={() => setManagerOpen(false)}
         characters={characters}
         activeCharId={activeCharId}
         onSelect={onSelectCharacter}
@@ -27,6 +50,48 @@ export function CharacterBuilder({
         onRename={onRenameCharacter}
         onDuplicate={onDuplicateCharacter}
       />
+      <div className="mt-1 flex gap-2 self-start">
+        <button
+          type="button"
+          onClick={onEditBodyToggle}
+          className={cn(
+            'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
+            isEdit
+              ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
+              : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
+          )}
+        >
+          <Pencil className="h-7 w-7" />
+          <span>{isEdit ? 'Close' : 'Edit Structure'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onToggleBones}
+          className={cn(
+            'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
+            showBones
+              ? 'bg-primary/20 border-primary text-primary'
+              : 'bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
+          )}
+        >
+          <Bone className="h-7 w-7" />
+          <span>Show Bones</span>
+        </button>
+        <button
+          type="button"
+          onClick={onToggleRagdoll}
+          title="Drag the character around — ephemeral, doesn't change config, structure or animation"
+          className={cn(
+            'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
+            ragdoll
+              ? 'bg-rose-400/20 border-rose-400 text-rose-300'
+              : 'bg-secondary border-border text-muted-foreground hover:border-rose-400/60 hover:text-rose-300',
+          )}
+        >
+          <Hand className="h-7 w-7" />
+          <span>Ragdoll</span>
+        </button>
+      </div>
       {children}
       {isEdit && (<>
       <Separator className="my-2" />
@@ -202,110 +267,3 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
   );
 }
 
-function CharacterList({ characters, activeCharId, onSelect, onAdd, onDelete, onRename, onDuplicate }) {
-  const [editingId, setEditingId] = useState(null);
-  const [editName,  setEditName]  = useState('');
-
-  const startEdit = (char, e) => {
-    e.stopPropagation();
-    setEditingId(char.id);
-    setEditName(char.name);
-  };
-
-  const commitEdit = (id) => {
-    const trimmed = editName.trim();
-    if (trimmed) onRename(id, trimmed);
-    setEditingId(null);
-  };
-
-  return (
-    <div className="flex flex-col gap-1.5 pb-1">
-      <div className="flex items-center justify-between">
-        <SectionTitle>Characters</SectionTitle>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={onAdd}
-          title="New character"
-          className="h-[22px] w-[22px]"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-
-      <div className="flex flex-col gap-0.5 max-h-[140px] overflow-y-auto">
-        {characters.map(char => {
-          const isActive = char.id === activeCharId;
-          return (
-            <div
-              key={char.id}
-              onClick={() => onSelect(char.id)}
-              className={cn(
-                'group flex items-center gap-1 px-2 py-1.5 rounded border cursor-pointer min-h-[30px] bg-secondary transition-colors',
-                isActive
-                  ? 'border-primary bg-primary/15'
-                  : 'border-transparent hover:border-border',
-              )}
-            >
-              {editingId === char.id ? (
-                <Input
-                  autoFocus
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  onBlur={() => commitEdit(char.id)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter')  commitEdit(char.id);
-                    if (e.key === 'Escape') setEditingId(null);
-                  }}
-                  onClick={e => e.stopPropagation()}
-                  className="h-6 text-xs px-1.5"
-                />
-              ) : (
-                <span
-                  onDoubleClick={e => startEdit(char, e)}
-                  title="Double-click to rename"
-                  className={cn(
-                    'flex-1 text-xs truncate select-none',
-                    isActive && 'font-semibold text-foreground',
-                  )}
-                >
-                  {char.name}
-                </span>
-              )}
-
-              <div className={cn(
-                'flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity',
-                isActive && 'opacity-100',
-              )}>
-                <button
-                  onClick={e => { e.stopPropagation(); startEdit(char, e); }}
-                  title="Rename"
-                  className="text-muted-foreground hover:text-foreground hover:bg-white/10 rounded p-0.5 transition-colors"
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={e => { e.stopPropagation(); onDuplicate(char.id); }}
-                  title="Duplicate"
-                  className="text-muted-foreground hover:text-foreground hover:bg-white/10 rounded p-0.5 transition-colors"
-                >
-                  <Copy className="h-3 w-3" />
-                </button>
-                {characters.length > 1 && (
-                  <button
-                    onClick={e => { e.stopPropagation(); onDelete(char.id); }}
-                    title="Delete"
-                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded p-0.5 transition-colors"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}

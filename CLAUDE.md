@@ -71,15 +71,25 @@ All rotations in **radians**. Positive = clockwise (canvas coords). Y increases 
 
 ## Z-draw order (Renderer.js)
 
+Universal order, back → front. **No per-weapon or per-animation z flags.**
+
+Described from the **character's** perspective:
+
 ```
-right_arm → weapon → left_leg → right_leg → lower_torso → body
-  → [left_arm if NOT carry_walk]
-  → head → head extras
-  → [left_arm if carry_walk]   ← only animation that reorders z
-  → head_prop
+legs → LEFT arm → body → head (+ extras) → weapon → RIGHT arm → head_prop
 ```
 
-`leftArmOverHead = animation === 'carry_walk'` — the only animation-specific z-override.
+> **Bone-name caveat:** the bones in `SkeletonSystem.js` are named *opposite* to the character's body — the bone called `right_arm` is on the **character's LEFT side** (support / non-dominant), and the bone called `left_arm` is on the **character's RIGHT side** (trigger / dominant). The renderer's source comments map this explicitly. When discussing z-order with users, always use the character's perspective. When editing bone data, remember the bone names are mirrored.
+>
+> Code order in `renderCharacter()` therefore is:
+> `left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop`.
+
+Rationale:
+- **Character's left arm behind body** — the support / far-side arm wraps around the body silhouette only where it extends past.
+- **Weapon between head and character's right arm** — the trigger/dominant hand always grips it from the front; the weapon always passes in front of the head/cheek (matters for shouldered weapons like rifle / rocket / grenade_launcher).
+- **head_prop on top of everything** — hats/crates ride above weapon and arms.
+
+This applies to every weapon (sword, rifle, bow, rocket, grenade_launcher, future additions). Do **not** add `aboveHead`, `rightArmInFront`, `leftArmBehind` flags or animation-specific z-overrides — the canonical order handles all cases.
 
 ## Character data model (App.jsx state)
 
@@ -120,7 +130,7 @@ my_anim: {
 
 Then add the button in `AnimationControls.jsx` and handle completion in `App.jsx → handleAnimationComplete` if `loop: false`.
 
-If the animation needs special z-ordering (like `carry_walk`), add a guard in `Renderer.js → renderCharacter`.
+Do NOT add per-animation z-overrides in `Renderer.js` — the universal draw order is intentional. If a pose looks wrong, fix the pose, not the order.
 
 ## Adding a new body part
 

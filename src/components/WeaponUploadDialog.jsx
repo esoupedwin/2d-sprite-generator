@@ -53,20 +53,23 @@ export function WeaponUploadDialog({ open, onClose, onPick, currentImage, weapon
             Draw your {
               weaponType === 'rifle' ? 'rifle'
               : weaponType === 'rocket' ? 'rocket launcher'
+              : weaponType === 'grenade_launcher' ? 'grenade launcher'
               : 'weapon'
             } with the
-            <strong className="text-foreground"> {weaponType === 'rifle' || weaponType === 'rocket' ? 'muzzle' : 'tip'} pointing UP</strong> and the
+            <strong className="text-foreground"> {weaponType === 'rifle' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'muzzle' : 'tip'} pointing UP</strong> and the
             <strong className="text-foreground"> {
               weaponType === 'rifle' ? 'stock'
               : weaponType === 'rocket' ? 'back-blast vent'
+              : weaponType === 'grenade_launcher' ? 'folding stock'
               : 'handle'
             } at the bottom-center</strong> of the image.
             The renderer rotates and anchors the PNG so the {
               weaponType === 'rifle' ? 'stock'
               : weaponType === 'rocket' ? 'grip'
+              : weaponType === 'grenade_launcher' ? 'pistol grip'
               : 'handle'
             } lands in the hand
-            and the {weaponType === 'rifle' || weaponType === 'rocket' ? 'barrel' : 'tip'} extends along the weapon's forward direction.
+            and the {weaponType === 'rifle' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'barrel' : 'tip'} extends along the weapon's forward direction.
           </p>
 
           <div className="flex items-center justify-center gap-6 py-2 bg-secondary/40 rounded-md border border-border">
@@ -124,17 +127,18 @@ function OrientationDiagram({ weaponType }) {
 
       {weaponType === 'rifle'  && <RifleSilhouette />}
       {weaponType === 'rocket' && <RocketSilhouette />}
-      {(weaponType === 'sword' || !['rifle', 'rocket'].includes(weaponType)) && <SwordSilhouette />}
+      {weaponType === 'grenade_launcher' && <GrenadeLauncherSilhouette />}
+      {(weaponType === 'sword' || !['rifle', 'rocket', 'grenade_launcher'].includes(weaponType)) && <SwordSilhouette />}
 
       {/* Tip / handle callouts (shared across weapon types) */}
       <line x1="68" y1="26" x2="84" y2="26" stroke="rgb(113, 113, 122)" strokeWidth="1" />
       <text x="86" y="29" fontSize="9" fill="rgb(212, 212, 216)" fontFamily="monospace">
-        {weaponType === 'rifle' || weaponType === 'rocket' ? 'muzzle' : 'tip'}
+        {weaponType === 'rifle' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'muzzle' : 'tip'}
       </text>
 
       <line x1="68" y1="120" x2="84" y2="120" stroke="rgb(113, 113, 122)" strokeWidth="1" />
       <text x="86" y="123" fontSize="9" fill="rgb(212, 212, 216)" fontFamily="monospace">
-        {weaponType === 'rifle' ? 'stock' : weaponType === 'rocket' ? 'back-blast' : 'handle'}
+        {weaponType === 'rifle' ? 'stock' : weaponType === 'rocket' ? 'back-blast' : weaponType === 'grenade_launcher' ? 'stock' : 'handle'}
       </text>
     </svg>
   );
@@ -175,6 +179,41 @@ function RifleSilhouette() {
       {/* Stock */}
       <polygon points="48,98 64,98 66,124 50,124" fill="rgb(110, 75, 40)" />
       <rect x="50" y="124" width="14" height="4" fill="rgb(60, 40, 20)" />
+    </g>
+  );
+}
+
+function GrenadeLauncherSilhouette() {
+  // Vertical M32-style grenade launcher: short stubby muzzle on top,
+  // big revolving drum in the middle, pistol grip + folding stock at bottom.
+  return (
+    <g>
+      {/* Muzzle ring */}
+      <rect x="49" y="20" width="12" height="4" fill="rgb(40, 40, 40)" />
+      {/* Stubby barrel */}
+      <rect x="51" y="24" width="8" height="14" fill="rgb(34, 34, 34)" />
+      {/* Cylinder drum */}
+      <ellipse cx="55" cy="52" rx="14" ry="15" fill="rgb(54, 54, 54)" stroke="rgb(20, 20, 20)" strokeWidth="1.2" />
+      {/* Drum chamber dots */}
+      <circle cx="49" cy="46" r="2.2" fill="rgb(10, 10, 10)" />
+      <circle cx="55" cy="42" r="2.2" fill="rgb(10, 10, 10)" />
+      <circle cx="61" cy="46" r="2.2" fill="rgb(10, 10, 10)" />
+      <circle cx="49" cy="58" r="2.2" fill="rgb(10, 10, 10)" />
+      <circle cx="55" cy="62" r="2.2" fill="rgb(10, 10, 10)" />
+      <circle cx="61" cy="58" r="2.2" fill="rgb(10, 10, 10)" />
+      {/* Drum hub */}
+      <circle cx="55" cy="52" r="2" fill="rgb(120, 120, 120)" />
+      {/* Receiver block */}
+      <rect x="50" y="67" width="12" height="10" fill="rgb(46, 46, 46)" />
+      {/* Trigger guard */}
+      <circle cx="56" cy="80" r="3" fill="none" stroke="rgb(80, 80, 80)" strokeWidth="1.2" />
+      {/* Pistol grip */}
+      <rect x="53" y="84" width="6" height="12" fill="rgb(92, 69, 48)" />
+      {/* Folding skeleton stock */}
+      <rect x="51" y="96" width="2" height="22" fill="rgb(50, 50, 50)" />
+      <rect x="59" y="96" width="2" height="22" fill="rgb(50, 50, 50)" />
+      {/* Butt pad */}
+      <rect x="49" y="118" width="14" height="5" fill="rgb(30, 30, 30)" />
     </g>
   );
 }

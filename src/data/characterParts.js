@@ -156,7 +156,6 @@ export const CHARACTER_PARTS = {
       },
       sword: {
         label: 'Sword',
-        aboveHead: true,
         draw(ctx) {
           // Handle at y≈16 (hand level near bottom of forearm blob)
           ctx.fillStyle = '#7B4F2E';
@@ -183,7 +182,6 @@ export const CHARACTER_PARTS = {
       },
       rifle: {
         label: 'Rifle',
-        aboveHead: true,
         draw(ctx) {
           // Barrel runs along Y axis (Y+ = muzzle/forward, Y- = stock/butt)
           ctx.fillStyle = '#1A1A1A';
@@ -213,7 +211,6 @@ export const CHARACTER_PARTS = {
       },
       bow: {
         label: 'Bow',
-        aboveHead: true,
         draw(ctx) {
           const LIMB    = '#7B5218';
           const LIMB_DK = '#5C3A0A';
@@ -287,9 +284,6 @@ export const CHARACTER_PARTS = {
       },
       rocket: {
         label: 'Rocket',
-        // Renders ABOVE the head — the launcher tube passes in front of the
-        // cheek when held on the shoulder.
-        aboveHead: true,
         draw(ctx) {
           // Shoulder-fired launcher. Fatter tube than the rifle, extends both
           // behind the hand (back-blast) and forward (muzzle). +Y = forward,
@@ -361,6 +355,103 @@ export const CHARACTER_PARTS = {
           // Forward support grip (for support hand)
           ctx.fillStyle = WOOD;
           ctx.fillRect(-4, 22, 6, 12);
+        },
+      },
+      grenade_launcher: {
+        label: 'Grenade Launcher',
+        draw(ctx) {
+          // M32-style 6-shot 40mm revolver. Hand grips at origin (0, 0).
+          // +Y = forward (muzzle), -Y = back (folding stock),
+          // +X = top of weapon, -X = grip side underneath.
+          const STEEL    = '#2e2e2e';
+          const STEEL_DK = '#161616';
+          const STEEL_LT = '#5a5a5a';
+          const DRUM     = '#363636';
+          const DRUM_DK  = '#1c1c1c';
+          const BARREL   = '#222';
+          const HOLE     = '#0a0a0a';
+          const WOOD     = '#5c4530';
+
+          // Folding stock (rear) — tubular skeleton stock.
+          ctx.strokeStyle = STEEL;
+          ctx.lineWidth   = 2;
+          ctx.beginPath();
+          ctx.moveTo(-2, -30);
+          ctx.lineTo(-2, -10);
+          ctx.moveTo( 6, -30);
+          ctx.lineTo( 6, -10);
+          ctx.stroke();
+          // Butt pad
+          ctx.fillStyle = STEEL_DK;
+          ctx.fillRect(-4, -34, 12, 5);
+
+          // Receiver body — connects stock to drum.
+          ctx.fillStyle = STEEL;
+          ctx.fillRect(-3, -10, 10, 12);
+
+          // Top rail / sight on the receiver
+          ctx.fillStyle = STEEL_DK;
+          ctx.fillRect(7, -8, 3, 8);
+
+          // Cylindrical revolver drum — the signature M32 feature.
+          // Big fat drum spans roughly y = 2 → y = 26, sticks out in +X.
+          ctx.fillStyle = DRUM;
+          ctx.beginPath();
+          ctx.ellipse(2, 14, 13, 14, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = DRUM_DK;
+          ctx.beginPath();
+          ctx.ellipse(2, 14, 13, 14, 0, 0, Math.PI * 2);
+          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = STEEL_DK;
+          ctx.stroke();
+
+          // Drum chamber holes (peek at 3 of the 6 facing the viewer)
+          ctx.fillStyle = HOLE;
+          for (const [cx, cy] of [[-4, 8], [ 2, 4], [ 8, 8], [-4, 20], [ 2, 24], [ 8, 20]]) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Drum hub (center pin)
+          ctx.fillStyle = STEEL_LT;
+          ctx.beginPath();
+          ctx.arc(2, 14, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Short stubby barrel emerging from the front of the drum
+          ctx.fillStyle = BARREL;
+          ctx.fillRect(-2, 28, 8, 14);
+          // Muzzle ring
+          ctx.fillStyle = STEEL_DK;
+          ctx.fillRect(-3, 42, 10, 4);
+          // Muzzle hole
+          ctx.fillStyle = HOLE;
+          ctx.beginPath();
+          ctx.arc(2, 44, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Pistol grip (where the trigger hand wraps the bone origin)
+          ctx.fillStyle = WOOD;
+          ctx.beginPath();
+          ctx.moveTo(-5, -2);
+          ctx.lineTo( 2, -2);
+          ctx.lineTo( 3, 10);
+          ctx.lineTo(-6, 11);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#3a2a18';
+          ctx.lineWidth   = 0.5;
+          ctx.beginPath(); ctx.moveTo(-3, 1); ctx.lineTo(-3, 8); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-1, 1); ctx.lineTo(-1, 9); ctx.stroke();
+
+          // Trigger guard
+          ctx.strokeStyle = STEEL;
+          ctx.lineWidth   = 1.2;
+          ctx.beginPath();
+          ctx.arc(-1, 5, 3.5, 0, Math.PI * 2);
+          ctx.stroke();
         },
       },
     },
