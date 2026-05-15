@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { CharacterCanvas } from './components/CharacterCanvas.jsx';
 import { CharacterBuilder } from './components/CharacterBuilder.jsx';
 import { AnimationControls } from './components/AnimationControls.jsx';
+import { EditBodyControls } from './components/EditBodyControls.jsx';
 import { PoseEditor } from './components/PoseEditor.jsx';
 import { ExportMenu } from './components/ExportMenu.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
@@ -24,7 +25,6 @@ import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
 import { resolveWeaponOffset } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -185,7 +185,10 @@ export default function App() {
   const toggleEditStructure = useCallback(() => {
     setEditStructure(p => {
       const next = !p;
-      if (next) setRagdoll(false);
+      if (next) {
+        setRagdoll(false);
+        setShowBones(true);
+      }
       return next;
     });
   }, []);
@@ -730,91 +733,10 @@ export default function App() {
             onRenameCharacter={renameCharacter}
             onSelectCharacter={selectCharacter}
             onDuplicateCharacter={duplicateCharacter}
-          />
-
-          <main className="flex-1 flex items-center justify-center p-6 overflow-auto relative">
-              <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-                <button
-                  type="button"
-                  onClick={() => setShowBones(p => !p)}
-                  className={cn(
-                    'px-2.5 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap inline-flex items-center',
-                    showBones
-                      ? 'bg-primary/20 border-primary text-primary font-medium'
-                      : 'bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
-                  )}
-                >
-                  <Bone className="h-3 w-3 mr-1.5" />Show Bones
-                </button>
-                <button
-                  onClick={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors inline-flex items-center',
-                    currentAnimation === 'edit'
-                      ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
-                      : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
-                  )}
-                >
-                  <Pencil className="h-3 w-3 mr-1.5" />Edit Body
-                </button>
-              </div>
-            <div className="flex flex-col items-start">
-              {currentAnimation === 'edit' && (
-                <div className="bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
-                  Edit Body Mode
-                </div>
-              )}
-              {editAnimPose && currentAnimation !== 'edit' && (
-                <div className="bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
-                  Edit Animation — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
-                </div>
-              )}
-              <div className={cn(
-                  'rounded-lg border overflow-hidden shadow-2xl transition-colors duration-200',
-                  currentAnimation === 'edit'
-                    ? 'border-yellow-400 shadow-[0_0_24px_rgba(250,204,21,0.25)] rounded-tl-none'
-                    : editAnimPose
-                    ? 'border-teal-400 shadow-[0_0_24px_rgba(45,212,191,0.2)] rounded-tl-none'
-                    : 'border-border',
-                )}>
-              <CharacterCanvas
-                ref={charCanvasRef}
-                key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
-                character={activeChar.parts}
-                boneOffsets={poseEditorOpen ? (poseFrames[activePoseFrame]?.boneOffsets ?? {}) : activeChar.boneOffsets}
-                skinOverrides={activeChar.skinOverrides}
-                defaultBoneOffsets={activeChar.defaultBoneOffsets}
-                defaultSkinOverrides={activeChar.defaultSkinOverrides}
-                animBoneOffsets={poseEditorOpen ? {} : (activeChar.animBoneOffsets ?? {})}
-                animKeyframeOverrides={poseEditorOpen ? {} : (activeChar.animKeyframeOverrides ?? {})}
-                activeKeyframe={activeKeyframe}
-                onKeyframeOverrideChange={updateAnimKeyframeOverride}
-                currentAnimation={currentAnimation}
-                isPlaying={isPlaying}
-                showBones={showBones}
-                showVectors={poseEditorOpen ? false : showVectors}
-                ragdoll={poseEditorOpen ? true : ragdoll}
-                editStructure={poseEditorOpen ? false : editStructure}
-                rebindMode={poseEditorOpen ? false : rebindMode}
-                showBinds={poseEditorOpen ? false : showBinds}
-                selectedSkin={selectedSkin}
-                editAnimPose={poseEditorOpen ? false : editAnimPose}
-                customAnimations={activeChar.customAnimations}
-                onAnimationComplete={handleAnimationComplete}
-                onBoneOffsetsChange={poseEditorOpen ? updatePoseFrameBones : updateBoneOffsets}
-                onSkinOverridesChange={updateSkinOverrides}
-                onRagdollOverlayChange={poseEditorOpen ? handlePoseRagdollOverlayChange : undefined}
-                onAnimBoneOffsetsChange={poseEditorOpen ? undefined : updateAnimBoneOffsets}
-                onSaveDefault={saveCharacterDefault}
-                weaponOffset={resolveWeaponOffset(activeChar.parts, currentAnimation)}
-                onWeaponOffsetSet={setWeaponOffsetAbsolute}
-              />
-            </div>
-            </div>
-          </main>
-
-          <aside className="w-80 shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
+          >
+            {currentAnimation !== 'edit' && (<>
             {/* Weapon */}
+            <Separator className="my-2" />
             <div className="flex flex-col gap-2">
               {(() => {
                 const w = activeChar.parts.weapon;
@@ -905,30 +827,18 @@ export default function App() {
               })()}
             </div>
 
-            <Separator />
+            <Separator className="my-2" />
 
             <AnimationControls
               currentAnimation={currentAnimation}
               isPlaying={isPlaying}
               weapon={activeChar.parts.weapon}
-              showVectors={showVectors}
-              ragdoll={ragdoll}
-              editStructure={editStructure}
-              rebindMode={rebindMode}
-              showBinds={showBinds}
-              selectedSkin={selectedSkin}
               editAnimPose={editAnimPose}
               hasAnimPoseEdits={Object.keys((activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}).length > 0}
               customAnimations={activeChar.customAnimations}
               poseEditorOpen={poseEditorOpen}
               onAnimationChange={handleAnimationChange}
               onPlayPause={() => setIsPlaying(p => !p)}
-              onToggleVectors={() => setShowVectors(p => !p)}
-              onToggleRagdoll={toggleRagdoll}
-              onToggleEditStructure={toggleEditStructure}
-              onToggleRebindMode={() => setRebindMode(p => !p)}
-              onToggleBinds={() => setShowBinds(p => !p)}
-              onSkinChange={setSelectedSkin}
               onNewAnimation={openPoseEditor}
               onDeleteAnimation={deleteCustomAnimation}
               onEditAnimPoseToggle={() => {
@@ -941,10 +851,110 @@ export default function App() {
               }}
               onResetAnimPose={() => resetAnimPose(currentAnimation)}
             />
+            </>)}
+          </CharacterBuilder>
 
-            {editAnimPose && !poseEditorOpen && (
-              <>
-                <Separator />
+          <main className="flex-1 flex items-center justify-center p-6 overflow-auto relative">
+              <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
+                <button
+                  type="button"
+                  onClick={() => setShowBones(p => !p)}
+                  className={cn(
+                    'px-2.5 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap inline-flex items-center',
+                    showBones
+                      ? 'bg-primary/20 border-primary text-primary font-medium'
+                      : 'bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
+                  )}
+                >
+                  <Bone className="h-3 w-3 mr-1.5" />Show Bones
+                </button>
+                <button
+                  onClick={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
+                  className={cn(
+                    'px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors inline-flex items-center',
+                    currentAnimation === 'edit'
+                      ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
+                      : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
+                  )}
+                >
+                  <Pencil className="h-3 w-3 mr-1.5" />Edit Body
+                </button>
+              </div>
+            <div className="flex flex-col items-start">
+              {currentAnimation === 'edit' && (
+                <div className="bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
+                  Edit Body Mode
+                </div>
+              )}
+              {editAnimPose && currentAnimation !== 'edit' && (
+                <div className="bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-t-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
+                  Edit Animation — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
+                </div>
+              )}
+              <div className={cn(
+                  'rounded-lg border overflow-hidden shadow-2xl transition-colors duration-200',
+                  currentAnimation === 'edit'
+                    ? 'border-yellow-400 shadow-[0_0_24px_rgba(250,204,21,0.25)] rounded-tl-none'
+                    : editAnimPose
+                    ? 'border-teal-400 shadow-[0_0_24px_rgba(45,212,191,0.2)] rounded-tl-none'
+                    : 'border-border',
+                )}>
+              <CharacterCanvas
+                ref={charCanvasRef}
+                key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
+                character={activeChar.parts}
+                boneOffsets={poseEditorOpen ? (poseFrames[activePoseFrame]?.boneOffsets ?? {}) : activeChar.boneOffsets}
+                skinOverrides={activeChar.skinOverrides}
+                defaultBoneOffsets={activeChar.defaultBoneOffsets}
+                defaultSkinOverrides={activeChar.defaultSkinOverrides}
+                animBoneOffsets={poseEditorOpen ? {} : (activeChar.animBoneOffsets ?? {})}
+                animKeyframeOverrides={poseEditorOpen ? {} : (activeChar.animKeyframeOverrides ?? {})}
+                activeKeyframe={activeKeyframe}
+                onKeyframeOverrideChange={updateAnimKeyframeOverride}
+                currentAnimation={currentAnimation}
+                isPlaying={isPlaying}
+                showBones={showBones}
+                showVectors={poseEditorOpen ? false : showVectors}
+                ragdoll={poseEditorOpen ? true : ragdoll}
+                editStructure={poseEditorOpen ? false : editStructure}
+                rebindMode={poseEditorOpen ? false : rebindMode}
+                showBinds={poseEditorOpen ? false : showBinds}
+                selectedSkin={selectedSkin}
+                editAnimPose={poseEditorOpen ? false : editAnimPose}
+                customAnimations={activeChar.customAnimations}
+                onAnimationComplete={handleAnimationComplete}
+                onBoneOffsetsChange={poseEditorOpen ? updatePoseFrameBones : updateBoneOffsets}
+                onSkinOverridesChange={updateSkinOverrides}
+                onRagdollOverlayChange={poseEditorOpen ? handlePoseRagdollOverlayChange : undefined}
+                onAnimBoneOffsetsChange={poseEditorOpen ? undefined : updateAnimBoneOffsets}
+                onSaveDefault={saveCharacterDefault}
+                weaponOffset={resolveWeaponOffset(activeChar.parts, currentAnimation)}
+                onWeaponOffsetSet={setWeaponOffsetAbsolute}
+              />
+            </div>
+            </div>
+          </main>
+
+          {((currentAnimation === 'edit') || (editAnimPose && !poseEditorOpen)) && (
+            <aside className="w-80 shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
+              {currentAnimation === 'edit' && (
+                <EditBodyControls
+                  showVectors={showVectors}
+                  ragdoll={ragdoll}
+                  editStructure={editStructure}
+                  rebindMode={rebindMode}
+                  showBinds={showBinds}
+                  selectedSkin={selectedSkin}
+                  poseEditorOpen={poseEditorOpen}
+                  onToggleVectors={() => setShowVectors(p => !p)}
+                  onToggleRagdoll={toggleRagdoll}
+                  onToggleEditStructure={toggleEditStructure}
+                  onToggleRebindMode={() => setRebindMode(p => !p)}
+                  onToggleBinds={() => setShowBinds(p => !p)}
+                  onSkinChange={setSelectedSkin}
+                />
+              )}
+              {editAnimPose && !poseEditorOpen && (
                 <AnimationCurvePanel
                   animation={resolveAnimation(
                     ANIMATIONS[currentAnimation]
@@ -956,9 +966,9 @@ export default function App() {
                   activeKeyframe={activeKeyframe}
                   onKeyframeClick={onKeyframeClick}
                 />
-              </>
-            )}
-          </aside>
+              )}
+            </aside>
+          )}
         </div>
 
         {/* Pose editor — full-width bottom panel, canvas stays full size */}

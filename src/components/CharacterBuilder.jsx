@@ -13,10 +13,11 @@ export function CharacterBuilder({
   onBodyImageChange, onHeadImageChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter,
+  children,
 }) {
   const isEdit = currentAnimation === 'edit';
   return (
-    <aside className="w-60 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-1">
+    <aside className="w-72 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-1">
       <CharacterList
         characters={characters}
         activeCharId={activeCharId}
@@ -26,10 +27,11 @@ export function CharacterBuilder({
         onRename={onRenameCharacter}
         onDuplicate={onDuplicateCharacter}
       />
+      {children}
       {isEdit && (<>
       <Separator className="my-2" />
       <SectionTitle className="text-[13px] mb-2">Parts</SectionTitle>
-      {Object.entries(CHARACTER_PARTS).filter(([k]) => k !== 'weapon').map(([partKey, partDef]) => {
+      {Object.entries(CHARACTER_PARTS).filter(([k]) => k !== 'weapon' && k !== 'lower_torso').map(([partKey, partDef]) => {
         const customColor  = character.customColors?.[partKey] ?? null;
         const presetColor  = CHARACTER_PARTS[partKey].options[character[partKey]]?.color ?? '#888888';
         const currentColor = customColor ?? presetColor;
