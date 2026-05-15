@@ -25,17 +25,36 @@ const BASE_SCALE = 2.5;
 const VECTOR_HIT_PX = 10;
 const JOINT_HIT_PX  = 14;
 
-// Joints that stay rigid in ragdoll mode — preserves natural shoulder placement.
-// Still draggable in Edit Structure for body customization.
+// Joints that stay rigid in pure ragdoll mode — preserves natural shoulder placement.
+// Still draggable in Edit Structure (free positioning) and in Edit Animation
+// (constrained to slight up/down shrug — see SHOULDER_Y_RANGE).
 const RAGDOLL_LOCKED = new Set(['left_arm', 'right_arm']);
 
+// Shoulders (joints 4 and 7) can shrug this many bone-local pixels up or down
+// in Edit Animation mode. Larger ranges look dislocated.
+const SHOULDER_BONES = new Set(['left_arm', 'right_arm']);
+const SHOULDER_Y_RANGE = 6;
+
+// Head (joint 2) can be tilted ±this many radians (~22°) in Edit Animation
+// mode so the user can make the character look up or down without the head
+// pivoting out of position. Drag direction around the head joint maps to
+// rotation; the head's xy position is untouched.
+const HEAD_ROT_RANGE = Math.PI * (22 / 180);
+
 // Rotation handles for bones that have no IK rotation control of their own
-// (the upper arms — joints 4 and 7). The handle sits at the given bone-local
-// offset and dragging it sets the bone's rotation directly.
+// (upper arms — joints 4/7, and the head — joint 2). The handle sits at the
+// given bone-local offset and dragging it sets the bone's rotation directly.
+// Head handle sits above the head skin so the user can grab it like a
+// hair tuft to tilt the face.
 const ROTATE_HANDLES = [
-  { boneId: 'left_arm',  lx: -12, ly: 0 },
-  { boneId: 'right_arm', lx:  12, ly: 0 },
+  { boneId: 'left_arm',  lx: -12, ly:  0,  label: 'L' },
+  { boneId: 'right_arm', lx:  12, ly:  0,  label: 'R' },
+  { boneId: 'head',      lx:  0,  ly: -55, label: 'H' },
 ];
+
+// Head can only tilt ±this many radians (~22°) when its rotation handle is
+// dragged in Edit Animation mode — keeps "look up / down" within reason.
+const HEAD_ROTATION_BONES = new Set(['head']);
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export const CharacterCanvas = forwardRef(function CharacterCanvas({
@@ -333,7 +352,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       ctx.translate(originX, originY);
       ctx.scale(scale, scale);
       const visualScale = 1 / zoom;
-      const r = 3 * visualScale;
+      // Enlarged so the letter label fits inside.
+      const r = 5 * visualScale;
       const targets = [];
       for (const h of ROTATE_HANDLES) {
         const bone = worldTransforms[h.boneId];
@@ -342,13 +362,21 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         const hx = bone.x + c * h.lx - sn * h.ly;
         const hy = bone.y + sn * h.lx + c * h.ly;
         const active = drag?.type === 'rotate' && drag.boneId === h.boneId;
+        const rr = active ? r * 1.4 : r;
         ctx.lineWidth   = 0.8 * visualScale;
         ctx.strokeStyle = 'rgba(0,0,0,0.6)';
         ctx.fillStyle   = active ? '#FFFFFF' : '#FF66FF';
         ctx.beginPath();
-        ctx.arc(hx, hy, active ? r * 1.4 : r, 0, Math.PI * 2);
+        ctx.arc(hx, hy, rr, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+        if (h.label) {
+          ctx.fillStyle = active ? '#000' : '#1a1a1a';
+          ctx.font = `bold ${(rr * 1.25).toFixed(2)}px sans-serif`;
+          ctx.textAlign    = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(h.label, hx, hy + 0.2 * visualScale);
+        }
         targets.push({ boneId: h.boneId, lx: h.lx, ly: h.ly, x: hx, y: hy });
       }
       s.rotateHitTargets = targets;
@@ -492,10 +520,12 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       }
       if (closestRot) return { type: 'rotate', boneId: closestRot.boneId, lx: closestRot.lx, ly: closestRot.ly };
 
-      const ragdollOnly = (s.ragdoll || s.editAnimPose) && !s.editStructure;
+      // Lock shoulders only in pure ragdoll mode. Edit Structure lets them be
+      // dragged freely; Edit Animation lets them shrug (constrained in handler).
+      const shouldersLocked = s.ragdoll && !s.editStructure && !s.editAnimPose;
       let closest = null, minDist = r;
       for (const [boneId, bone] of Object.entries(wt)) {
-        if (ragdollOnly && RAGDOLL_LOCKED.has(boneId)) continue;
+        if (shouldersLocked && RAGDOLL_LOCKED.has(boneId)) continue;
         const d = Math.hypot(bone.x - x, bone.y - y);
         if (d < minDist) { minDist = d; closest = boneId; }
       }
@@ -645,7 +675,15 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       const handleRestAngle = Math.atan2(drag.ly, drag.lx);
       const desiredWorldRot = cursorAngle - handleRestAngle;
       const desiredLocalRot = desiredWorldRot - pw.rotation;
-      const newRotation     = desiredLocalRot - BONES[drag.boneId].baseRotation;
+      let newRotation       = desiredLocalRot - BONES[drag.boneId].baseRotation;
+      // Head tilt is limited to ±~22° so the character can look up/down
+      // without spinning the head.
+      if (HEAD_ROTATION_BONES.has(drag.boneId)) {
+        // Normalize to ±π first so a wrap-around drag doesn't end up at +358°.
+        while (newRotation >  Math.PI) newRotation -= 2 * Math.PI;
+        while (newRotation < -Math.PI) newRotation += 2 * Math.PI;
+        newRotation = Math.max(-HEAD_ROT_RANGE, Math.min(HEAD_ROT_RANGE, newRotation));
+      }
 
       if (s.editStructure) {
         setBoneOffsets(prev => ({
@@ -712,12 +750,72 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         // so the drag feels natural.
         const curAnimOff   = s.animBoneOffsets[s.currentAnimation] ?? {};
         const combined     = mergeOffsets(mergeOffsets(s.lastAnimPose, s.boneOffsets), curAnimOff);
-        const next         = solveIK(combined, drag.boneId, charPos.x, charPos.y);
         const activeKf     = s.activeKeyframe;
         const animOvAll    = s.animKeyframeOverrides ?? {};
         const animOvForCur = animOvAll[s.currentAnimation] ?? {};
         const rawAnim      = ANIMATIONS[s.currentAnimation]
                            ?? s.customAnimations?.find(a => a.id === s.currentAnimation);
+
+        // Shoulders (joints 4/7) get constrained-translate instead of pivot IK.
+        // We only nudge the animBoneOffsets `y` of the shoulder, clamped to
+        // ±SHOULDER_Y_RANGE around whatever the build / animation already has.
+        // X is never touched — the shoulder stays attached at its build position.
+        // Child bones (forearm/hand) ride along automatically since they're
+        // parented to the shoulder.
+        if (SHOULDER_BONES.has(drag.boneId)) {
+          const torsoW   = wt['torso'];
+          const shldW    = wt[drag.boneId];
+          if (!torsoW || !shldW) return;
+          // Cursor delta from current shoulder position, in torso-local frame.
+          const dxW = charPos.x - shldW.x;
+          const dyW = charPos.y - shldW.y;
+          const cosT = Math.cos(torsoW.rotation), sinT = Math.sin(torsoW.rotation);
+          const dyLocal = -sinT * dxW + cosT * dyW;
+
+          // Pick the layer we're writing to and clamp THIS layer's y against the range.
+          const writeKf = !!(activeKf && onKeyframeOverrideChange);
+          const timeKey = writeKf ? keyframeTimeKey(activeKf.time) : null;
+          const srcKf   = writeKf
+            ? (rawAnim?.tracks?.[drag.boneId]?.find(k => keyframeTimeKey(k.time) === timeKey) ?? {})
+            : null;
+          const existingY = writeKf
+            ? (animOvForCur[drag.boneId]?.[timeKey]?.y ?? srcKf.y ?? 0)
+            : ((curAnimOff[drag.boneId] ?? {}).y || 0);
+
+          const newY = Math.max(-SHOULDER_Y_RANGE,
+                          Math.min(SHOULDER_Y_RANGE, existingY + dyLocal));
+          if (Math.abs(newY - existingY) < 1e-6) return;
+
+          if (writeKf) {
+            const existing = animOvForCur[drag.boneId]?.[timeKey] ?? {};
+            const oldRot = existing.rotation !== undefined ? existing.rotation : (srcKf.rotation ?? 0);
+            const oldX   = existing.x        !== undefined ? existing.x        : (srcKf.x ?? 0);
+            onKeyframeOverrideChange(s.currentAnimation, drag.boneId, activeKf.time, {
+              rotation: oldRot,
+              x: oldX,
+              y: newY,
+            });
+          } else {
+            setAnimBoneOffsets(prev => {
+              const cur     = prev[s.currentAnimation] ?? {};
+              const boneOff = cur[drag.boneId] ?? {};
+              return {
+                ...prev,
+                [s.currentAnimation]: {
+                  ...cur,
+                  [drag.boneId]: {
+                    x:        boneOff.x || 0,        // untouched
+                    y:        newY,
+                    rotation: boneOff.rotation || 0, // untouched
+                  },
+                },
+              };
+            });
+          }
+          return;
+        }
+
+        const next = solveIK(combined, drag.boneId, charPos.x, charPos.y);
 
         if (activeKf && onKeyframeOverrideChange) {
           // Active keyframe path: bake EVERY bone touched by the IK into the
