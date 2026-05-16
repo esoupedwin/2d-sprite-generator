@@ -11,10 +11,14 @@ import { renderCharacter, renderPartGroup } from '../systems/Renderer.js';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
 
-const FRAME_W = 160;
-const FRAME_H = 240;
-const FRAME_ORIGIN_X = FRAME_W / 2;
-const FRAME_ORIGIN_Y = FRAME_H - 30;
+// Fixed frame size — uniform across all characters so game-engine sprite
+// importers get consistent dimensions and a stable pivot point.
+// Right side intentionally wider than left to give weapons (rifle, launcher,
+// etc.) room without clipping. Sized for the largest expected character.
+const FRAME_W = 256;
+const FRAME_H = 280;
+const FRAME_ORIGIN_X = 100;          // offset left: 100px back, 156px weapon side
+const FRAME_ORIGIN_Y = FRAME_H - 50; // 230px headroom, 50px foot margin
 const FRAME_SCALE = 1.0;
 const SHEET_COLS = 6;
 
