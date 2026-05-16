@@ -1,7 +1,14 @@
 import { ANIMATIONS, getPoseAtTime, resolveAnimation } from '../systems/AnimationSystem.js';
 import { computeWorldTransforms } from '../systems/SkeletonSystem.js';
+import {
+  computeSkinBounds,
+  HEAD_SKIN, BODY_SKIN,
+  LEFT_ARM_SKIN, RIGHT_ARM_SKIN,
+  LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
+} from '../systems/SkinSystem.js';
 import { DEFAULT_SKINS, getSkin } from '../systems/VectorEditor.js';
-import { renderCharacter } from '../systems/Renderer.js';
+import { renderCharacter, renderPartGroup } from '../systems/Renderer.js';
+import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
 
 const FRAME_W = 160;
@@ -118,6 +125,82 @@ export async function exportSpriteSheet(character, animationName, { frameCount =
   download(canvas.toDataURL('image/png'), `${animationName}_spritesheet.png`);
 }
 
+const POSE_W = 320;
+const POSE_H = 480;
+const POSE_ORIGIN_X = POSE_W / 2;
+const POSE_ORIGIN_Y = POSE_H - 60;
+const POSE_SCALE = 2.0;
+const POSE_PIXEL_RATIO = 3;
+
+/**
+ * Renders the current pose (one frame at `currentTime`) to a transparent-
+ * background canvas, then wraps the PNG in an SVG and triggers download.
+ * The SVG preserves the correct aspect ratio so it scales without distortion.
+ */
+export async function exportPoseSVG(character, animationName, currentTime = 0) {
+  if (!character) return;
+
+  const rawAnim = ANIMATIONS[animationName]
+    ?? character.customAnimations?.find(a => a.id === animationName);
+  if (!rawAnim) return;
+
+  const animKeyframeOverrides = character.animKeyframeOverrides?.[animationName] ?? null;
+  const anim = resolveAnimation(rawAnim, animKeyframeOverrides);
+
+  const animSpecificOff  = (character.animBoneOffsets ?? {})[animationName] ?? {};
+  const persistentOffsets = mergeOffsets(character.boneOffsets ?? {}, animSpecificOff);
+
+  const t = currentTime % anim.duration;
+  const animPose        = getPoseAtTime(anim, t);
+  const fullPose        = mergeOffsets(animPose, persistentOffsets);
+  const worldTransforms  = computeWorldTransforms(fullPose);
+
+  const skinOverrides = character.skinOverrides ?? {};
+  const skins = {};
+  for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
+
+  const parts = character.parts ?? {};
+  const weaponUrl = parts.weaponImages?.[parts.weapon];
+  const [bodyImage, headImage, weaponImage] = await Promise.all([
+    loadImage(parts.bodyImage),
+    loadImage(parts.headImage),
+    loadImage(weaponUrl),
+  ]);
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = POSE_W * POSE_PIXEL_RATIO;
+  canvas.height = POSE_H * POSE_PIXEL_RATIO;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.scale(POSE_PIXEL_RATIO, POSE_PIXEL_RATIO);
+
+  renderCharacter(ctx, parts, worldTransforms, {
+    originX: POSE_ORIGIN_X,
+    originY: POSE_ORIGIN_Y,
+    scale:   POSE_SCALE,
+    skins,
+    animation: animationName,
+    bodyImage,
+    headImage,
+    weaponImage,
+  });
+
+  const pngDataUrl = canvas.toDataURL('image/png');
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"`,
+    ` width="${POSE_W}" height="${POSE_H}" viewBox="0 0 ${POSE_W} ${POSE_H}">`,
+    `<image width="${POSE_W}" height="${POSE_H}" xlink:href="${pngDataUrl}"/>`,
+    `</svg>`,
+  ].join('');
+
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const url  = URL.createObjectURL(blob);
+  const name = animationName.replace(/[^a-z0-9_-]/gi, '_');
+  download(url, `${name}_pose.svg`);
+  URL.revokeObjectURL(url);
+}
+
 /**
  * Exports the resolved animation track data as JSON, including the
  * character's per-keyframe overrides if any.
@@ -140,6 +223,151 @@ export function exportAnimationJSON(character, animationName) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   download(url, `${animationName}_animation.json`);
+  URL.revokeObjectURL(url);
+}
+
+// ─── Parts sheet SVG ──────────────────────────────────────────────────────────
+
+const SHEET_SCALE  = 2.5;   // character-local units → canvas pixels
+const SHEET_PR     = 3;     // pixel ratio for each part's backing canvas
+const SHEET_MARGIN = 22;    // char-local padding around each part's bounds
+const SHEET_GAP    = 28;    // SVG pixels between parts
+const SHEET_LABEL  = 18;    // SVG pixels reserved for the text label
+
+const SHEET_GROUPS = [
+  { id: 'head',      label: 'Head'      },
+  { id: 'body',      label: 'Torso'     },
+  { id: 'right_arm', label: 'Back Arm'  },
+  { id: 'left_arm',  label: 'Front Arm' },
+  { id: 'right_leg', label: 'Back Leg'  },
+  { id: 'left_leg',  label: 'Front Leg' },
+  { id: 'weapon',    label: null        }, // label set at runtime from parts
+];
+
+function groupBounds(groupId, parts, worldTransforms, skins) {
+  const ps = key => parts.partScales?.[key] ?? 1;
+  switch (groupId) {
+    case 'head':
+      return computeSkinBounds(skins.head || HEAD_SKIN, worldTransforms, ps('head'));
+    case 'body':
+      return computeSkinBounds(skins.body || BODY_SKIN, worldTransforms, ps('body'));
+    case 'right_arm':
+      return computeSkinBounds(skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, ps('right_arm'));
+    case 'left_arm':
+      return computeSkinBounds(skins.left_arm || LEFT_ARM_SKIN, worldTransforms, ps('left_arm'));
+    case 'right_leg':
+      return computeSkinBounds(skins.right_leg || RIGHT_LEG_SKIN, worldTransforms, ps('right_leg'));
+    case 'left_leg':
+      return computeSkinBounds(skins.left_leg || LEFT_LEG_SKIN, worldTransforms, ps('left_leg'));
+    case 'weapon': {
+      // No skin template — use a generous fixed box around the hand bone.
+      const bone = worldTransforms.right_hand;
+      if (!bone) return null;
+      const sc = ps('weapon');
+      return { x: bone.x - 55 * sc, y: bone.y - 55 * sc, w: 110 * sc, h: 180 * sc };
+    }
+    default: return null;
+  }
+}
+
+/**
+ * Renders each limb / weapon group at the current pose into its own
+ * transparent mini-canvas, then stitches them into a single SVG with labels.
+ */
+export async function exportPartsSheetSVG(character, animationName, currentTime = 0) {
+  if (!character) return;
+
+  const rawAnim = ANIMATIONS[animationName]
+    ?? character.customAnimations?.find(a => a.id === animationName);
+  if (!rawAnim) return;
+
+  const anim = resolveAnimation(rawAnim, character.animKeyframeOverrides?.[animationName] ?? null);
+  const animSpecificOff  = (character.animBoneOffsets ?? {})[animationName] ?? {};
+  const persistentOffsets = mergeOffsets(character.boneOffsets ?? {}, animSpecificOff);
+
+  const t              = currentTime % anim.duration;
+  const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
+
+  const skinOverrides = character.skinOverrides ?? {};
+  const skins = {};
+  for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
+
+  const parts = character.parts ?? {};
+  const weaponUrl = parts.weaponImages?.[parts.weapon];
+  const [bodyImage, headImage, weaponImage] = await Promise.all([
+    loadImage(parts.bodyImage),
+    loadImage(parts.headImage),
+    loadImage(weaponUrl),
+  ]);
+  const imgOpts = { skins, bodyImage, headImage, weaponImage, animation: animationName };
+
+  // Build label for weapon from part definition
+  const groups = SHEET_GROUPS
+    .filter(g => g.id !== 'weapon' || parts.weapon !== 'none')
+    .map(g => ({
+      ...g,
+      label: g.label ?? CHARACTER_PARTS.weapon?.options[parts.weapon]?.label ?? 'Weapon',
+    }));
+
+  // Render each group into its own canvas
+  const rendered = [];
+  for (const group of groups) {
+    const bounds = groupBounds(group.id, parts, worldTransforms, skins);
+    if (!bounds || bounds.w <= 0 || bounds.h <= 0) continue;
+
+    const M  = SHEET_MARGIN;
+    const cw = Math.ceil((bounds.w + 2 * M) * SHEET_SCALE);
+    const ch = Math.ceil((bounds.h + 2 * M) * SHEET_SCALE);
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = cw * SHEET_PR;
+    canvas.height = ch * SHEET_PR;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.scale(SHEET_PR, SHEET_PR);
+
+    // Shift so that bounds.x-M maps to canvas x=0
+    const tx = -(bounds.x - M) * SHEET_SCALE;
+    const ty = -(bounds.y - M) * SHEET_SCALE;
+    ctx.save();
+    ctx.translate(tx, ty);
+    ctx.scale(SHEET_SCALE, SHEET_SCALE);
+    renderPartGroup(ctx, group.id, parts, worldTransforms, imgOpts);
+    ctx.restore();
+
+    rendered.push({ label: group.label, w: cw, h: ch, png: canvas.toDataURL('image/png') });
+  }
+
+  if (rendered.length === 0) return;
+
+  // Assemble SVG — parts bottom-aligned, labels centred below
+  const pad  = SHEET_GAP;
+  const maxH = Math.max(...rendered.map(r => r.h));
+  const totalW = rendered.reduce((s, r) => s + r.w, 0) + (rendered.length + 1) * pad;
+  const totalH = maxH + SHEET_LABEL + 2 * pad;
+
+  const lines = [
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"`,
+    ` width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">`,
+  ];
+
+  let cx = pad;
+  for (const r of rendered) {
+    const iy = pad + (maxH - r.h); // bottom-align
+    const mx = cx + r.w / 2;
+    lines.push(
+      `<image x="${cx}" y="${iy}" width="${r.w}" height="${r.h}" xlink:href="${r.png}"/>`,
+      `<text x="${mx}" y="${iy + r.h + SHEET_LABEL - 3}" text-anchor="middle"`,
+      ` font-family="system-ui,ui-sans-serif,sans-serif" font-size="13" fill="#999">${r.label}</text>`,
+    );
+    cx += r.w + pad;
+  }
+  lines.push(`</svg>`);
+
+  const blob = new Blob([lines.join('\n')], { type: 'image/svg+xml' });
+  const url  = URL.createObjectURL(blob);
+  download(url, `${animationName.replace(/[^a-z0-9_-]/gi, '_')}_parts.svg`);
   URL.revokeObjectURL(url);
 }
 

@@ -20,7 +20,7 @@ import {
   DEFAULT_WEAPON_SCALES,
 } from './data/defaultBuild.js';
 import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation } from './systems/AnimationSystem.js';
-import { exportSpriteSheet, exportAnimationJSON } from './utils/export.js';
+import { exportSpriteSheet, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
 import { resolveWeaponOffset } from './utils/weaponSettings.js';
@@ -719,6 +719,8 @@ export default function App() {
           <ExportMenu
             onSpriteSheet={() => exportSpriteSheet(activeChar, currentAnimation)}
             onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
+            onPoseSVG={() => exportPoseSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
+            onPartsSheet={() => exportPartsSheetSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
             open={headerTab === 'export'}
             onClose={() => setHeaderTab('')}
           />
@@ -770,7 +772,7 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setEditAnimPose(p => {
-                    setIsPlaying(p ? true : false);
+                    setIsPlaying(p); // entering edit → pause; exiting → resume
                     return !p;
                   });
                 }}

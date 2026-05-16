@@ -6,6 +6,23 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
 import { Bone, ChevronDown, Hand, ImageUp, Pencil, RotateCcw, Users, X } from 'lucide-react';
 
+function BigIconButton({ icon: Icon, label, active, activeClass, inactiveClass, onClick, title }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={cn(
+        'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
+        active ? activeClass : inactiveClass,
+      )}
+    >
+      <Icon className="h-7 w-7" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 export function CharacterBuilder({
   character, characters, activeCharId, currentAnimation,
   onPartChange, onColorChange, onScaleChange,
@@ -51,46 +68,31 @@ export function CharacterBuilder({
         onDuplicate={onDuplicateCharacter}
       />
       <div className="mt-1 flex gap-2 self-start">
-        <button
-          type="button"
+        <BigIconButton
+          icon={Pencil}
+          label={isEdit ? 'Close' : 'Edit Structure'}
+          active={isEdit}
           onClick={onEditBodyToggle}
-          className={cn(
-            'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
-            isEdit
-              ? 'bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]'
-              : 'bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400',
-          )}
-        >
-          <Pencil className="h-7 w-7" />
-          <span>{isEdit ? 'Close' : 'Edit Structure'}</span>
-        </button>
-        <button
-          type="button"
+          activeClass="bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]"
+          inactiveClass="bg-secondary border-border text-muted-foreground hover:border-yellow-400/60 hover:text-yellow-400"
+        />
+        <BigIconButton
+          icon={Bone}
+          label="Show Bones"
+          active={showBones}
           onClick={onToggleBones}
-          className={cn(
-            'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
-            showBones
-              ? 'bg-primary/20 border-primary text-primary'
-              : 'bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground',
-          )}
-        >
-          <Bone className="h-7 w-7" />
-          <span>Show Bones</span>
-        </button>
-        <button
-          type="button"
+          activeClass="bg-primary/20 border-primary text-primary"
+          inactiveClass="bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground"
+        />
+        <BigIconButton
+          icon={Hand}
+          label="Ragdoll"
+          active={ragdoll}
           onClick={onToggleRagdoll}
           title="Drag the character around — ephemeral, doesn't change config, structure or animation"
-          className={cn(
-            'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
-            ragdoll
-              ? 'bg-rose-400/20 border-rose-400 text-rose-300'
-              : 'bg-secondary border-border text-muted-foreground hover:border-rose-400/60 hover:text-rose-300',
-          )}
-        >
-          <Hand className="h-7 w-7" />
-          <span>Ragdoll</span>
-        </button>
+          activeClass="bg-rose-400/20 border-rose-400 text-rose-300"
+          inactiveClass="bg-secondary border-border text-muted-foreground hover:border-rose-400/60 hover:text-rose-300"
+        />
       </div>
       {children}
       {isEdit && (<>

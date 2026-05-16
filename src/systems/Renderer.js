@@ -130,6 +130,47 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   ctx.restore();
 }
 
+/**
+ * Renders a single named part group onto the current ctx.
+ * The ctx must already have translate + scale set up so that character-local
+ * coordinates map to the desired canvas region (same convention as renderCharacter).
+ */
+export function renderPartGroup(ctx, groupId, character, worldTransforms, options = {}) {
+  const { skins = {}, bodyImage = null, headImage = null, weaponImage = null, animation = '' } = options;
+  switch (groupId) {
+    case 'head':
+      if (headImage) {
+        drawSkinPinned(ctx, skins.head || HEAD_SKIN, worldTransforms, headImage, getScale(character, 'head'));
+      } else {
+        drawSkin(ctx, skins.head || HEAD_SKIN, worldTransforms, getColor(character, 'head'), getScale(character, 'head'));
+        drawExtras(ctx, 'head', character, worldTransforms);
+      }
+      break;
+    case 'body':
+      if (bodyImage) {
+        drawSkinImage(ctx, skins.body || BODY_SKIN, worldTransforms, bodyImage, getScale(character, 'body'));
+      } else {
+        drawSkin(ctx, skins.body || BODY_SKIN, worldTransforms, getColor(character, 'body'), getScale(character, 'body'));
+      }
+      break;
+    case 'right_arm':
+      drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
+      break;
+    case 'left_arm':
+      drawSkin(ctx, skins.left_arm || LEFT_ARM_SKIN, worldTransforms, getColor(character, 'left_arm'), getScale(character, 'left_arm'));
+      break;
+    case 'right_leg':
+      drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, worldTransforms, getColor(character, 'right_leg'), getScale(character, 'right_leg'));
+      break;
+    case 'left_leg':
+      drawSkin(ctx, skins.left_leg || LEFT_LEG_SKIN, worldTransforms, getColor(character, 'left_leg'), getScale(character, 'left_leg'));
+      break;
+    case 'weapon':
+      drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
+      break;
+  }
+}
+
 // Stable numeric IDs for each bone joint, shown in the debug overlay.
 const BONE_IDS = {
   torso:         1,

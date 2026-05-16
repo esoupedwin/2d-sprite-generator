@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/utils.js';
 
-export function ExportMenu({ onSpriteSheet, onAnimationJSON, open: openProp, onClose }) {
+export function ExportMenu({ onSpriteSheet, onAnimationJSON, onPoseSVG, onPartsSheet, open: openProp, onClose }) {
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const wrapRef = useRef(null);
@@ -48,6 +48,26 @@ export function ExportMenu({ onSpriteSheet, onAnimationJSON, open: openProp, onC
           role="menu"
           className="absolute right-0 top-full mt-1 min-w-[180px] rounded-md border border-border bg-card shadow-lg z-50 overflow-hidden"
         >
+          <button
+            role="menuitem"
+            type="button"
+            onClick={pick(onPoseSVG)}
+            className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
+          >
+            <div>Current Pose (SVG)</div>
+            <div className="text-[10px] opacity-60 mt-0.5">Transparent background · current frame</div>
+          </button>
+          <div className="border-t border-border" />
+          <button
+            role="menuitem"
+            type="button"
+            onClick={pick(onPartsSheet)}
+            className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
+          >
+            <div>Parts Sheet (SVG)</div>
+            <div className="text-[10px] opacity-60 mt-0.5">Exploded limbs · current frame</div>
+          </button>
+          <div className="border-t border-border" />
           <button
             role="menuitem"
             type="button"

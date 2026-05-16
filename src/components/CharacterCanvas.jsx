@@ -52,9 +52,6 @@ const ROTATE_HANDLES = [
   { boneId: 'head',      lx:  0,  ly: -55, label: 'H' },
 ];
 
-// Head can only tilt ±this many radians (~22°) when its rotation handle is
-// dragged in Edit Animation mode — keeps "look up / down" within reason.
-const HEAD_ROTATION_BONES = new Set(['head']);
 
 // ── Component ──────────────────────────────────────────────────────────────────
 export const CharacterCanvas = forwardRef(function CharacterCanvas({
@@ -106,6 +103,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     seekTime(t) {
       stateRef.current.time = t;
       stateRef.current.lastTimestamp = null;
+    },
+    getCurrentTime() {
+      return stateRef.current.time;
     },
   }));
 
@@ -218,11 +218,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(el);
-    window.addEventListener('resize', apply);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', apply);
-    };
+    return () => ro.disconnect();
   }, []);
 
   // ── Wheel zoom ────────────────────────────────────────────────────────────────
@@ -678,7 +674,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       let newRotation       = desiredLocalRot - BONES[drag.boneId].baseRotation;
       // Head tilt is limited to ±~22° so the character can look up/down
       // without spinning the head.
-      if (HEAD_ROTATION_BONES.has(drag.boneId)) {
+      if (drag.boneId === 'head') {
         // Normalize to ±π first so a wrap-around drag doesn't end up at +358°.
         while (newRotation >  Math.PI) newRotation -= 2 * Math.PI;
         while (newRotation < -Math.PI) newRotation += 2 * Math.PI;
