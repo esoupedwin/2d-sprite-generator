@@ -1967,10 +1967,60 @@ export const ANIMATIONS = {
     },
   },
 
+  // Walk while firing — compress-across-cycle design. The draw begins at t=0,
+  // reaches full pull at t=0.18, releases at t≈0.27, and recovers by t=0.72.
+  // Legs/lower_torso are copied verbatim from bow_walk for an identical stride.
+  // Pop-free swap with bow_walk is guaranteed at the cycle boundary (t=0/t=0.72).
+  bow_walk_fire: {
+    name: 'Walk Fire',
+    duration: 0.72,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.00, y:  0, rotation: 0.10 },   // walk kf
+        { time: 0.18, y: -6, rotation: 0.14 },   // bracing into draw — walk y, extra rotation
+        { time: 0.27, y: -3, rotation: 0.04 },   // RELEASE — torso uncoils
+        { time: 0.36, y:  0, rotation: 0.10 },   // walk kf, recovered
+        { time: 0.54, y: -6, rotation: 0.12 },   // walk kf
+        { time: 0.72, y:  0, rotation: 0.10 },   // walk kf
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.14 },          // walk kf
+        { time: 0.18, rotation:  0.02 },          // bracing (walk is 0.00)
+        { time: 0.27, rotation: -0.04 },          // hip pushes back on release
+        { time: 0.36, rotation: -0.14 },          // walk kf
+        { time: 0.54, rotation:  0.00 },          // walk kf
+        { time: 0.72, rotation:  0.14 },          // walk kf
+      ],
+      head: [
+        { time: 0.00, rotation: -0.04 },          // walk kf
+        { time: 0.22, rotation: -0.08 },          // focused aim
+        { time: 0.38, rotation: -0.02 },          // follows arrow
+        { time: 0.58, rotation:  0.01 },          // walk kf
+        { time: 0.72, rotation: -0.04 },          // walk kf
+      ],
+      // Bow arm — holds aim; absorbs on release
+      right_arm:    [{ time: 0.00, rotation: -0.05 }, { time: 0.18, rotation: -0.05 }, { time: 0.27, rotation: -0.16 }, { time: 0.36, rotation: -0.07 }, { time: 0.54, rotation: -0.07 }, { time: 0.72, rotation: -0.05 }],
+      right_forearm:[{ time: 0.00, rotation: -0.12 }, { time: 0.18, rotation: -0.10 }, { time: 0.27, rotation: -0.24 }, { time: 0.36, rotation: -0.12 }, { time: 0.54, rotation: -0.10 }, { time: 0.72, rotation: -0.12 }],
+      right_hand:   [{ time: 0.00, rotation:  0.00 }, { time: 0.72, rotation:  0.00 }],
+      // Draw arm — pulls back through t=0.18, snaps out at release, recovers
+      left_arm:     [{ time: 0.00, rotation: -2.55 }, { time: 0.18, rotation: -2.38 }, { time: 0.27, rotation: -2.72 }, { time: 0.36, rotation: -2.62 }, { time: 0.54, rotation: -2.57 }, { time: 0.72, rotation: -2.55 }],
+      left_forearm: [{ time: 0.00, rotation:  1.25 }, { time: 0.18, rotation:  1.48 }, { time: 0.27, rotation:  0.62 }, { time: 0.36, rotation:  0.85 }, { time: 0.54, rotation:  1.18 }, { time: 0.72, rotation:  1.25 }],
+      left_hand:    [{ time: 0.00, rotation:  0.00 }, { time: 0.27, rotation:  0.18 }, { time: 0.54, rotation:  0.00 }, { time: 0.72, rotation:  0.00 }],
+      // Legs verbatim from bow_walk
+      left_leg:   [{ time: 0.00, rotation: -0.42 }, { time: 0.36, rotation:  0.42 }, { time: 0.72, rotation: -0.42 }],
+      left_shin:  [{ time: 0.00, rotation: 0.10 }, { time: 0.18, rotation: 0.08 }, { time: 0.36, rotation: 0.18 }, { time: 0.54, rotation: 0.65 }, { time: 0.72, rotation: 0.10 }],
+      left_foot:  [{ time: 0.00, rotation: -0.22 }, { time: 0.18, rotation: 0.00 }, { time: 0.36, rotation: 0.30 }, { time: 0.54, rotation: -0.10 }, { time: 0.72, rotation: -0.22 }],
+      right_leg:  [{ time: 0.00, rotation:  0.42 }, { time: 0.36, rotation: -0.42 }, { time: 0.72, rotation:  0.42 }],
+      right_shin: [{ time: 0.00, rotation: 0.18 }, { time: 0.18, rotation: 0.65 }, { time: 0.36, rotation: 0.10 }, { time: 0.54, rotation: 0.08 }, { time: 0.72, rotation: 0.18 }],
+      right_foot: [{ time: 0.00, rotation: 0.30 }, { time: 0.18, rotation: -0.10 }, { time: 0.36, rotation: -0.22 }, { time: 0.54, rotation: 0.00 }, { time: 0.72, rotation: 0.30 }],
+    },
+  },
+
   bow_fire: {
     name: 'Fire',
-    duration: 1.30,
-    loop: false,
+    duration: 2.30,
+    loop: true,
     tracks: {
       torso: [
         { time: 0.00, y: 0, rotation:  0.06 },   // aim
@@ -2011,8 +2061,8 @@ export const ANIMATIONS = {
 
   bow_jump: {
     name: 'Jump',
-    duration: 0.90,
-    loop: false,
+    duration: 1.90,
+    loop: true,
     tracks: {
       torso: [
         { time: 0.0,  y:   0, rotation:  0.08 },
@@ -2220,8 +2270,8 @@ export const ANIMATIONS = {
 
   grenade_launcher_fire: {
     name: 'Fire',
-    duration: 1.0,                     // crisp single thump — faster cycle than rocket
-    loop: false,
+    duration: 2.0,                     // crisp single thump — faster cycle than rocket
+    loop: true,
     tracks: {
       // Sharp thump: body rocks back ~6, snaps forward, settles. No long shove.
       torso: [
@@ -2286,8 +2336,8 @@ export const ANIMATIONS = {
 
   grenade_launcher_jump: {
     name: 'Jump',
-    duration: 1.9,
-    loop: false,
+    duration: 2.9,
+    loop: true,
     tracks: {
       torso: [
         { time: 0.0,  y:   0, rotation: 0.13 },
@@ -2333,7 +2383,7 @@ export const WEAPON_ANIMATION_SETS = {
   sword:   ['sword_idle', 'sword_walk', 'sword_walk_slash', 'sword_slash', 'sword_jump'],
   rifle:   ['rifle_idle', 'rifle_walk', 'rifle_walk_shoot', 'rifle_run', 'rifle_jump', 'rifle', 'full_auto'],
   rocket:  ['rocket_idle', 'rocket_walk', 'rocket_walk_fire', 'rocket_fire', 'rocket_jump'],
-  bow:     ['bow_idle', 'bow_walk', 'bow_fire', 'bow_jump'],
+  bow:     ['bow_idle', 'bow_walk', 'bow_walk_fire', 'bow_fire', 'bow_jump'],
   grenade_launcher: ['grenade_launcher_idle', 'grenade_launcher_walk', 'grenade_launcher_walk_fire', 'grenade_launcher_fire', 'grenade_launcher_jump'],
 };
 

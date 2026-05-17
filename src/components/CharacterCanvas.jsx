@@ -65,7 +65,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   activeKeyframe,
   onKeyframeOverrideChange,
   currentAnimation, isPlaying,
-  showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
+  showBones, showFrame, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
   editAnimPose,
   customAnimations,
   onAnimationComplete,
@@ -125,7 +125,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   const stateRef = useRef({
     time: 0, lastTimestamp: null,
     currentAnimation, isPlaying, character,
-    showBones, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
+    showBones, showFrame, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
     editAnimPose: false,
     boneOffsets: {}, skinOverrides: {}, ragdollOverlay: {}, animBoneOffsets: {},
     lastWorldTransforms: null, lastAnimPose: {},
@@ -146,6 +146,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.isPlaying        = isPlaying;
   stateRef.current.character        = character;
   stateRef.current.showBones        = showBones;
+  stateRef.current.showFrame        = showFrame;
   stateRef.current.showVectors      = showVectors;
   stateRef.current.ragdoll          = ragdoll;
   stateRef.current.editStructure    = editStructure;
@@ -293,8 +294,10 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
+    // Ground line at the bottom of the sprite frame (world y = FRAME_H - FRAME_ORIGIN_Y = 30).
+    const groundY = originY + 30 * scale;
     ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(60, originY + 2); ctx.lineTo(CANVAS_W - 60, originY + 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(60, groundY); ctx.lineTo(CANVAS_W - 60, groundY); ctx.stroke();
 
     const animPose         = anim ? getPoseAtTime(anim, s.time) : {};
     s.lastAnimPose         = animPose;
@@ -442,6 +445,45 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       }
     } else {
       s.weaponHitTargets = [];
+    }
+
+    if (s.showFrame) {
+      // Sprite frame boundary — matches export.js constants (via spriteExportConfig.js).
+      // FRAME_ORIGIN_X/Y is where world (0,0) sits inside the frame.
+      const FW = 256, FH = 300, FOX = 100, FOY = 270;
+      const fl = originX - FOX * scale;
+      const ft = originY - FOY * scale;
+      const fw = FW * scale;
+      const fh = FH * scale;
+
+      ctx.save();
+      // Dim area outside the frame
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0,  0,  CANVAS_W, ft);           // above
+      ctx.fillRect(0,  ft + fh, CANVAS_W, CANVAS_H);// below
+      ctx.fillRect(0,  ft, fl, fh);                  // left
+      ctx.fillRect(fl + fw, ft, CANVAS_W, fh);       // right
+
+      // Frame border
+      ctx.strokeStyle = 'rgba(255,195,50,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 5]);
+      ctx.strokeRect(fl, ft, fw, fh);
+      ctx.setLineDash([]);
+
+      // Pivot crosshair at world origin
+      ctx.strokeStyle = 'rgba(255,195,50,0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(originX - 7, originY); ctx.lineTo(originX + 7, originY);
+      ctx.moveTo(originX, originY - 7); ctx.lineTo(originX, originY + 7);
+      ctx.stroke();
+
+      // Dimension label
+      ctx.fillStyle = 'rgba(255,195,50,0.85)';
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(`${FW}×${FH}px`, fl + 5, ft + 15);
+      ctx.restore();
     }
 
     if (anim) {

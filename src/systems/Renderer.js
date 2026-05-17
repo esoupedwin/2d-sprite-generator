@@ -6,6 +6,8 @@ import {
   HEAD_SKIN, BODY_SKIN,
 } from './SkinSystem.js';
 
+const MELEE_WEAPONS = new Set(['sword']);
+
 function getColor(character, partKey) {
   if (character.customColors?.[partKey]) return character.customColors[partKey];
   const option = CHARACTER_PARTS[partKey]?.options[character[partKey]];
@@ -87,13 +89,20 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   ctx.translate(originX, originY);
   ctx.scale(scale, scale);
 
-  // Universal z-order, back → front (same for every weapon).
-  // Order is named from the CHARACTER'S perspective:
-  //   legs → left arm → body → head → weapon → right arm → head prop
-  // In this codebase the bone names are mirrored relative to the character
-  // (the bone called `right_arm` is on the character's LEFT side, and vice
-  // versa — see SkeletonSystem.js). So the *code* draws bones in this order:
-  //   left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop
+  // Z-order, back → front.
+  // Ranged weapons (rifle, rocket, bow, etc.) sit in front of the head —
+  // the muzzle passes the character's cheek when shouldered.
+  // Melee weapons (sword) sit behind the head — a sword held at the hip
+  // should not occlude the face.
+  //
+  // From the CHARACTER'S perspective:
+  //   ranged: legs → left arm → body → head → weapon → right arm → head prop
+  //   melee:  legs → left arm → body → weapon → head → right arm → head prop
+  //
+  // Bone-name caveat: `right_arm` = character's LEFT (support) arm;
+  //                   `left_arm`  = character's RIGHT (dominant) arm.
+  const isMelee = MELEE_WEAPONS.has(character.weapon);
+
   drawSkin(ctx, skins.left_leg  || LEFT_LEG_SKIN,  worldTransforms, getColor(character, 'left_leg'),  getScale(character, 'left_leg'));
   drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, worldTransforms, getColor(character, 'right_leg'), getScale(character, 'right_leg'));
   // Character's LEFT arm (= bone right_arm) — sits behind the body.
@@ -107,6 +116,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
     }
   }
+  if (isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
   {
     const headTmpl  = skins.head || HEAD_SKIN;
     const headScale = getScale(character, 'head');
@@ -117,7 +127,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       drawExtras(ctx, 'head', character, worldTransforms);
     }
   }
-  drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
+  if (!isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
   // Character's RIGHT arm (= bone left_arm) — the trigger / dominant hand,
   // always in front of the weapon so the grip is visible.
   drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'),  getScale(character, 'left_arm'));

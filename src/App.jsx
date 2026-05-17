@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
+import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
 
 const CHARS_STORAGE = '2dsprite:characters';
 
@@ -48,10 +48,6 @@ const ANIMATION_COMPLETE_TARGETS = {
   rifle_jump:                 'rifle_idle',
   rocket_jump:                'rocket_idle',
   rocket_fire:                'rocket_idle',
-  bow_fire:                   'bow_idle',
-  bow_jump:                   'bow_idle',
-  grenade_launcher_fire:      'grenade_launcher_idle',
-  grenade_launcher_jump:      'grenade_launcher_idle',
 };
 
 function genId() {
@@ -137,6 +133,7 @@ export default function App() {
   const [isPlaying,    setIsPlaying]    = useState(true);
   const [editAnimPose, setEditAnimPose] = useState(false);
   const [showBones,    setShowBones]    = useState(false);
+  const [showFrame,    setShowFrame]    = useState(false);
   const [headerTab,    setHeaderTab]    = useState('');
   const [showVectors,  setShowVectors]  = useState(false);
   const [ragdoll,       setRagdoll]       = useState(false);
@@ -919,6 +916,20 @@ export default function App() {
                   Edit Animation — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
                 </div>
               )}
+              <button
+                type="button"
+                onClick={() => setShowFrame(p => !p)}
+                className={cn(
+                  'absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                  showFrame
+                    ? 'bg-amber-400/20 border-amber-400 text-amber-400'
+                    : 'bg-card/80 border-border text-muted-foreground hover:border-amber-400/60 hover:text-amber-400',
+                )}
+                title="Toggle sprite frame boundary"
+              >
+                <Frame className="h-3 w-3" />
+                Frame
+              </button>
               <CharacterCanvas
                 ref={charCanvasRef}
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
@@ -934,6 +945,7 @@ export default function App() {
                 currentAnimation={currentAnimation}
                 isPlaying={isPlaying}
                 showBones={showBones}
+                showFrame={showFrame}
                 showVectors={poseEditorOpen ? false : showVectors}
                 ragdoll={poseEditorOpen ? true : ragdoll}
                 editStructure={poseEditorOpen ? false : editStructure}

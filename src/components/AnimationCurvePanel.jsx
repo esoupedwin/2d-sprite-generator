@@ -53,7 +53,7 @@ export function AnimationCurvePanel({
         written to a per-character keyframe override.
       </div>
 
-      <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto pr-1 border-t border-border pt-2 font-mono">
+      <div className="flex flex-col gap-2 border-t border-border pt-2 font-mono">
         {boneIds.length === 0 && (
           <div className="text-xs text-muted-foreground">No tracks.</div>
         )}
@@ -63,15 +63,15 @@ export function AnimationCurvePanel({
           const boneOv = overrides?.[boneId] ?? null;
           return (
             <div key={boneId} className="flex flex-col gap-0.5">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center justify-between text-sm">
                 <span className="text-foreground">{boneId}</span>
                 {off && (
-                  <span className="text-teal-400 text-[11px]" title="Edit Pose offset">
+                  <span className="text-teal-400 text-xs" title="Edit Pose offset">
                     Δ {off}
                   </span>
                 )}
               </div>
-              <div className="flex flex-col gap-px pl-2 text-[11px]">
+              <div className="flex flex-col gap-px pl-2 text-xs">
                 {kfs.map((kf, i) => {
                   const key = kf.time.toFixed(2);
                   const isActive  = activeKeyframe && activeKeyframe.boneId === boneId && activeKeyframe.time.toFixed(2) === key;
