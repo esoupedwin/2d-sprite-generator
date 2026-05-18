@@ -10,9 +10,10 @@ import { DEFAULT_SKINS, getSkin } from '../systems/VectorEditor.js';
 import { renderCharacter, renderPartGroup } from '../systems/Renderer.js';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
-import { FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y, FRAME_SCALE } from './spriteExportConfig.js';
-
-const SHEET_COLS = 6;
+import {
+  FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y, FRAME_SCALE,
+  SHEET_COLS, DEFAULT_FRAMES,
+} from './spriteExportConfig.js';
 
 // Oversample factor — the backing canvas is this many times larger than the
 // nominal sprite size. Drawing math stays in nominal units (we apply
@@ -33,8 +34,9 @@ function loadImage(url) {
 }
 
 /**
- * Renders every frame of an animation to a sprite sheet PNG and triggers
- * download. The output matches what's drawn live on the canvas:
+ * Renders every frame of an animation into a sprite sheet canvas. Used by
+ * both the PNG export and the in-app preview dialog. Returns null if the
+ * animation can't be resolved. Output matches what's drawn live on the canvas:
  *  - animation keyframe curves (with per-keyframe overrides applied)
  *  - character rest-pose `boneOffsets`
  *  - per-animation `animBoneOffsets` for the current animation
@@ -42,16 +44,27 @@ function loadImage(url) {
  *  - body/head/weapon PNG reskins
  *  - custom animations on the character
  *  - per-weapon offset/scale and per-(weapon×animation) anchor offsets
+ *
+ * `drawGrid` defaults to false — pass `true` for the in-app preview to draw
+ * faint frame borders. The PNG export keeps it false so the saved file has
+ * no decoration baked into the sprite cells.
+ *
+ * Returns: {
+ *   canvas, name,
+ *   frameW, frameH, frameCount, cols, rows,
+ *   pixelRatio,        // oversample factor applied to the canvas buffer
+ *   duration, loop,    // for playback timing in the preview
+ * }
  */
-export async function exportSpriteSheet(character, animationName, { frameCount = 12 } = {}) {
-  if (!character) return;
+export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false } = {}) {
+  if (!character) return null;
 
   // Resolve the animation — built-in first, custom fallback. Then layer the
   // character's per-keyframe overrides on top via resolveAnimation, so the
   // exported frames match the live preview.
   const rawAnim = ANIMATIONS[animationName]
     ?? character.customAnimations?.find(a => a.id === animationName);
-  if (!rawAnim) return;
+  if (!rawAnim) return null;
   const animKeyframeOverrides = character.animKeyframeOverrides?.[animationName] ?? null;
   const anim = resolveAnimation(rawAnim, animKeyframeOverrides);
 
@@ -87,8 +100,10 @@ export async function exportSpriteSheet(character, animationName, { frameCount =
   ctx.scale(EXPORT_PIXEL_RATIO, EXPORT_PIXEL_RATIO);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = 1;
+  if (drawGrid) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+  }
 
   for (let i = 0; i < frameCount; i++) {
     const t = (i / frameCount) * anim.duration;
@@ -101,7 +116,7 @@ export async function exportSpriteSheet(character, animationName, { frameCount =
     const ox = col * FRAME_W;
     const oy = row * FRAME_H;
 
-    ctx.strokeRect(ox, oy, FRAME_W, FRAME_H);
+    if (drawGrid) ctx.strokeRect(ox, oy, FRAME_W, FRAME_H);
 
     ctx.save();
     ctx.translate(ox, oy);
@@ -118,7 +133,37 @@ export async function exportSpriteSheet(character, animationName, { frameCount =
     ctx.restore();
   }
 
-  download(canvas.toDataURL('image/png'), `${animationName}_spritesheet.png`);
+  return {
+    canvas,
+    name: anim.name ?? animationName,
+    frameW: FRAME_W,
+    frameH: FRAME_H,
+    frameCount,
+    cols,
+    rows,
+    pixelRatio: EXPORT_PIXEL_RATIO,
+    duration: anim.duration,
+    loop: anim.loop !== false,
+  };
+}
+
+/**
+ * Builds the sprite sheet (no in-frame grid lines) and triggers a PNG
+ * download via an object URL (avoids holding a multi-MB base64 string).
+ */
+export async function exportSpriteSheet(character, animationName, opts) {
+  const sheet = await buildSpriteSheet(character, animationName, opts);
+  if (!sheet) return;
+  const safeName = String(animationName).replace(/[^a-z0-9_-]/gi, '_');
+  await new Promise((resolve) => {
+    sheet.canvas.toBlob((blob) => {
+      if (!blob) { resolve(); return; }
+      const url = URL.createObjectURL(blob);
+      download(url, `${safeName}_spritesheet.png`);
+      // Give the download click time to start, then release the blob URL.
+      setTimeout(() => { URL.revokeObjectURL(url); resolve(); }, 1000);
+    }, 'image/png');
+  });
 }
 
 const POSE_W = 320;

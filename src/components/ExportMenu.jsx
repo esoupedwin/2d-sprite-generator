@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/utils.js';
 
-export function ExportMenu({ onSpriteSheet, onAnimationJSON, onPoseSVG, onPartsSheet, open: openProp, onClose }) {
+export function ExportMenu({ onSpriteSheet, onSpriteSheetPreview, onAnimationJSON, onPoseSVG, onPartsSheet, open: openProp, onClose }) {
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const wrapRef = useRef(null);
@@ -75,6 +75,15 @@ export function ExportMenu({ onSpriteSheet, onAnimationJSON, onPoseSVG, onPartsS
             className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
           >
             Sprite Sheet (PNG)
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={pick(onSpriteSheetPreview)}
+            className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
+          >
+            <div>Preview Sprite Sheet…</div>
+            <div className="text-[10px] opacity-60 mt-0.5">Play the exported frames in-app</div>
           </button>
           <button
             role="menuitem"

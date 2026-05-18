@@ -202,6 +202,26 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     if (!ragdoll) setRagdollOverlay(o => Object.keys(o).length === 0 ? o : {});
   }, [ragdoll]);
 
+  // Re-center the sprite frame in the canvas whenever Edit Animation toggles.
+  // Frame dimensions are baked here (same constants as the in-frame overlay).
+  // We preserve the current zoom — just nudge pan so the frame's centre lands
+  // on the canvas centre.
+  const recenterInitialMountRef = useRef(true);
+  useEffect(() => {
+    if (recenterInitialMountRef.current) {
+      recenterInitialMountRef.current = false;
+      return;
+    }
+    const FOX = 100, FW = 256, FOY = 270, FH = 300;
+    const zoom  = viewRef.current.zoom;
+    const scale = BASE_SCALE * zoom;
+    viewRef.current = {
+      zoom,
+      panX: (FOX - FW / 2) * scale,
+      panY: (FOY - FH / 2) * scale - ORIGIN_Y_OFFSET,
+    };
+  }, [editAnimPose]);
+
   // (Body/head/weapon image decoding lives in useImageDataUrl above.)
 
   // ── Responsive sizing — backing buffer follows container size ─────────────────
@@ -277,14 +297,69 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < CANVAS_W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CANVAS_H); ctx.stroke(); }
-    for (let y = 0; y < CANVAS_H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CANVAS_W, y); ctx.stroke(); }
-
     const { zoom, panX, panY } = viewRef.current;
     const originX = s.originX + panX, originY = s.originY + panY;
     const scale   = BASE_SCALE * zoom;
+
+    // ── Character-local grid + coordinate labels ──────────────────────────────
+    // Grid lines sit at multiples of GRID_STEP in CHARACTER-LOCAL units so
+    // they stay anchored to the character as the user pans/zooms. The edge
+    // labels (top: x, left: y) read out the underlying coordinates so the
+    // user can position skin points / bones precisely.
+    const GRID_STEP = 40;
+    const xMin = (0          - originX) / scale;
+    const xMax = (CANVAS_W   - originX) / scale;
+    const yMin = (0          - originY) / scale;
+    const yMax = (CANVAS_H   - originY) / scale;
+    const xGridStart = Math.ceil (xMin / GRID_STEP) * GRID_STEP;
+    const xGridEnd   = Math.floor(xMax / GRID_STEP) * GRID_STEP;
+    const yGridStart = Math.ceil (yMin / GRID_STEP) * GRID_STEP;
+    const yGridEnd   = Math.floor(yMax / GRID_STEP) * GRID_STEP;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let x = xGridStart; x <= xGridEnd; x += GRID_STEP) {
+      const cx = originX + x * scale;
+      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, CANVAS_H); ctx.stroke();
+    }
+    for (let y = yGridStart; y <= yGridEnd; y += GRID_STEP) {
+      const cy = originY + y * scale;
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(CANVAS_W, cy); ctx.stroke();
+    }
+
+    // Axis emphasis at x=0 / y=0
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    if (originX >= 0 && originX <= CANVAS_W) {
+      ctx.beginPath(); ctx.moveTo(originX, 0); ctx.lineTo(originX, CANVAS_H); ctx.stroke();
+    }
+    if (originY >= 0 && originY <= CANVAS_H) {
+      ctx.beginPath(); ctx.moveTo(0, originY); ctx.lineTo(CANVAS_W, originY); ctx.stroke();
+    }
+
+    // Edge labels — sparser at low zoom so the numbers don't pile up.
+    // Aim for at least ~50 canvas px between labels.
+    const cellPx     = GRID_STEP * scale;
+    const labelMul   = Math.max(1, Math.ceil(50 / cellPx));
+    const labelStep  = GRID_STEP * labelMul;
+    const xLabelStart = Math.ceil (xMin / labelStep) * labelStep;
+    const xLabelEnd   = Math.floor(xMax / labelStep) * labelStep;
+    const yLabelStart = Math.ceil (yMin / labelStep) * labelStep;
+    const yLabelEnd   = Math.floor(yMax / labelStep) * labelStep;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.32)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let x = xLabelStart; x <= xLabelEnd; x += labelStep) {
+      const cx = originX + x * scale;
+      if (cx > 22 && cx < CANVAS_W - 4) ctx.fillText(`${x}`, cx, 2);
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    for (let y = yLabelStart; y <= yLabelEnd; y += labelStep) {
+      const cy = originY + y * scale;
+      if (cy > 10 && cy < CANVAS_H - 4) ctx.fillText(`${y}`, 4, cy);
+    }
 
     ctx.save();
     ctx.translate(originX, originY + 6 * zoom);

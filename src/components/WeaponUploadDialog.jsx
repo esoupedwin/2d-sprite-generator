@@ -52,24 +52,27 @@ export function WeaponUploadDialog({ open, onClose, onPick, currentImage, weapon
           <p className="text-xs text-muted-foreground leading-relaxed">
             Draw your {
               weaponType === 'rifle' ? 'rifle'
+              : weaponType === 'sniper' ? 'sniper rifle'
               : weaponType === 'rocket' ? 'rocket launcher'
               : weaponType === 'grenade_launcher' ? 'grenade launcher'
               : 'weapon'
             } with the
-            <strong className="text-foreground"> {weaponType === 'rifle' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'muzzle' : 'tip'} pointing UP</strong> and the
+            <strong className="text-foreground"> {weaponType === 'rifle' || weaponType === 'sniper' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'muzzle' : 'tip'} pointing UP</strong> and the
             <strong className="text-foreground"> {
               weaponType === 'rifle' ? 'stock'
+              : weaponType === 'sniper' ? 'stock'
               : weaponType === 'rocket' ? 'back-blast vent'
               : weaponType === 'grenade_launcher' ? 'folding stock'
               : 'handle'
             } at the bottom-center</strong> of the image.
             The renderer rotates and anchors the PNG so the {
               weaponType === 'rifle' ? 'stock'
+              : weaponType === 'sniper' ? 'pistol grip'
               : weaponType === 'rocket' ? 'grip'
               : weaponType === 'grenade_launcher' ? 'pistol grip'
               : 'handle'
             } lands in the hand
-            and the {weaponType === 'rifle' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'barrel' : 'tip'} extends along the weapon's forward direction.
+            and the {weaponType === 'rifle' || weaponType === 'sniper' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'barrel' : 'tip'} extends along the weapon's forward direction.
           </p>
 
           <div className="flex items-center justify-center gap-6 py-2 bg-secondary/40 rounded-md border border-border">
@@ -126,19 +129,20 @@ function OrientationDiagram({ weaponType }) {
       <text x="4" y="148" fontSize="9" fill="rgb(45, 212, 191)" textAnchor="middle" fontFamily="monospace">UP</text>
 
       {weaponType === 'rifle'  && <RifleSilhouette />}
+      {weaponType === 'sniper' && <SniperSilhouette />}
       {weaponType === 'rocket' && <RocketSilhouette />}
       {weaponType === 'grenade_launcher' && <GrenadeLauncherSilhouette />}
-      {(weaponType === 'sword' || !['rifle', 'rocket', 'grenade_launcher'].includes(weaponType)) && <SwordSilhouette />}
+      {(weaponType === 'sword' || !['rifle', 'sniper', 'rocket', 'grenade_launcher'].includes(weaponType)) && <SwordSilhouette />}
 
       {/* Tip / handle callouts (shared across weapon types) */}
       <line x1="68" y1="26" x2="84" y2="26" stroke="rgb(113, 113, 122)" strokeWidth="1" />
       <text x="86" y="29" fontSize="9" fill="rgb(212, 212, 216)" fontFamily="monospace">
-        {weaponType === 'rifle' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'muzzle' : 'tip'}
+        {weaponType === 'rifle' || weaponType === 'sniper' || weaponType === 'rocket' || weaponType === 'grenade_launcher' ? 'muzzle' : 'tip'}
       </text>
 
       <line x1="68" y1="120" x2="84" y2="120" stroke="rgb(113, 113, 122)" strokeWidth="1" />
       <text x="86" y="123" fontSize="9" fill="rgb(212, 212, 216)" fontFamily="monospace">
-        {weaponType === 'rifle' ? 'stock' : weaponType === 'rocket' ? 'back-blast' : weaponType === 'grenade_launcher' ? 'stock' : 'handle'}
+        {weaponType === 'rifle' ? 'stock' : weaponType === 'sniper' ? 'stock' : weaponType === 'rocket' ? 'back-blast' : weaponType === 'grenade_launcher' ? 'stock' : 'handle'}
       </text>
     </svg>
   );
@@ -179,6 +183,40 @@ function RifleSilhouette() {
       {/* Stock */}
       <polygon points="48,98 64,98 66,124 50,124" fill="rgb(110, 75, 40)" />
       <rect x="50" y="124" width="14" height="4" fill="rgb(60, 40, 20)" />
+    </g>
+  );
+}
+
+function SniperSilhouette() {
+  // Vertical sniper rifle: long barrel up top, scope on the side, stock + grip below.
+  return (
+    <g>
+      {/* Muzzle brake */}
+      <rect x="50" y="20" width="10" height="4" fill="rgb(30, 30, 30)" />
+      <rect x="51" y="24" width="8" height="3" fill="rgb(40, 40, 40)" />
+      {/* Long barrel */}
+      <rect x="52" y="27" width="6" height="44" fill="rgb(30, 30, 30)" />
+      {/* Scope */}
+      <rect x="60" y="36" width="3" height="3" fill="rgb(60, 60, 60)" />
+      <rect x="61" y="39" width="6" height="14" fill="rgb(20, 20, 20)" />
+      <rect x="60" y="53" width="3" height="3" fill="rgb(60, 60, 60)" />
+      <circle cx="64" cy="55" r="2" fill="rgb(80, 160, 220)" />
+      {/* Bolt handle */}
+      <rect x="58" y="72" width="6" height="2" fill="rgb(120, 120, 120)" />
+      <circle cx="66" cy="73" r="2" fill="rgb(160, 160, 160)" />
+      {/* Receiver */}
+      <rect x="48" y="71" width="14" height="14" fill="rgb(48, 48, 48)" />
+      {/* Magazine */}
+      <rect x="52" y="85" width="6" height="9" fill="rgb(40, 40, 40)" />
+      {/* Trigger guard */}
+      <circle cx="55" cy="92" r="3" fill="none" stroke="rgb(80, 80, 80)" strokeWidth="1.2" />
+      {/* Pistol grip */}
+      <rect x="52" y="95" width="6" height="11" fill="rgb(92, 60, 18)" />
+      {/* Stock with cheek riser */}
+      <polygon points="48,85 62,85 64,108 50,108" fill="rgb(123, 94, 42)" />
+      <rect x="56" y="78" width="4" height="14" fill="rgb(92, 67, 23)" />
+      {/* Butt plate */}
+      <rect x="46" y="108" width="18" height="6" fill="rgb(60, 40, 20)" />
     </g>
   );
 }

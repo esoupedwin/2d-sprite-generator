@@ -5,6 +5,8 @@ import { AnimationControls } from './components/AnimationControls.jsx';
 import { EditBodyControls } from './components/EditBodyControls.jsx';
 import { PoseEditor } from './components/PoseEditor.jsx';
 import { ExportMenu } from './components/ExportMenu.jsx';
+import { SpritePreviewDialog } from './components/SpritePreviewDialog.jsx';
+import { SpriteExportDialog } from './components/SpriteExportDialog.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
@@ -48,6 +50,8 @@ const ANIMATION_COMPLETE_TARGETS = {
   rifle_jump:                 'rifle_idle',
   rocket_jump:                'rocket_idle',
   rocket_fire:                'rocket_idle',
+  sniper_fire:                'sniper_idle',
+  sniper_jump:                'sniper_idle',
 };
 
 function genId() {
@@ -148,6 +152,13 @@ export default function App() {
   // Weapon PNG upload dialog
   const [weaponUploadOpen, setWeaponUploadOpen] = useState(false);
 
+  // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
+  // Captured at open time so changes to active selection don't disturb the open dialog.
+  const [spritePreview, setSpritePreview] = useState(null);
+
+  // Sprite sheet export dialog. Same capture-at-open shape.
+  const [spriteExport,  setSpriteExport]  = useState(null);
+
   // ── Animation keyframe editing ───────────────────────────────────────────────
   // When set, the canvas pauses + seeks to this time. Drags on the named bone
   // write back to character.animKeyframeOverrides[currentAnimation][bone][time].
@@ -194,6 +205,10 @@ export default function App() {
   }, []);
 
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
+
+  const handlePreviewSpriteSheet = useCallback(() => {
+    setSpritePreview({ character: activeChar, animationName: currentAnimation });
+  }, [activeChar, currentAnimation]);
 
   // Close header menu on outside click or Escape
   useEffect(() => {
@@ -714,7 +729,8 @@ export default function App() {
             onClose={() => setHeaderTab('')}
           />
           <ExportMenu
-            onSpriteSheet={() => exportSpriteSheet(activeChar, currentAnimation)}
+            onSpriteSheet={() => setSpriteExport({ character: activeChar, animationName: currentAnimation })}
+            onSpriteSheetPreview={handlePreviewSpriteSheet}
             onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
             onPoseSVG={() => exportPoseSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
             onPartsSheet={() => exportPartsSheetSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
@@ -907,12 +923,12 @@ export default function App() {
               : 'border-transparent',
           )}>
               {currentAnimation === 'edit' && (
-                <div className="absolute top-3 left-3 z-20 bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
+                <div className="absolute top-3 left-12 z-20 bg-yellow-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md select-none pointer-events-none shadow-[0_0_14px_rgba(250,204,21,0.7)]">
                   Edit Body Mode
                 </div>
               )}
               {editAnimPose && currentAnimation !== 'edit' && (
-                <div className="absolute top-3 left-3 z-20 bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
+                <div className="absolute top-3 left-12 z-20 bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
                   Edit Animation — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
                 </div>
               )}
@@ -1031,6 +1047,20 @@ export default function App() {
         currentImage={activeChar.parts.weaponImages?.[activeChar.parts.weapon]}
         onPick={updateWeaponImage}
         onClose={() => setWeaponUploadOpen(false)}
+      />
+
+      <SpritePreviewDialog
+        open={!!spritePreview}
+        character={spritePreview?.character}
+        animationName={spritePreview?.animationName}
+        onClose={() => setSpritePreview(null)}
+      />
+
+      <SpriteExportDialog
+        open={!!spriteExport}
+        animationName={spriteExport?.animationName}
+        onExport={(frameCount) => exportSpriteSheet(spriteExport.character, spriteExport.animationName, { frameCount })}
+        onClose={() => setSpriteExport(null)}
       />
     </div>
   );
