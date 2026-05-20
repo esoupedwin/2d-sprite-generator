@@ -115,7 +115,11 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   // Decoded HTMLImageElements for character body/head/weapon PNGs.
   // The hook handles cancellation so rapid weapon swaps don't race.
   const bodyImageRef   = useImageDataUrl(character?.bodyImage);
-  const headImageRef   = useImageDataUrl(character?.headImage);
+  // Per-animation head PNG override falls back to the base headImage. The
+  // hook re-decodes whenever the URL string changes (e.g. when the user
+  // switches between Idle / Carry / etc.).
+  const resolvedHeadUrl = character?.animHeadImages?.[currentAnimation] ?? character?.headImage;
+  const headImageRef   = useImageDataUrl(resolvedHeadUrl);
   const weaponImageRef = useImageDataUrl(character?.weaponImages?.[character?.weapon]);
 
   // Undo history — session-only, capped at 60 entries

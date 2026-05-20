@@ -50,8 +50,6 @@ const ANIMATION_COMPLETE_TARGETS = {
   rifle_jump:                 'rifle_idle',
   rocket_jump:                'rocket_idle',
   rocket_fire:                'rocket_idle',
-  sniper_fire:                'sniper_idle',
-  sniper_jump:                'sniper_idle',
 };
 
 function genId() {
@@ -467,6 +465,22 @@ export default function App() {
       return { ...c, animBoneOffsets: rest };
     }));
     charCanvasRef.current?.resetAnimBoneOffsets(animKey);
+  }, [activeCharId]);
+
+  // Per-animation head PNG override. dataUrl=null clears the override and
+  // falls back to the character's base headImage. Stored alongside the other
+  // image fields under `parts` so it's threaded into CharacterCanvas with
+  // the rest of the character prop.
+  const updateAnimHeadImage = useCallback((animKey, dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts    = { ...c.parts };
+      const animImgs = { ...(parts.animHeadImages ?? {}) };
+      if (dataUrl) animImgs[animKey] = dataUrl;
+      else         delete animImgs[animKey];
+      parts.animHeadImages = animImgs;
+      return { ...c, parts };
+    }));
   }, [activeCharId]);
 
   // Per-keyframe override: replace a specific (anim, bone, time) keyframe's
@@ -1000,6 +1014,71 @@ export default function App() {
                   onSkinChange={setSelectedSkin}
                 />
               )}
+              {editAnimPose && !poseEditorOpen && (() => {
+                const animHeadUrl = activeChar.parts?.animHeadImages?.[currentAnimation];
+                const baseHeadUrl = activeChar.parts?.headImage;
+                const hasOverride = !!animHeadUrl;
+                const onPickHeadPng = (file) => {
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => updateAnimHeadImage(currentAnimation, reader.result);
+                  reader.readAsDataURL(file);
+                };
+                return (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between">
+                      <SectionTitle>Head skin for this animation</SectionTitle>
+                      {hasOverride && (
+                        <button
+                          type="button"
+                          onClick={() => updateAnimHeadImage(currentAnimation, null)}
+                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+                          title="Clear override (fall back to the base head skin)"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {animHeadUrl ? (
+                        <img
+                          src={animHeadUrl}
+                          alt="Animation head skin"
+                          className="w-12 h-12 object-contain rounded border border-teal-400/40 bg-background/40"
+                        />
+                      ) : baseHeadUrl ? (
+                        <img
+                          src={baseHeadUrl}
+                          alt="Base head skin"
+                          className="w-12 h-12 object-contain rounded border border-border/60 bg-background/40 opacity-60"
+                          title="Currently using the base head skin"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded border border-dashed border-border bg-background/40 flex items-center justify-center text-[9px] text-muted-foreground">
+                          none
+                        </div>
+                      )}
+                      <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors cursor-pointer">
+                        <ImageUp className="h-3.5 w-3.5" />
+                        {hasOverride ? 'Replace PNG' : 'Upload PNG'}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          className="hidden"
+                          onChange={(e) => { onPickHeadPng(e.target.files?.[0]); e.target.value = ''; }}
+                        />
+                      </label>
+                    </div>
+                    {!hasOverride && (
+                      <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
+                        Upload a PNG that bakes the expression in (e.g. surprised face for Carry).
+                        Applies only to <span className="font-mono">{currentAnimation}</span>.
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
               {editAnimPose && !poseEditorOpen && (
                 <AnimationCurvePanel
                   animation={resolveAnimation(
