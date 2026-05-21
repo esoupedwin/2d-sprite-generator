@@ -541,135 +541,6 @@ export const ANIMATIONS = {
     },
   },
 
-  throw: {
-    name: 'Throw',
-    // Symmetric two-handed overhead throw: both arms raise straight up,
-    // bend back behind the head, then extend forward together. Action
-    // resolves by ~0.85 s; the rest is a held idle so the loop pauses
-    // before the next throw.
-    duration: 1.40,
-    loop: true,
-    tracks: {
-      // Torso leans back during wind-up, snaps forward at release.
-      torso: [
-        { time: 0.00, y:  0, rotation:  0.00 },
-        { time: 0.25, y:  0, rotation:  0.18 },
-        { time: 0.55, y: -2, rotation: -0.16 },
-        { time: 0.75, y:  0, rotation: -0.05 },
-        { time: 1.40, y:  0, rotation:  0.00 },
-      ],
-      lower_torso: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 0.25, rotation:  0.10 },
-        { time: 0.55, rotation: -0.08 },
-        { time: 0.75, rotation:  0.00 },
-        { time: 1.40, rotation:  0.00 },
-      ],
-      head: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 0.25, rotation: -0.08 },
-        { time: 0.55, rotation: -0.04 },
-        { time: 1.40, rotation:  0.00 },
-      ],
-
-      // BOTH ARMS swing up and over together. Each arm rotates toward
-      // straight up (left_arm via -π, right_arm via +π — same world
-      // direction since π ≡ -π mod 2π) and the angles are mirrored so the
-      // hands track each other in space throughout the motion.
-      left_arm: [
-        { time: 0.00, rotation: -1.023 },   // rest (no-weapon idle baseline)
-        { time: 0.25, rotation: -3.14  },   // wind-up — arm straight up
-        { time: 0.40, rotation: -3.14  },   // hold (forearms cocked behind head)
-        { time: 0.55, rotation: -2.00  },   // release — upper-forward
-        { time: 0.70, rotation: -1.40  },   // follow-through — forward
-        { time: 1.00, rotation: -1.023 },   // settle to rest
-        { time: 1.40, rotation: -1.023 },
-      ],
-      right_arm: [
-        { time: 0.00, rotation:  1.022 },   // rest
-        { time: 0.25, rotation:  3.14  },   // wind-up — arm straight up (mirrors left)
-        { time: 0.40, rotation:  3.14  },
-        { time: 0.55, rotation:  2.00  },   // release
-        { time: 0.70, rotation:  1.40  },   // follow-through
-        { time: 1.00, rotation:  1.022 },
-        { time: 1.40, rotation:  1.022 },
-      ],
-
-      // Both forearms bend BACK behind the head during the wind-up
-      // (rotated in opposite local senses because their parent upper arms
-      // are at mirrored world rotations), straighten at release, relax
-      // through follow-through.
-      left_forearm: [
-        { time: 0.00, rotation: -0.318 },
-        { time: 0.25, rotation:  1.50  },   // bent — hand goes behind head
-        { time: 0.40, rotation:  1.50  },
-        { time: 0.55, rotation:  0.00  },   // straight at release
-        { time: 0.70, rotation: -0.40  },   // relax through follow-through
-        { time: 1.00, rotation: -0.318 },
-        { time: 1.40, rotation: -0.318 },
-      ],
-      right_forearm: [
-        { time: 0.00, rotation: -0.558 },
-        { time: 0.25, rotation: -1.50  },   // bent (mirror sign of left_forearm)
-        { time: 0.40, rotation: -1.50  },
-        { time: 0.55, rotation:  0.00  },   // straight at release
-        { time: 0.70, rotation:  0.40  },
-        { time: 1.00, rotation: -0.558 },
-        { time: 1.40, rotation: -0.558 },
-      ],
-
-      // Wrist snap on release (mirrored).
-      left_hand: [
-        { time: 0.00, rotation:  0.06 },
-        { time: 0.55, rotation:  0.30 },
-        { time: 0.70, rotation:  0.10 },
-        { time: 1.40, rotation:  0.06 },
-      ],
-      right_hand: [
-        { time: 0.00, rotation: -0.06 },
-        { time: 0.55, rotation: -0.30 },
-        { time: 0.70, rotation: -0.10 },
-        { time: 1.40, rotation: -0.06 },
-      ],
-
-      // Stance — back leg loads, front leg plants forward on release.
-      left_leg: [
-        { time: 0.00, rotation: -0.04 },
-        { time: 0.25, rotation: -0.18 },
-        { time: 0.55, rotation:  0.10 },
-        { time: 0.75, rotation:  0.00 },
-        { time: 1.40, rotation: -0.04 },
-      ],
-      right_leg: [
-        { time: 0.00, rotation:  0.04 },
-        { time: 0.25, rotation:  0.18 },
-        { time: 0.55, rotation: -0.10 },
-        { time: 0.75, rotation:  0.00 },
-        { time: 1.40, rotation:  0.04 },
-      ],
-      left_shin: [
-        { time: 0.00, rotation:  0.10 },
-        { time: 0.25, rotation:  0.32 },
-        { time: 0.55, rotation:  0.08 },
-        { time: 1.40, rotation:  0.10 },
-      ],
-      right_shin: [
-        { time: 0.00, rotation:  0.10 },
-        { time: 0.25, rotation:  0.06 },
-        { time: 0.55, rotation:  0.22 },
-        { time: 1.40, rotation:  0.10 },
-      ],
-      left_foot: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 1.40, rotation:  0.00 },
-      ],
-      right_foot: [
-        { time: 0.00, rotation:  0.00 },
-        { time: 1.40, rotation:  0.00 },
-      ],
-    },
-  },
-
   punch: {
     name: 'Punch',
     // Strike resolves at ~0.60s; the rest is a held idle so the animation
@@ -2508,7 +2379,7 @@ export const ANIMATIONS = {
 };
 
 export const WEAPON_ANIMATION_SETS = {
-  none:    ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'throw', 'carry_walk'],
+  none:    ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'carry_walk'],
   sword:   ['sword_idle', 'sword_walk', 'sword_walk_slash', 'sword_slash', 'sword_jump'],
   rifle:   ['rifle_idle', 'rifle_walk', 'rifle_walk_shoot', 'rifle_run', 'rifle_jump', 'rifle', 'full_auto'],
   rocket:  ['rocket_idle', 'rocket_walk', 'rocket_walk_fire', 'rocket_fire', 'rocket_jump'],

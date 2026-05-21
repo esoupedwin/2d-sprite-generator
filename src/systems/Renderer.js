@@ -83,7 +83,15 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     showBones = false, highlightBone = null,
     skins = {}, bodyImage = null, headImage = null, weaponImage = null,
     animation = '',
+    // partsFilter: 'all' (default) | 'no-legs' | 'legs-only'.
+    // Used by the split-export mode to render the body and legs onto
+    // separate sprite sheets at identical frame coords so they overlay
+    // exactly in a downstream tool.
+    partsFilter = 'all',
   } = options;
+
+  const includeLegs   = partsFilter !== 'no-legs';
+  const includeOthers = partsFilter !== 'legs-only';
 
   ctx.save();
   ctx.translate(originX, originY);
@@ -101,37 +109,51 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   //
   // Bone-name caveat: `right_arm` = character's LEFT (support) arm;
   //                   `left_arm`  = character's RIGHT (dominant) arm.
-  const isMelee = MELEE_WEAPONS.has(character.weapon);
+  const isMelee   = MELEE_WEAPONS.has(character.weapon);
+  // With no weapon equipped, the character's left arm sits BEHIND the legs
+  // (unarmed silhouettes look more relaxed with the support arm tucked
+  // behind). Once any weapon is drawn it goes back to the standard order.
+  const armBehindLegs = character.weapon === 'none' || !character.weapon;
 
-  drawSkin(ctx, skins.left_leg  || LEFT_LEG_SKIN,  worldTransforms, getColor(character, 'left_leg'),  getScale(character, 'left_leg'));
-  drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, worldTransforms, getColor(character, 'right_leg'), getScale(character, 'right_leg'));
-  // Character's LEFT arm (= bone right_arm) — sits behind the body.
-  drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
-  {
-    const bodyTmpl  = skins.body || BODY_SKIN;
-    const bodyScale = getScale(character, 'body');
-    if (bodyImage) {
-      drawSkinImage(ctx, bodyTmpl, worldTransforms, bodyImage, bodyScale);
-    } else {
-      drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
-    }
+  if (includeOthers && armBehindLegs) {
+    // Character's LEFT arm (= bone right_arm) — drawn first, behind legs.
+    drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
   }
-  if (isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
-  {
-    const headTmpl  = skins.head || HEAD_SKIN;
-    const headScale = getScale(character, 'head');
-    if (headImage) {
-      drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale);
-    } else {
-      drawSkin(ctx, headTmpl, worldTransforms, getColor(character, 'head'), headScale);
-      drawExtras(ctx, 'head', character, worldTransforms);
-    }
+  if (includeLegs) {
+    drawSkin(ctx, skins.left_leg  || LEFT_LEG_SKIN,  worldTransforms, getColor(character, 'left_leg'),  getScale(character, 'left_leg'));
+    drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, worldTransforms, getColor(character, 'right_leg'), getScale(character, 'right_leg'));
   }
-  if (!isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
-  // Character's RIGHT arm (= bone left_arm) — the trigger / dominant hand,
-  // always in front of the weapon so the grip is visible.
-  drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'),  getScale(character, 'left_arm'));
-  drawPart(ctx, 'head_prop', character, worldTransforms);
+  if (includeOthers) {
+    if (!armBehindLegs) {
+      // Character's LEFT arm (= bone right_arm) — sits behind the body.
+      drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
+    }
+    {
+      const bodyTmpl  = skins.body || BODY_SKIN;
+      const bodyScale = getScale(character, 'body');
+      if (bodyImage) {
+        drawSkinImage(ctx, bodyTmpl, worldTransforms, bodyImage, bodyScale);
+      } else {
+        drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
+      }
+    }
+    if (isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
+    {
+      const headTmpl  = skins.head || HEAD_SKIN;
+      const headScale = getScale(character, 'head');
+      if (headImage) {
+        drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale);
+      } else {
+        drawSkin(ctx, headTmpl, worldTransforms, getColor(character, 'head'), headScale);
+        drawExtras(ctx, 'head', character, worldTransforms);
+      }
+    }
+    if (!isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
+    // Character's RIGHT arm (= bone left_arm) — the trigger / dominant hand,
+    // always in front of the weapon so the grip is visible.
+    drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'),  getScale(character, 'left_arm'));
+    drawPart(ctx, 'head_prop', character, worldTransforms);
+  }
 
   if (showBones) {
     renderBones(ctx, worldTransforms, highlightBone);

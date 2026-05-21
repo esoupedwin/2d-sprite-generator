@@ -11,11 +11,13 @@ import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS } from '../utils/spr
  */
 export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
   const [frameCount, setFrameCount] = useState(DEFAULT_FRAMES);
+  const [split, setSplit] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       setFrameCount(DEFAULT_FRAMES);
+      setSplit(false);
       setBusy(false);
     }
   }, [open]);
@@ -37,7 +39,7 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
     if (busy) return;
     setBusy(true);
     try {
-      await onExport(fc);
+      await onExport(fc, { split });
     } finally {
       setBusy(false);
       onClose();
@@ -103,13 +105,43 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
             Sheet will be <span className="font-mono text-foreground">{cols} × {rows}</span> frames
             ({fc} total). Maximum 6 frames per row; the rest wrap to the next row.
           </div>
+
+          {/* Split-export toggle */}
+          <div className="flex items-start gap-2 pt-2 border-t border-border/60">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={split}
+              onClick={() => setSplit(s => !s)}
+              className={`mt-0.5 relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full border transition-colors ${
+                split ? 'bg-emerald-500/30 border-emerald-500' : 'bg-secondary border-border'
+              }`}
+            >
+              <span className={`inline-block h-[12px] w-[12px] rounded-full bg-foreground transition-transform ${
+                split ? 'translate-x-[16px]' : 'translate-x-[2px]'
+              }`} />
+            </button>
+            <div className="flex flex-col gap-0.5">
+              <label
+                onClick={() => setSplit(s => !s)}
+                className="text-xs text-foreground cursor-pointer select-none"
+              >
+                Split body and legs into separate PNGs
+              </label>
+              <span className="text-[10px] text-muted-foreground/80 leading-snug">
+                {split
+                  ? 'Two files: <name>_body.png (no legs) and <name>_legs.png. Same frame coords — overlay to reconstruct.'
+                  : 'One file with the full character.'}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-secondary/30 rounded-b-lg">
           <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={handleExport} disabled={busy}>
             <Download className="h-3.5 w-3.5 mr-1.5" />
-            {busy ? 'Rendering…' : 'Export PNG'}
+            {busy ? 'Rendering…' : split ? 'Export 2 PNGs' : 'Export PNG'}
           </Button>
         </div>
       </div>

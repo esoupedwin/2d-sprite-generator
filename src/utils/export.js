@@ -56,7 +56,7 @@ function loadImage(url) {
  *   duration, loop,    // for playback timing in the preview
  * }
  */
-export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false } = {}) {
+export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = 'all' } = {}) {
   if (!character) return null;
 
   // Resolve the animation — built-in first, custom fallback. Then layer the
@@ -129,6 +129,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       bodyImage,
       headImage,
       weaponImage,
+      partsFilter,
     });
     ctx.restore();
   }
@@ -149,17 +150,34 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
 
 /**
  * Builds the sprite sheet (no in-frame grid lines) and triggers a PNG
- * download via an object URL (avoids holding a multi-MB base64 string).
+ * download via an object URL. When `opts.split === true`, exports TWO
+ * PNGs at identical frame coords: one without legs and one with just the
+ * legs — overlay them in your downstream tool to reconstruct the character.
  */
-export async function exportSpriteSheet(character, animationName, opts) {
-  const sheet = await buildSpriteSheet(character, animationName, opts);
-  if (!sheet) return;
+export async function exportSpriteSheet(character, animationName, opts = {}) {
+  const { split = false, ...sheetOpts } = opts;
   const safeName = String(animationName).replace(/[^a-z0-9_-]/gi, '_');
-  await new Promise((resolve) => {
-    sheet.canvas.toBlob((blob) => {
+
+  if (!split) {
+    const sheet = await buildSpriteSheet(character, animationName, sheetOpts);
+    if (!sheet) return;
+    await downloadCanvas(sheet.canvas, `${safeName}_spritesheet.png`);
+    return;
+  }
+
+  // Split mode: render the two halves at the same frame coords.
+  const body = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: 'no-legs' });
+  const legs = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: 'legs-only' });
+  if (body) await downloadCanvas(body.canvas, `${safeName}_spritesheet_body.png`);
+  if (legs) await downloadCanvas(legs.canvas, `${safeName}_spritesheet_legs.png`);
+}
+
+function downloadCanvas(canvas, filename) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
       if (!blob) { resolve(); return; }
       const url = URL.createObjectURL(blob);
-      download(url, `${safeName}_spritesheet.png`);
+      download(url, filename);
       // Give the download click time to start, then release the blob URL.
       setTimeout(() => { URL.revokeObjectURL(url); resolve(); }, 1000);
     }, 'image/png');
