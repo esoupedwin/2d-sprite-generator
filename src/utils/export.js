@@ -21,6 +21,12 @@ import {
 // come out crisp instead of stair-stepped.
 const EXPORT_PIXEL_RATIO = 2;
 
+// Per-animation head PNG override falls back to the character-wide head
+// PNG. Mirrors the live-canvas resolution in CharacterCanvas.jsx.
+function resolveHeadUrl(parts, animationName) {
+  return parts?.animHeadImages?.[animationName] ?? parts?.headImage ?? null;
+}
+
 // Decode a data-URL/asset URL into an HTMLImageElement. Returns null on
 // missing/failed loads so the rest of the export keeps going.
 function loadImage(url) {
@@ -84,7 +90,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   const weaponUrl = parts.weaponImages?.[parts.weapon];
   const [bodyImage, headImage, weaponImage] = await Promise.all([
     loadImage(parts.bodyImage),
-    loadImage(parts.headImage),
+    loadImage(resolveHeadUrl(parts, animationName)),
     loadImage(weaponUrl),
   ]);
 
@@ -222,7 +228,7 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
   const weaponUrl = parts.weaponImages?.[parts.weapon];
   const [bodyImage, headImage, weaponImage] = await Promise.all([
     loadImage(parts.bodyImage),
-    loadImage(parts.headImage),
+    loadImage(resolveHeadUrl(parts, animationName)),
     loadImage(weaponUrl),
   ]);
 
@@ -355,7 +361,7 @@ export async function exportPartsSheetSVG(character, animationName, currentTime 
   const weaponUrl = parts.weaponImages?.[parts.weapon];
   const [bodyImage, headImage, weaponImage] = await Promise.all([
     loadImage(parts.bodyImage),
-    loadImage(parts.headImage),
+    loadImage(resolveHeadUrl(parts, animationName)),
     loadImage(weaponUrl),
   ]);
   const imgOpts = { skins, bodyImage, headImage, weaponImage, animation: animationName };
