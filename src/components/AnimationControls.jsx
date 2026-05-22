@@ -45,9 +45,9 @@ export function AnimationControls({
           </AnimChip>
         ))}
 
-        {customAnimations?.length > 0 && <Separator className="my-0.5 w-full" />}
+        {customAnimations?.filter(a => !ANIMATIONS[a.id]).length > 0 && <Separator className="my-0.5 w-full" />}
 
-        {customAnimations?.map(anim => (
+        {customAnimations?.filter(a => !ANIMATIONS[a.id]).map(anim => (
           <div key={anim.id} className="flex items-center gap-1">
             <AnimChip active={currentAnimation === anim.id} disabled={poseEditorOpen} onClick={() => onAnimationChange(anim.id)}>
               {anim.name}{!anim.loop && <OnceTag />}

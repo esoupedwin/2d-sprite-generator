@@ -279,8 +279,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const delta = Math.min((timestamp - s.lastTimestamp) / 1000, 0.05);
     s.lastTimestamp = timestamp;
 
-    const rawAnim = ANIMATIONS[s.currentAnimation]
-      ?? s.customAnimations?.find(a => a.id === s.currentAnimation);
+    const rawAnim = s.customAnimations?.find(a => a.id === s.currentAnimation)
+      ?? ANIMATIONS[s.currentAnimation];
     // Apply per-keyframe overrides for this animation.
     const anim = rawAnim
       ? resolveAnimation(rawAnim, (s.animKeyframeOverrides ?? {})[s.currentAnimation] ?? null)
@@ -872,8 +872,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         const activeKf     = s.activeKeyframe;
         const animOvAll    = s.animKeyframeOverrides ?? {};
         const animOvForCur = animOvAll[s.currentAnimation] ?? {};
-        const rawAnim      = ANIMATIONS[s.currentAnimation]
-                           ?? s.customAnimations?.find(a => a.id === s.currentAnimation);
+        const rawAnim      = s.customAnimations?.find(a => a.id === s.currentAnimation)
+                           ?? ANIMATIONS[s.currentAnimation];
 
         // Shoulders (joints 4/7) get constrained-translate instead of pivot IK.
         // We only nudge the animBoneOffsets `y` of the shoulder, clamped to

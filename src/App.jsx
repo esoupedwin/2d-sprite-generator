@@ -539,6 +539,58 @@ export default function App() {
     }));
   }, [activeCharId]);
 
+  const commitAnimKeyframeOverrides = useCallback(() => {
+    const overrides   = (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {};
+    const animOffsets = (activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {};
+    if (Object.keys(overrides).length === 0 && Object.keys(animOffsets).length === 0) return;
+
+    const baseAnim = activeChar.customAnimations?.find(a => a.id === currentAnimation)
+      ?? ANIMATIONS[currentAnimation];
+    if (!baseAnim) return;
+
+    let resolved = resolveAnimation(baseAnim, overrides);
+
+    // Bake time-invariant pose offsets into every keyframe
+    if (Object.keys(animOffsets).length > 0) {
+      const tracks = { ...resolved.tracks };
+      for (const [boneId, offset] of Object.entries(animOffsets)) {
+        const ox = offset.x ?? 0, oy = offset.y ?? 0, or_ = offset.rotation ?? 0;
+        if (!ox && !oy && !or_) continue;
+        if (tracks[boneId]) {
+          tracks[boneId] = tracks[boneId].map(kf => ({
+            ...kf,
+            ...(ox  !== 0 ? { x:        (kf.x        ?? 0) + ox  } : {}),
+            ...(oy  !== 0 ? { y:        (kf.y        ?? 0) + oy  } : {}),
+            ...(or_ !== 0 ? { rotation: (kf.rotation ?? 0) + or_ } : {}),
+          }));
+        } else {
+          tracks[boneId] = [
+            { time: 0,                 x: ox, y: oy, rotation: or_ },
+            { time: resolved.duration, x: ox, y: oy, rotation: or_ },
+          ];
+        }
+      }
+      resolved = { ...resolved, tracks };
+    }
+
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const ov = { ...(c.animKeyframeOverrides ?? {}) };
+      delete ov[currentAnimation];
+      const ao = { ...(c.animBoneOffsets ?? {}) };
+      delete ao[currentAnimation];
+      // Upsert: replace existing baked entry or append — same ID as the original animation
+      const bakedAnim = { ...resolved, id: currentAnimation, custom: true };
+      const existing = (c.customAnimations ?? []).some(a => a.id === currentAnimation);
+      const customAnimations = existing
+        ? c.customAnimations.map(a => a.id === currentAnimation ? bakedAnim : a)
+        : [...(c.customAnimations ?? []), bakedAnim];
+      return { ...c, customAnimations, animKeyframeOverrides: ov, animBoneOffsets: ao };
+    }));
+
+    charCanvasRef.current?.resetAnimBoneOffsets(currentAnimation);
+  }, [activeCharId, activeChar, currentAnimation]);
+
   // Click on a keyframe row in the curve panel: pause + seek + remember which
   // keyframe is "active" so ragdoll drags route to it.
   const onKeyframeClick = useCallback((boneId, time) => {
@@ -949,7 +1001,7 @@ export default function App() {
               )}
               {editAnimPose && currentAnimation !== 'edit' && (
                 <div className="absolute top-3 left-12 z-20 bg-teal-400 text-black text-[11px] font-semibold uppercase tracking-wider px-2.5 py-0.5 rounded-md select-none pointer-events-none shadow-[0_0_14px_rgba(45,212,191,0.7)]">
-                  Edit Animation — {(ANIMATIONS[currentAnimation] ?? activeChar.customAnimations?.find(a => a.id === currentAnimation))?.name ?? currentAnimation}
+                  Edit Animation — {(activeChar.customAnimations?.find(a => a.id === currentAnimation) ?? ANIMATIONS[currentAnimation])?.name ?? currentAnimation}
                 </div>
               )}
               <button
@@ -1092,14 +1144,15 @@ export default function App() {
               {editAnimPose && !poseEditorOpen && (
                 <AnimationCurvePanel
                   animation={resolveAnimation(
-                    ANIMATIONS[currentAnimation]
-                    ?? activeChar.customAnimations?.find(a => a.id === currentAnimation),
+                    activeChar.customAnimations?.find(a => a.id === currentAnimation)
+                    ?? ANIMATIONS[currentAnimation],
                     (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {},
                   )}
                   offsets={(activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}}
                   overrides={(activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {}}
                   activeKeyframe={activeKeyframe}
                   onKeyframeClick={onKeyframeClick}
+                  onCommitOverrides={commitAnimKeyframeOverrides}
                 />
               )}
             </aside>

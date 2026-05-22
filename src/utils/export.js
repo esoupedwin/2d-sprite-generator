@@ -43,8 +43,8 @@ function loadImage(url) {
 // bone offsets (rest-pose + per-animation). Returns null when the animation
 // can't be found, so callers can early-return cleanly.
 function resolveAnimWithOffsets(character, animationName) {
-  const rawAnim = ANIMATIONS[animationName]
-    ?? character.customAnimations?.find(a => a.id === animationName);
+  const rawAnim = character.customAnimations?.find(a => a.id === animationName)
+    ?? ANIMATIONS[animationName];
   if (!rawAnim) return null;
   const anim = resolveAnimation(rawAnim, character.animKeyframeOverrides?.[animationName] ?? null);
   const animSpecificOff   = (character.animBoneOffsets ?? {})[animationName] ?? {};
@@ -263,8 +263,8 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
  * character's per-keyframe overrides if any.
  */
 export function exportAnimationJSON(character, animationName) {
-  const rawAnim = ANIMATIONS[animationName]
-    ?? character?.customAnimations?.find(a => a.id === animationName);
+  const rawAnim = character?.customAnimations?.find(a => a.id === animationName)
+    ?? ANIMATIONS[animationName];
   if (!rawAnim) return;
 
   const animKeyframeOverrides = character?.animKeyframeOverrides?.[animationName] ?? null;

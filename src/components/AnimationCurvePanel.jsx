@@ -28,6 +28,7 @@ function offsetLine(off) {
 export function AnimationCurvePanel({
   animation, offsets, overrides,
   activeKeyframe, onKeyframeClick,
+  onCommitOverrides,
 }) {
   if (!animation) {
     return (
@@ -37,6 +38,8 @@ export function AnimationCurvePanel({
 
   const tracks = animation.tracks ?? {};
   const boneIds = Object.keys(tracks);
+  const hasOverrides = (overrides && Object.values(overrides).some(boneOv => Object.keys(boneOv).length > 0))
+    || (offsets && Object.keys(offsets).length > 0);
 
   return (
     <div className="flex flex-col gap-2">
@@ -46,6 +49,16 @@ export function AnimationCurvePanel({
           {animation.name} · {animation.duration?.toFixed?.(2) ?? animation.duration}s · {animation.loop ? 'loop' : 'once'}
         </span>
       </div>
+
+      {hasOverrides && (
+        <button
+          type="button"
+          onClick={onCommitOverrides}
+          className="self-start text-[11px] px-2 py-0.5 rounded border border-amber-400/40 text-amber-400 hover:bg-amber-400/10 transition-colors"
+        >
+          Commit edits
+        </button>
+      )}
 
       <div className="text-xs text-muted-foreground/70 leading-snug">
         Click a <span className="font-mono">t=…</span> row to pause the animation at that
