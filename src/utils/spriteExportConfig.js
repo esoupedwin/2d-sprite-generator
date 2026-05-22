@@ -2,10 +2,10 @@
 // The exported PNG is EXPORT_PIXEL_RATIO× larger per axis, so each frame in
 // the saved file is actually FRAME_W * EXPORT_PIXEL_RATIO × FRAME_H * EXPORT_PIXEL_RATIO
 // pixels. At default 2× that's 512 × 600 raw pixels per cell.
-export const FRAME_W        = 256;
+export const FRAME_W        = 300;
 export const FRAME_H        = 300;
-export const FRAME_ORIGIN_X = 100;
-export const FRAME_ORIGIN_Y = FRAME_H - 30; // foot bone (world y=+16) lands near frame bottom
+export const FRAME_ORIGIN_X = 150;
+export const FRAME_ORIGIN_Y = FRAME_H; // bottom of frame sits on world y=0 (torso line)
 export const FRAME_SCALE    = 1.0;
 
 // Sheet layout — max columns per row; overflow wraps to the next row.

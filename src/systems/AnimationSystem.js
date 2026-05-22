@@ -949,79 +949,6 @@ export const ANIMATIONS = {
     },
   },
 
-  full_auto: {
-    name: 'Full Auto',
-    duration: 0.12,  // rapid cyclic — ~500 RPM feel
-    loop: true,
-    tracks: {
-      // Aggressive forward lean; whole body shakes from sustained fire
-      torso: [
-        { time: 0.00, y:  0, rotation:  0.12 },
-        { time: 0.02, y:  2, rotation:  0.04 },  // jolts back on fire
-        { time: 0.07, y: -1, rotation:  0.14 },  // rebounds forward
-        { time: 0.12, y:  0, rotation:  0.12 },
-      ],
-      lower_torso: [
-        { time: 0.00, rotation:  0.06 },
-        { time: 0.02, rotation: -0.10 },  // hips absorb impulse
-        { time: 0.07, rotation:  0.08 },
-        { time: 0.12, rotation:  0.06 },
-      ],
-      // Head lags body — snaps back then re-acquires
-      head: [
-        { time: 0.00, rotation:  0.08 },
-        { time: 0.03, rotation:  0.18 },
-        { time: 0.09, rotation:  0.05 },
-        { time: 0.12, rotation:  0.08 },
-      ],
-      // Right arm (trigger hand) — low hip, hard muzzle kick each cycle
-      right_arm: [
-        { time: 0.00, rotation: 1.719 },
-        { time: 0.02, rotation: 1.449 },  // muzzle kicks up
-        { time: 0.07, rotation: 1.749 },
-        { time: 0.12, rotation: 1.719 },
-      ],
-      right_forearm: [
-        { time: 0.00, rotation: -1.188 },
-        { time: 0.02, rotation: -1.418 },
-        { time: 0.07, rotation: -1.158 },
-        { time: 0.12, rotation: -1.188 },
-      ],
-      right_hand: [
-        { time: 0.00, rotation: -0.15 },
-        { time: 0.02, rotation:  0.10 },  // wrist whips from recoil
-        { time: 0.07, rotation: -0.18 },
-        { time: 0.12, rotation: -0.15 },
-      ],
-      // Left arm (support hand) — grips barrel low, follows the kick
-      left_arm: [
-        { time: 0.00, rotation: -1.523 },
-        { time: 0.02, rotation: -1.753 },
-        { time: 0.07, rotation: -1.493 },
-        { time: 0.12, rotation: -1.523 },
-      ],
-      left_forearm: [
-        { time: 0.00, rotation: -1.058 },
-        { time: 0.02, rotation: -1.258 },
-        { time: 0.07, rotation: -1.038 },
-        { time: 0.12, rotation: -1.058 },
-      ],
-      left_hand: [
-        { time: 0.00, rotation: -0.10 },
-        { time: 0.02, rotation: -0.20 },
-        { time: 0.07, rotation: -0.08 },
-        { time: 0.12, rotation: -0.10 },
-      ],
-      // Wide, deeply-bent combat stance to absorb sustained recoil
-      left_leg:   [{ time: 0.0, rotation: -0.22 }, { time: 0.12, rotation: -0.22 }],
-      left_shin:  [{ time: 0.0, rotation:  0.35 }, { time: 0.12, rotation:  0.35 }],
-      left_foot:  [{ time: 0.0, rotation: -0.08 }, { time: 0.12, rotation: -0.08 }],
-      right_leg:  [{ time: 0.0, rotation:  0.18 }, { time: 0.12, rotation:  0.18 }],
-      right_shin: [{ time: 0.0, rotation:  0.36 }, { time: 0.12, rotation:  0.36 }],
-      right_foot: [{ time: 0.0, rotation:  0.08 }, { time: 0.12, rotation:  0.08 }],
-    },
-  },
-
   // ── Rifle weapon animations ───────────────────────────────────────────────────
 
   rifle_idle: {
@@ -2092,7 +2019,7 @@ export const ANIMATIONS = {
 export const WEAPON_ANIMATION_SETS = {
   none:    ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'throw', 'carry_walk'],
   sword:   ['sword_idle', 'sword_walk', 'sword_slash', 'sword_jump'],
-  rifle:   ['rifle_idle', 'rifle_walk', 'rifle_run', 'rifle_jump', 'rifle', 'full_auto'],
+  rifle:   ['rifle_idle', 'rifle_walk', 'rifle_run', 'rifle_jump', 'rifle'],
   rocket:  ['rocket_idle', 'rocket_walk', 'rocket_fire', 'rocket_jump'],
   bow:     ['bow_idle', 'bow_walk', 'bow_fire', 'bow_jump'],
   grenade_launcher: ['grenade_launcher_idle', 'grenade_launcher_walk', 'grenade_launcher_fire', 'grenade_launcher_jump'],

@@ -1,5 +1,5 @@
 import { ANIMATIONS, getPoseAtTime, resolveAnimation } from '../systems/AnimationSystem.js';
-import { computeWorldTransforms } from '../systems/SkeletonSystem.js';
+import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import {
   computeSkinBounds,
   HEAD_SKIN, BODY_SKIN,
@@ -39,6 +39,37 @@ function loadImage(url) {
   });
 }
 
+// Resolves the animation definition and stacks the character's persistent
+// bone offsets (rest-pose + per-animation). Returns null when the animation
+// can't be found, so callers can early-return cleanly.
+function resolveAnimWithOffsets(character, animationName) {
+  const rawAnim = ANIMATIONS[animationName]
+    ?? character.customAnimations?.find(a => a.id === animationName);
+  if (!rawAnim) return null;
+  const anim = resolveAnimation(rawAnim, character.animKeyframeOverrides?.[animationName] ?? null);
+  const animSpecificOff   = (character.animBoneOffsets ?? {})[animationName] ?? {};
+  const neckLen = character.parts?.neckLength;
+  const neckOff = neckLen != null ? { head: { y: Math.abs(BONES.head.localY) - neckLen } } : {};
+  const persistentOffsets = mergeOffsets(mergeOffsets(character.boneOffsets ?? {}, animSpecificOff), neckOff);
+  return { anim, persistentOffsets };
+}
+
+// Preloads body/head/weapon PNGs and builds the skin-template map.
+// Returns synchronously-usable HTMLImageElements (or null on load failure)
+// plus the resolved `parts` and `skins` objects.
+async function loadRenderAssets(character, animationName) {
+  const skinOverrides = character.skinOverrides ?? {};
+  const skins = {};
+  for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
+  const parts = character.parts ?? {};
+  const [bodyImage, headImage, weaponImage] = await Promise.all([
+    loadImage(parts.bodyImage),
+    loadImage(resolveHeadUrl(parts, animationName)),
+    loadImage(parts.weaponImages?.[parts.weapon]),
+  ]);
+  return { skins, parts, bodyImage, headImage, weaponImage };
+}
+
 /**
  * Renders every frame of an animation into a sprite sheet canvas. Used by
  * both the PNG export and the in-app preview dialog. Returns null if the
@@ -65,34 +96,13 @@ function loadImage(url) {
 export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = 'all' } = {}) {
   if (!character) return null;
 
-  // Resolve the animation — built-in first, custom fallback. Then layer the
-  // character's per-keyframe overrides on top via resolveAnimation, so the
-  // exported frames match the live preview.
-  const rawAnim = ANIMATIONS[animationName]
-    ?? character.customAnimations?.find(a => a.id === animationName);
-  if (!rawAnim) return null;
-  const animKeyframeOverrides = character.animKeyframeOverrides?.[animationName] ?? null;
-  const anim = resolveAnimation(rawAnim, animKeyframeOverrides);
-
-  // Persistent offsets stacked the same way CharacterCanvas does in drawFrame:
-  //   character rest-pose boneOffsets + per-animation animBoneOffsets.
-  // (Ragdoll overlay is ephemeral and intentionally excluded.)
-  const animSpecificOff = (character.animBoneOffsets ?? {})[animationName] ?? {};
-  const persistentOffsets = mergeOffsets(character.boneOffsets ?? {}, animSpecificOff);
-
-  // Skins (vector overlay) — fall back to defaults per key.
-  const skinOverrides = character.skinOverrides ?? {};
-  const skins = {};
-  for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
-
-  // Preload PNGs once so each frame can drawImage synchronously.
-  const parts = character.parts ?? {};
-  const weaponUrl = parts.weaponImages?.[parts.weapon];
-  const [bodyImage, headImage, weaponImage] = await Promise.all([
-    loadImage(parts.bodyImage),
-    loadImage(resolveHeadUrl(parts, animationName)),
-    loadImage(weaponUrl),
-  ]);
+  // Resolve animation + persistent offsets; preload PNGs and build skin map.
+  // Per-keyframe overrides are folded in via resolveAnimation so exported
+  // frames match the live preview. Ragdoll overlay is ephemeral and excluded.
+  const resolved = resolveAnimWithOffsets(character, animationName);
+  if (!resolved) return null;
+  const { anim, persistentOffsets } = resolved;
+  const { skins, parts, bodyImage, headImage, weaponImage } = await loadRenderAssets(character, animationName);
 
   const cols = Math.min(frameCount, SHEET_COLS);
   const rows = Math.ceil(frameCount / cols);
@@ -205,32 +215,14 @@ const POSE_PIXEL_RATIO = 3;
 export async function exportPoseSVG(character, animationName, currentTime = 0) {
   if (!character) return;
 
-  const rawAnim = ANIMATIONS[animationName]
-    ?? character.customAnimations?.find(a => a.id === animationName);
-  if (!rawAnim) return;
-
-  const animKeyframeOverrides = character.animKeyframeOverrides?.[animationName] ?? null;
-  const anim = resolveAnimation(rawAnim, animKeyframeOverrides);
-
-  const animSpecificOff  = (character.animBoneOffsets ?? {})[animationName] ?? {};
-  const persistentOffsets = mergeOffsets(character.boneOffsets ?? {}, animSpecificOff);
+  const resolved = resolveAnimWithOffsets(character, animationName);
+  if (!resolved) return;
+  const { anim, persistentOffsets } = resolved;
 
   const t = currentTime % anim.duration;
-  const animPose        = getPoseAtTime(anim, t);
-  const fullPose        = mergeOffsets(animPose, persistentOffsets);
-  const worldTransforms  = computeWorldTransforms(fullPose);
+  const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const skinOverrides = character.skinOverrides ?? {};
-  const skins = {};
-  for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
-
-  const parts = character.parts ?? {};
-  const weaponUrl = parts.weaponImages?.[parts.weapon];
-  const [bodyImage, headImage, weaponImage] = await Promise.all([
-    loadImage(parts.bodyImage),
-    loadImage(resolveHeadUrl(parts, animationName)),
-    loadImage(weaponUrl),
-  ]);
+  const { skins, parts, bodyImage, headImage, weaponImage } = await loadRenderAssets(character, animationName);
 
   const canvas = document.createElement('canvas');
   canvas.width  = POSE_W * POSE_PIXEL_RATIO;
@@ -342,28 +334,14 @@ function groupBounds(groupId, parts, worldTransforms, skins) {
 export async function exportPartsSheetSVG(character, animationName, currentTime = 0) {
   if (!character) return;
 
-  const rawAnim = ANIMATIONS[animationName]
-    ?? character.customAnimations?.find(a => a.id === animationName);
-  if (!rawAnim) return;
+  const resolved = resolveAnimWithOffsets(character, animationName);
+  if (!resolved) return;
+  const { anim, persistentOffsets } = resolved;
 
-  const anim = resolveAnimation(rawAnim, character.animKeyframeOverrides?.[animationName] ?? null);
-  const animSpecificOff  = (character.animBoneOffsets ?? {})[animationName] ?? {};
-  const persistentOffsets = mergeOffsets(character.boneOffsets ?? {}, animSpecificOff);
-
-  const t              = currentTime % anim.duration;
+  const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const skinOverrides = character.skinOverrides ?? {};
-  const skins = {};
-  for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
-
-  const parts = character.parts ?? {};
-  const weaponUrl = parts.weaponImages?.[parts.weapon];
-  const [bodyImage, headImage, weaponImage] = await Promise.all([
-    loadImage(parts.bodyImage),
-    loadImage(resolveHeadUrl(parts, animationName)),
-    loadImage(weaponUrl),
-  ]);
+  const { skins, parts, bodyImage, headImage, weaponImage } = await loadRenderAssets(character, animationName);
   const imgOpts = { skins, bodyImage, headImage, weaponImage, animation: animationName };
 
   // Build label for weapon from part definition

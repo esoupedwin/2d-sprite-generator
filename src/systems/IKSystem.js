@@ -1,5 +1,6 @@
 import { BONES, computeWorldTransforms } from './SkeletonSystem.js';
 import { mergeOffsets } from '../utils/transforms.js';
+import { worldToLocal } from '../utils/mathUtils.js';
 
 // Effective bone offset = rest offset + structural override.
 // Used so ragdoll IK preserves whatever lengths the user set in Edit Structure mode.
@@ -40,12 +41,6 @@ const IK_PLAN = {
   left_foot:     { kind: 'fabrik2', bendSign: -1 },
   right_foot:    { kind: 'fabrik2', bendSign: -1 },
 };
-
-function worldToLocal(wx, wy, frame) {
-  const dx  = wx - frame.x, dy = wy - frame.y;
-  const cos = Math.cos(frame.rotation), sin = Math.sin(frame.rotation);
-  return { x: cos * dx + sin * dy, y: -sin * dx + cos * dy };
-}
 
 export function solveIK(currentOffsets, draggedBoneId, tx, ty) {
   const plan = IK_PLAN[draggedBoneId];

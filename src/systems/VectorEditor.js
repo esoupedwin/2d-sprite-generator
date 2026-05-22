@@ -13,6 +13,7 @@ import {
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
   HEAD_SKIN, BODY_SKIN,
 } from './SkinSystem.js';
+import { rotateOffset, worldToLocal } from '../utils/mathUtils.js';
 
 export const DEFAULT_SKINS = {
   head:        HEAD_SKIN,
@@ -51,21 +52,6 @@ const HANDLE_R_BASE    = 2.5 / 1.5;
 const ACTIVE_COLOR     = '#ffd700';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function rotateOffset(dx, dy, r) {
-  const c = Math.cos(r), s = Math.sin(r);
-  return { x: c * dx - s * dy, y: s * dx + c * dy };
-}
-
-/** Character-local → bone-local (inverse rotation around bone origin). */
-export function worldToLocal(wx, wy, bone) {
-  const cos = Math.cos(bone.rotation);
-  const sin = Math.sin(bone.rotation);
-  return {
-    x:  cos * (wx - bone.x) + sin * (wy - bone.y),
-    y: -sin * (wx - bone.x) + cos * (wy - bone.y),
-  };
-}
 
 /** Return the effective template for a skin key (override → default fallback). */
 export function getSkin(skinKey, overrides) {
@@ -193,8 +179,8 @@ export function renderBoneBinds(ctx, worldTransforms, skinOverrides, selectedSki
 /** World position of a skin anchor given the bone's world transform. */
 function anchorWorld(pt, bone) {
   const [, lx, ly] = pt;
-  const c = Math.cos(bone.rotation), s = Math.sin(bone.rotation);
-  return { x: bone.x + c * lx - s * ly, y: bone.y + s * lx + c * ly };
+  const r = rotateOffset(lx, ly, bone.rotation);
+  return { x: bone.x + r.x, y: bone.y + r.y };
 }
 
 /**

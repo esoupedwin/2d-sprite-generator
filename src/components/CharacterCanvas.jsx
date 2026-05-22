@@ -3,13 +3,15 @@ import { ANIMATIONS, getPoseAtTime, resolveAnimation, keyframeTimeKey } from '..
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { renderCharacter } from '../systems/Renderer.js';
 import {
-  DEFAULT_SKINS, SKIN_COLORS, getSkin, worldToLocal,
+  DEFAULT_SKINS, SKIN_COLORS, getSkin,
   renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
   deleteSkinPoint,
 } from '../systems/VectorEditor.js';
 import { strokeSkinOutline } from '../systems/SkinSystem.js';
 import { solveIK } from '../systems/IKSystem.js';
 import { mergeOffsets } from '../utils/transforms.js';
+import { worldToLocal } from '../utils/mathUtils.js';
+import { FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y } from '../utils/spriteExportConfig.js';
 import { useImageDataUrl } from '../hooks/useImageDataUrl.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
@@ -216,13 +218,12 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       recenterInitialMountRef.current = false;
       return;
     }
-    const FOX = 100, FW = 256, FOY = 270, FH = 300;
     const zoom  = viewRef.current.zoom;
     const scale = BASE_SCALE * zoom;
     viewRef.current = {
       zoom,
-      panX: (FOX - FW / 2) * scale,
-      panY: (FOY - FH / 2) * scale - ORIGIN_Y_OFFSET,
+      panX: (FRAME_ORIGIN_X - FRAME_W / 2) * scale,
+      panY: (FRAME_ORIGIN_Y - FRAME_H / 2) * scale - ORIGIN_Y_OFFSET,
     };
   }, [editAnimPose]);
 
@@ -310,7 +311,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     // they stay anchored to the character as the user pans/zooms. The edge
     // labels (top: x, left: y) read out the underlying coordinates so the
     // user can position skin points / bones precisely.
-    const GRID_STEP = 40;
+    const GRID_STEP = 50;
     const xMin = (0          - originX) / scale;
     const xMax = (CANVAS_W   - originX) / scale;
     const yMin = (0          - originY) / scale;
@@ -373,8 +374,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     ctx.beginPath(); ctx.arc(0, 0, 70, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    // Ground line at the bottom of the sprite frame (world y = FRAME_H - FRAME_ORIGIN_Y = 30).
-    const groundY = originY + 30 * scale;
+    // Ground line at the bottom of the sprite frame (world y = FRAME_H - FRAME_ORIGIN_Y).
+    const groundY = originY + (FRAME_H - FRAME_ORIGIN_Y) * scale;
     ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(60, groundY); ctx.lineTo(CANVAS_W - 60, groundY); ctx.stroke();
 
@@ -382,7 +383,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     s.lastAnimPose         = animPose;
     const animSpecificOff  = (s.animBoneOffsets ?? {})[s.currentAnimation] ?? {};
     const persistentOffsets = mergeOffsets(mergeOffsets(s.boneOffsets, animSpecificOff), s.ragdollOverlay);
-    const fullPose         = mergeOffsets(animPose, persistentOffsets);
+    const neckLen          = s.character?.neckLength;
+    const neckOff          = neckLen != null ? { head: { y: Math.abs(BONES.head.localY) - neckLen } } : {};
+    const fullPose         = mergeOffsets(mergeOffsets(animPose, persistentOffsets), neckOff);
     const worldTransforms  = computeWorldTransforms(fullPose);
     s.lastWorldTransforms = worldTransforms;
 
@@ -529,11 +532,10 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     if (s.showFrame) {
       // Sprite frame boundary — matches export.js constants (via spriteExportConfig.js).
       // FRAME_ORIGIN_X/Y is where world (0,0) sits inside the frame.
-      const FW = 256, FH = 300, FOX = 100, FOY = 270;
-      const fl = originX - FOX * scale;
-      const ft = originY - FOY * scale;
-      const fw = FW * scale;
-      const fh = FH * scale;
+      const fl = originX - FRAME_ORIGIN_X * scale;
+      const ft = originY - FRAME_ORIGIN_Y * scale;
+      const fw = FRAME_W * scale;
+      const fh = FRAME_H * scale;
 
       ctx.save();
       // Dim area outside the frame
@@ -561,7 +563,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       // Dimension label
       ctx.fillStyle = 'rgba(255,195,50,0.85)';
       ctx.font = 'bold 11px monospace';
-      ctx.fillText(`${FW}×${FH}px`, fl + 5, ft + 15);
+      ctx.fillText(`${FRAME_W}×${FRAME_H}px`, fl + 5, ft + 15);
       ctx.restore();
     }
 
@@ -1069,20 +1071,22 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     setSkinOverrides({ ...skins });
   }, [onSaveDefault]);
 
-  // ── Mirror ────────────────────────────────────────────────────────────────────
-  const mirrorLimb = useCallback((fromSide, limbType) => {
+  // ── Mirror / Copy ─────────────────────────────────────────────────────────────
+  // negate=true  → Mirror (flip rotation sign, for a mirrored-pose silhouette)
+  // negate=false → Copy   (preserve rotation, for duplicating the same pose)
+  const copyLimb = useCallback((fromSide, limbType, negate) => {
     pushHistory();
     const pairs = limbType === 'legs'
       ? [['left_leg','right_leg'], ['left_shin','right_shin'], ['left_foot','right_foot']]
       : [['left_arm','right_arm'], ['left_forearm','right_forearm'], ['left_hand','right_hand']];
 
-    const fromBones  = pairs.map(p => fromSide === 'left' ? p[0] : p[1]);
-    const toBones    = pairs.map(p => fromSide === 'left' ? p[1] : p[0]);
-    const boneIdMap  = Object.fromEntries(pairs.map(([l, r]) => fromSide === 'left' ? [l, r] : [r, l]));
+    const fromBones   = pairs.map(p => fromSide === 'left' ? p[0] : p[1]);
+    const toBones     = pairs.map(p => fromSide === 'left' ? p[1] : p[0]);
+    const boneIdMap   = Object.fromEntries(pairs.map(([l, r]) => fromSide === 'left' ? [l, r] : [r, l]));
     const fromSkinKey = fromSide === 'left'
       ? (limbType === 'legs' ? 'left_leg'  : 'left_arm')
       : (limbType === 'legs' ? 'right_leg' : 'right_arm');
-    const toSkinKey = fromSide === 'left'
+    const toSkinKey   = fromSide === 'left'
       ? (limbType === 'legs' ? 'right_leg' : 'right_arm')
       : (limbType === 'legs' ? 'left_leg'  : 'left_arm');
 
@@ -1091,7 +1095,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       fromBones.forEach((fromId, i) => {
         const toId = toBones[i];
         const off  = prev[fromId];
-        if (off) next[toId] = { x: off.x || 0, y: off.y || 0, rotation: -(off.rotation || 0) };
+        if (off) next[toId] = { x: off.x || 0, y: off.y || 0, rotation: negate ? -(off.rotation || 0) : (off.rotation || 0) };
         else     delete next[toId];
       });
       return next;
@@ -1107,43 +1111,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     });
   }, [pushHistory]);
 
-  // ── Replicate (copy without rotation negation) ───────────────────────────────
-  const replicateLimb = useCallback((fromSide, limbType) => {
-    pushHistory();
-    const pairs = limbType === 'legs'
-      ? [['left_leg','right_leg'], ['left_shin','right_shin'], ['left_foot','right_foot']]
-      : [['left_arm','right_arm'], ['left_forearm','right_forearm'], ['left_hand','right_hand']];
-
-    const fromBones  = pairs.map(p => fromSide === 'left' ? p[0] : p[1]);
-    const toBones    = pairs.map(p => fromSide === 'left' ? p[1] : p[0]);
-    const boneIdMap  = Object.fromEntries(pairs.map(([l, r]) => fromSide === 'left' ? [l, r] : [r, l]));
-    const fromSkinKey = fromSide === 'left'
-      ? (limbType === 'legs' ? 'left_leg'  : 'left_arm')
-      : (limbType === 'legs' ? 'right_leg' : 'right_arm');
-    const toSkinKey = fromSide === 'left'
-      ? (limbType === 'legs' ? 'right_leg' : 'right_arm')
-      : (limbType === 'legs' ? 'left_leg'  : 'left_arm');
-
-    setBoneOffsets(prev => {
-      const next = { ...prev };
-      fromBones.forEach((fromId, i) => {
-        const toId = toBones[i];
-        const off  = prev[fromId];
-        if (off) next[toId] = { x: off.x || 0, y: off.y || 0, rotation: off.rotation || 0 };
-        else     delete next[toId];
-      });
-      return next;
-    });
-
-    setSkinOverrides(prev => {
-      const src    = getSkin(fromSkinKey, prev);
-      const copied = src.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => [
-        boneIdMap[boneId] ?? boneId,
-        lx, ly, hInDx, hInDy, hOutDx, hOutDy,
-      ]);
-      return { ...prev, [toSkinKey]: copied };
-    });
-  }, [pushHistory]);
+  const mirrorLimb    = useCallback((side, type) => copyLimb(side, type, true),  [copyLimb]);
+  const replicateLimb = useCallback((side, type) => copyLimb(side, type, false), [copyLimb]);
 
   const hasBoneEdits = JSON.stringify(boneOffsets)   !== JSON.stringify(defaultBoneOffsets.current);
   const hasSkinEdits = JSON.stringify(skinOverrides) !== JSON.stringify(defaultSkinOverrides.current);

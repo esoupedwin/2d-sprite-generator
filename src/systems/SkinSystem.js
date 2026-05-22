@@ -130,27 +130,22 @@ export const LOWER_TORSO_SKIN = [];
 
 // ─── Renderer ────────────────────────────────────────────────────────────────
 
-function rotateOffset(dx, dy, rotation) {
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
-  return { x: cos * dx - sin * dy, y: sin * dx + cos * dy };
-}
+import { rotateOffset } from '../utils/mathUtils.js';
 
-function buildSkinPath(ctx, template, worldTransforms, scale) {
-  const pts = template.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => {
+function mapSkinPoints(template, worldTransforms, scale) {
+  return template.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => {
     const bone = worldTransforms[boneId];
     if (!bone) return null;
     const a  = rotateOffset(lx * scale, ly * scale, bone.rotation);
-    const ax = bone.x + a.x;
-    const ay = bone.y + a.y;
-    const hi = rotateOffset(hInDx * scale,  hInDy * scale,  bone.rotation);
+    const ax = bone.x + a.x, ay = bone.y + a.y;
+    const hi = rotateOffset(hInDx * scale, hInDy * scale, bone.rotation);
     const ho = rotateOffset(hOutDx * scale, hOutDy * scale, bone.rotation);
-    return {
-      x: ax, y: ay,
-      hIn:  { x: ax + hi.x, y: ay + hi.y },
-      hOut: { x: ax + ho.x, y: ay + ho.y },
-    };
+    return { x: ax, y: ay, hIn: { x: ax + hi.x, y: ay + hi.y }, hOut: { x: ax + ho.x, y: ay + ho.y } };
   });
+}
+
+function buildSkinPath(ctx, template, worldTransforms, scale) {
+  const pts = mapSkinPoints(template, worldTransforms, scale);
   if (pts.some(p => !p)) return false;
 
   ctx.beginPath();
@@ -197,19 +192,15 @@ export function strokeSkinOutline(ctx, template, worldTransforms, color, lineWid
  */
 export function computeSkinBounds(template, worldTransforms, scale = 1) {
   if (!template || template.length === 0) return null;
+  const pts = mapSkinPoints(template, worldTransforms, scale);
+  if (pts.some(p => !p)) return null;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy] of template) {
-    const bone = worldTransforms[boneId];
-    if (!bone) return null;
-    const a  = rotateOffset(lx * scale, ly * scale, bone.rotation);
-    const ax = bone.x + a.x, ay = bone.y + a.y;
-    const hi = rotateOffset(hInDx * scale,  hInDy * scale,  bone.rotation);
-    const ho = rotateOffset(hOutDx * scale, hOutDy * scale, bone.rotation);
-    for (const [x, y] of [[ax, ay], [ax + hi.x, ay + hi.y], [ax + ho.x, ay + ho.y]]) {
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
+  for (const { x, y, hIn, hOut } of pts) {
+    for (const [px, py] of [[x, y], [hIn.x, hIn.y], [hOut.x, hOut.y]]) {
+      if (px < minX) minX = px;
+      if (px > maxX) maxX = px;
+      if (py < minY) minY = py;
+      if (py > maxY) maxY = py;
     }
   }
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };

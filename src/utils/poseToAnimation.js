@@ -1,6 +1,4 @@
-function genId() {
-  return Math.random().toString(36).slice(2, 9);
-}
+import { genId } from './genId.js';
 
 // Absolute frame pose minus character rest pose = animation track delta
 function frameDelta(frameOffsets, charOffsets) {

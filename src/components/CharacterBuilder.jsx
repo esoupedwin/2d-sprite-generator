@@ -259,7 +259,7 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
                 type="file"
                 accept="image/png,image/jpeg"
                 className="hidden"
-                onChange={e => handleImageFile(e.target.files?.[0])}
+                onChange={e => { handleImageFile(e.target.files?.[0]); e.target.value = ''; }}
               />
             </>
           )}

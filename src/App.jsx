@@ -32,6 +32,7 @@ import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
+import { genId } from './utils/genId.js';
 
 const CHARS_STORAGE = '2dsprite:characters';
 
@@ -51,10 +52,6 @@ const ANIMATION_COMPLETE_TARGETS = {
   rocket_jump:                'rocket_idle',
   rocket_fire:                'rocket_idle',
 };
-
-function genId() {
-  return Math.random().toString(36).slice(2, 9);
-}
 
 function cloneSkinOverrides(src) {
   return Object.fromEntries(Object.entries(src).map(([k, pts]) => [k, pts.map(p => [...p])]));
@@ -114,6 +111,39 @@ function loadCharactersFromStorage() {
   } catch {}
 
   return null;
+}
+
+// Spreads the character's arms into a horizontal T-pose so joints are easy
+// to grab in Edit Body mode. Weapon is cleared (no grip pose to maintain).
+function withTPose(char) {
+  const off = char.boneOffsets ?? {};
+  const lfx = 0  + (off.left_forearm?.x  ?? 0);
+  const lfy = 40 + (off.left_forearm?.y  ?? 0);
+  const rfx = 0  + (off.right_forearm?.x ?? 0);
+  const rfy = 40 + (off.right_forearm?.y ?? 0);
+  const lhx = 0  + (off.left_hand?.x     ?? 0);
+  const lhy = 40 + (off.left_hand?.y     ?? 0);
+  const rhx = 0  + (off.right_hand?.x    ?? 0);
+  const rhy = 40 + (off.right_hand?.y    ?? 0);
+  // World rotations so each segment lies along the horizontal axis.
+  // Left arm extends toward −X (world angle π); right arm toward +X.
+  const leftArmWorld   = Math.PI - Math.atan2(lfy, lfx);
+  const rightArmWorld  =          -Math.atan2(rfy, rfx);
+  const leftFArmWorld  = Math.PI - Math.atan2(lhy, lhx);
+  const rightFArmWorld =          -Math.atan2(rhy, rhx);
+  return {
+    ...char,
+    parts: { ...char.parts, weapon: 'none' },
+    boneOffsets: {
+      ...off,
+      left_arm:      { ...(off.left_arm      ?? {}), rotation: leftArmWorld  },
+      right_arm:     { ...(off.right_arm     ?? {}), rotation: rightArmWorld },
+      left_forearm:  { ...(off.left_forearm  ?? {}), rotation: leftFArmWorld  - leftArmWorld  },
+      right_forearm: { ...(off.right_forearm ?? {}), rotation: rightFArmWorld - rightArmWorld },
+      left_hand:     { ...(off.left_hand     ?? {}), rotation: 0 },
+      right_hand:    { ...(off.right_hand    ?? {}), rotation: 0 },
+    },
+  };
 }
 
 function persistCharacters(chars) {
@@ -349,6 +379,16 @@ export default function App() {
       if (Math.abs(scale - 1) < 0.001) delete partScales[partKey];
       else partScales[partKey] = scale;
       return { ...c, parts: { ...c.parts, partScales } };
+    }));
+  }, [activeCharId]);
+
+  const updateNeckLength = useCallback((len) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (Math.abs(len - 72) < 0.5) delete parts.neckLength;
+      else parts.neckLength = len;
+      return { ...c, parts };
     }));
   }, [activeCharId]);
 
@@ -667,41 +707,7 @@ export default function App() {
       // the forearm bone ends up horizontal regardless of how the elbow is
       // positioned in the build.
       if (key === 'edit' && prev !== 'edit') {
-        setCharacters(chars => chars.map(c => {
-          if (c.id !== activeCharId) return c;
-          const off = c.boneOffsets ?? {};
-          // Effective bone-local offsets for elbow (forearm) and wrist (hand).
-          const lfx = 0  + (off.left_forearm?.x  ?? 0);
-          const lfy = 40 + (off.left_forearm?.y  ?? 0);
-          const rfx = 0  + (off.right_forearm?.x ?? 0);
-          const rfy = 40 + (off.right_forearm?.y ?? 0);
-          const lhx = 0  + (off.left_hand?.x     ?? 0);
-          const lhy = 40 + (off.left_hand?.y     ?? 0);
-          const rhx = 0  + (off.right_hand?.x    ?? 0);
-          const rhy = 40 + (off.right_hand?.y    ?? 0);
-
-          // World rotations needed so each segment lies on the horizontal axis.
-          // Left arm extends toward -X (world angle π); right arm toward +X.
-          const leftArmWorld   = Math.PI - Math.atan2(lfy, lfx);
-          const rightArmWorld  =          -Math.atan2(rfy, rfx);
-          const leftFArmWorld  = Math.PI - Math.atan2(lhy, lhx);
-          const rightFArmWorld =          -Math.atan2(rhy, rhx);
-
-          // Bone-local rotations: world minus parent's world.
-          return {
-            ...c,
-            parts: { ...c.parts, weapon: 'none' },
-            boneOffsets: {
-              ...off,
-              left_arm:      { ...(off.left_arm      ?? {}), rotation: leftArmWorld   },
-              right_arm:     { ...(off.right_arm     ?? {}), rotation: rightArmWorld  },
-              left_forearm:  { ...(off.left_forearm  ?? {}), rotation: leftFArmWorld  - leftArmWorld  },
-              right_forearm: { ...(off.right_forearm ?? {}), rotation: rightFArmWorld - rightArmWorld },
-              left_hand:     { ...(off.left_hand     ?? {}), rotation: 0 },
-              right_hand:    { ...(off.right_hand    ?? {}), rotation: 0 },
-            },
-          };
-        }));
+        setCharacters(chars => chars.map(c => c.id !== activeCharId ? c : withTPose(c)));
       }
       return key;
     });
@@ -1006,12 +1012,16 @@ export default function App() {
                   showBinds={showBinds}
                   selectedSkin={selectedSkin}
                   poseEditorOpen={poseEditorOpen}
+                  headScale={activeChar.parts.partScales?.head ?? 1}
+                  neckLength={activeChar.parts?.neckLength ?? 72}
                   onToggleVectors={() => setShowVectors(p => !p)}
                   onToggleRagdoll={toggleRagdoll}
                   onToggleEditStructure={toggleEditStructure}
                   onToggleRebindMode={() => setRebindMode(p => !p)}
                   onToggleBinds={() => setShowBinds(p => !p)}
                   onSkinChange={setSelectedSkin}
+                  onHeadScaleChange={s => updatePartScale('head', s)}
+                  onNeckLengthChange={updateNeckLength}
                 />
               )}
               {editAnimPose && !poseEditorOpen && (() => {

@@ -42,11 +42,20 @@ function ToggleRow({ checked, onChange, label, disabled, title }) {
   );
 }
 
+const MIN_SCALE  = 0.5;
+const MAX_SCALE  = 3.0;
+const SCALE_STEP = 0.1;
+
+const MIN_NECK = 20;
+const MAX_NECK = 140;
+
 export function EditBodyControls({
   showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
   poseEditorOpen,
+  headScale, neckLength,
   onToggleVectors, onToggleRagdoll, onToggleEditStructure,
   onToggleRebindMode, onToggleBinds, onSkinChange,
+  onHeadScaleChange, onNeckLengthChange,
 }) {
   const disabled = poseEditorOpen;
   const title    = poseEditorOpen ? 'Close pose editor first' : '';
@@ -67,6 +76,78 @@ export function EditBodyControls({
         <SectionTitle>Edit Body Parts</SectionTitle>
         <div className="flex gap-1.5 flex-wrap" title={title}>
           <ModeBtn active={!!showVectors} disabled={disabled} onClick={onToggleVectors}>Vectors</ModeBtn>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Head Size</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onHeadScaleChange(Math.max(MIN_SCALE, +((headScale - SCALE_STEP).toFixed(2))))}
+                className="w-5 h-5 flex items-center justify-center text-xs rounded border border-border hover:border-primary/60 hover:text-foreground text-muted-foreground select-none"
+              >−</button>
+              <span className="text-xs w-10 text-center tabular-nums">{Math.round(headScale * 100)}%</span>
+              <button
+                type="button"
+                onClick={() => onHeadScaleChange(Math.min(MAX_SCALE, +((headScale + SCALE_STEP).toFixed(2))))}
+                className="w-5 h-5 flex items-center justify-center text-xs rounded border border-border hover:border-primary/60 hover:text-foreground text-muted-foreground select-none"
+              >+</button>
+              {Math.abs(headScale - 1) >= 0.001 && (
+                <button
+                  type="button"
+                  onClick={() => onHeadScaleChange(1)}
+                  className="ml-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  title="Reset to 100%"
+                >↺</button>
+              )}
+            </div>
+          </div>
+          <input
+            type="range"
+            min={MIN_SCALE}
+            max={MAX_SCALE}
+            step={SCALE_STEP}
+            value={headScale}
+            onChange={e => onHeadScaleChange(+parseFloat(e.target.value).toFixed(2))}
+            className="w-full h-1.5 accent-primary cursor-pointer"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">Neck Length</span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onNeckLengthChange(Math.max(MIN_NECK, Math.round(neckLength) - 1))}
+                className="w-5 h-5 flex items-center justify-center text-xs rounded border border-border hover:border-primary/60 hover:text-foreground text-muted-foreground select-none"
+              >−</button>
+              <span className="text-xs w-10 text-center tabular-nums">{Math.round(neckLength)}</span>
+              <button
+                type="button"
+                onClick={() => onNeckLengthChange(Math.min(MAX_NECK, Math.round(neckLength) + 1))}
+                className="w-5 h-5 flex items-center justify-center text-xs rounded border border-border hover:border-primary/60 hover:text-foreground text-muted-foreground select-none"
+              >+</button>
+              {Math.abs(Math.round(neckLength) - 72) >= 1 && (
+                <button
+                  type="button"
+                  onClick={() => onNeckLengthChange(72)}
+                  className="ml-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                  title="Reset to default"
+                >↺</button>
+              )}
+            </div>
+          </div>
+          <input
+            type="range"
+            min={MIN_NECK}
+            max={MAX_NECK}
+            step={1}
+            value={Math.round(neckLength)}
+            onChange={e => onNeckLengthChange(+parseInt(e.target.value))}
+            className="w-full h-1.5 accent-primary cursor-pointer"
+          />
         </div>
 
         {showVectors && (

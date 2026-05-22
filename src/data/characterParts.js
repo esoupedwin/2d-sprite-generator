@@ -155,7 +155,7 @@ export const CHARACTER_PARTS = {
         draw() {},
       },
       sword: {
-        label: 'Sword',
+        label: 'Melee',
         draw(ctx) {
           // Handle at y≈16 (hand level near bottom of forearm blob)
           ctx.fillStyle = '#7B4F2E';
