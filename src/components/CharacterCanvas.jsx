@@ -141,6 +141,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     weaponOffset: { x: 0, y: 0, rotation: 0 },
     onWeaponOffsetSet: null,
     canvasW: 868, canvasH: 896, originX: 434, originY: 686,
+    // Skins cache — rebuilt only when skinOverrides reference changes.
+    cachedSkins: null, lastSkinOverrides: null,
   });
 
   stateRef.current.canvasW = canvasSize.w;
@@ -321,25 +323,26 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const yGridStart = Math.ceil (yMin / GRID_STEP) * GRID_STEP;
     const yGridEnd   = Math.floor(yMax / GRID_STEP) * GRID_STEP;
 
+    // Batch all grid lines into two paths (one per style) instead of one path per line.
     ctx.strokeStyle = 'rgba(0,0,0,0.07)';
     ctx.lineWidth = 1;
+    ctx.beginPath();
     for (let x = xGridStart; x <= xGridEnd; x += GRID_STEP) {
       const cx = originX + x * scale;
-      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, CANVAS_H); ctx.stroke();
+      ctx.moveTo(cx, 0); ctx.lineTo(cx, CANVAS_H);
     }
     for (let y = yGridStart; y <= yGridEnd; y += GRID_STEP) {
       const cy = originY + y * scale;
-      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(CANVAS_W, cy); ctx.stroke();
+      ctx.moveTo(0, cy); ctx.lineTo(CANVAS_W, cy);
     }
+    ctx.stroke();
 
     // Axis emphasis at x=0 / y=0
     ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-    if (originX >= 0 && originX <= CANVAS_W) {
-      ctx.beginPath(); ctx.moveTo(originX, 0); ctx.lineTo(originX, CANVAS_H); ctx.stroke();
-    }
-    if (originY >= 0 && originY <= CANVAS_H) {
-      ctx.beginPath(); ctx.moveTo(0, originY); ctx.lineTo(CANVAS_W, originY); ctx.stroke();
-    }
+    ctx.beginPath();
+    if (originX >= 0 && originX <= CANVAS_W) { ctx.moveTo(originX, 0); ctx.lineTo(originX, CANVAS_H); }
+    if (originY >= 0 && originY <= CANVAS_H) { ctx.moveTo(0, originY); ctx.lineTo(CANVAS_W, originY); }
+    ctx.stroke();
 
     // Edge labels — sparser at low zoom so the numbers don't pile up.
     // Aim for at least ~50 canvas px between labels.
@@ -389,8 +392,14 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const worldTransforms  = computeWorldTransforms(fullPose);
     s.lastWorldTransforms = worldTransforms;
 
-    const skins = {};
-    for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, s.skinOverrides);
+    // Rebuild skins only when skinOverrides reference changes (not every frame).
+    if (s.lastSkinOverrides !== s.skinOverrides) {
+      const built = {};
+      for (const key of Object.keys(DEFAULT_SKINS)) built[key] = getSkin(key, s.skinOverrides);
+      s.cachedSkins = built;
+      s.lastSkinOverrides = s.skinOverrides;
+    }
+    const skins = s.cachedSkins;
 
     const drag = dragRef.current;
     renderCharacter(ctx, s.character, worldTransforms, {

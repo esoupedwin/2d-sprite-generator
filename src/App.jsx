@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { CharacterCanvas } from './components/CharacterCanvas.jsx';
 import { CharacterBuilder } from './components/CharacterBuilder.jsx';
 import { AnimationControls } from './components/AnimationControls.jsx';
@@ -67,6 +67,10 @@ function bakeAnimation(baseAnim, overrides, animOffsets) {
   }
   return resolved;
 }
+
+// Stable empty object — avoids creating a new reference on every render when
+// a prop value is conditionally absent (e.g. animBoneOffsets when poseEditorOpen).
+const EMPTY_OBJ = {};
 
 // Weapon scale clamps (matched by the −/+ buttons and the input).
 const MIN_WEAPON_SCALE = 0.5;
@@ -856,6 +860,22 @@ export default function App() {
     }
   }, [activeCharId]);
 
+  // Memoised derived values to avoid recreating objects/running resolvers every render.
+  const weaponOffset = useMemo(
+    () => resolveWeaponOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.weaponAnimOffsets, activeChar.parts.weaponOffsets, activeChar.parts.weaponOffset, activeChar.parts.weapon, currentAnimation],
+  );
+  const curveAnimKeyframeOverrides = (activeChar.animKeyframeOverrides ?? EMPTY_OBJ)[currentAnimation] ?? EMPTY_OBJ;
+  const curveAnimation = useMemo(
+    () => resolveAnimation(
+      activeChar.customAnimations?.find(a => a.id === currentAnimation) ?? ANIMATIONS[currentAnimation],
+      curveAnimKeyframeOverrides,
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.customAnimations, currentAnimation, curveAnimKeyframeOverrides],
+  );
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Slim single-line header */}
@@ -1153,8 +1173,8 @@ export default function App() {
                 skinOverrides={activeChar.skinOverrides}
                 defaultBoneOffsets={activeChar.defaultBoneOffsets}
                 defaultSkinOverrides={activeChar.defaultSkinOverrides}
-                animBoneOffsets={poseEditorOpen ? {} : (activeChar.animBoneOffsets ?? {})}
-                animKeyframeOverrides={poseEditorOpen ? {} : (activeChar.animKeyframeOverrides ?? {})}
+                animBoneOffsets={poseEditorOpen ? EMPTY_OBJ : (activeChar.animBoneOffsets ?? EMPTY_OBJ)}
+                animKeyframeOverrides={poseEditorOpen ? EMPTY_OBJ : (activeChar.animKeyframeOverrides ?? EMPTY_OBJ)}
                 activeKeyframe={activeKeyframe}
                 onKeyframeOverrideChange={updateAnimKeyframeOverride}
                 currentAnimation={currentAnimation}
@@ -1175,7 +1195,7 @@ export default function App() {
                 onRagdollOverlayChange={poseEditorOpen ? handlePoseRagdollOverlayChange : undefined}
                 onAnimBoneOffsetsChange={poseEditorOpen ? undefined : updateAnimBoneOffsets}
                 onSaveDefault={saveCharacterDefault}
-                weaponOffset={resolveWeaponOffset(activeChar.parts, currentAnimation)}
+                weaponOffset={weaponOffset}
                 onWeaponOffsetSet={setWeaponOffsetAbsolute}
               />
           </main>
@@ -1270,13 +1290,9 @@ export default function App() {
 
               {editAnimPose && !poseEditorOpen && (
                 <AnimationCurvePanel
-                  animation={resolveAnimation(
-                    activeChar.customAnimations?.find(a => a.id === currentAnimation)
-                    ?? ANIMATIONS[currentAnimation],
-                    (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {},
-                  )}
-                  offsets={(activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}}
-                  overrides={(activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {}}
+                  animation={curveAnimation}
+                  offsets={(activeChar.animBoneOffsets ?? EMPTY_OBJ)[currentAnimation] ?? EMPTY_OBJ}
+                  overrides={curveAnimKeyframeOverrides}
                   activeKeyframe={activeKeyframe}
                   onKeyframeClick={onKeyframeClick}
                   onCommitOverrides={commitAnimKeyframeOverrides}

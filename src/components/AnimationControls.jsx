@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { ANIMATIONS, WEAPON_ANIMATION_SETS } from '../systems/AnimationSystem.js';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -28,7 +29,7 @@ function OnceTag() {
   );
 }
 
-export function AnimationControls({
+export const AnimationControls = memo(function AnimationControls({
   currentAnimation, weapon,
   editAnimPose,
   customAnimations, poseEditorOpen,
@@ -84,4 +85,4 @@ export function AnimationControls({
       )}
     </div>
   );
-}
+});

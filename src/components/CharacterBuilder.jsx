@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, memo } from 'react';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { CharacterManagerDialog } from './CharacterManagerDialog.jsx';
 import { Separator } from '@/components/ui/separator';
@@ -23,7 +23,7 @@ function BigIconButton({ icon: Icon, label, active, activeClass, inactiveClass, 
   );
 }
 
-export function CharacterBuilder({
+export const CharacterBuilder = memo(function CharacterBuilder({
   character, characters, activeCharId, currentAnimation,
   onPartChange, onColorChange, onScaleChange,
   onBodyImageChange, onHeadImageChange,
@@ -267,5 +267,5 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
       )}
     </section>
   );
-}
+});
 

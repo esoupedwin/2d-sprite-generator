@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { SectionTitle } from '@/components/ui/section-title.jsx';
 
 // Format a number for compact, readable display
@@ -25,7 +26,7 @@ function offsetLine(off) {
   return out.length ? out.join('  ') : null;
 }
 
-export function AnimationCurvePanel({
+export const AnimationCurvePanel = memo(function AnimationCurvePanel({
   animation, offsets, overrides,
   activeKeyframe, onKeyframeClick,
   onCommitOverrides, onSaveAsTemplate,
@@ -124,4 +125,4 @@ export function AnimationCurvePanel({
       </div>
     </div>
   );
-}
+});
