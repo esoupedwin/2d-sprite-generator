@@ -10,6 +10,7 @@ import { SpriteExportDialog } from './components/SpriteExportDialog.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
+import { AccessoryUploadDialog } from './components/AccessoryUploadDialog.jsx';
 import { CHARACTER_PARTS, DEFAULT_CHARACTER } from './data/characterParts.js';
 import {
   DEFAULT_BUILD_COLORS,
@@ -25,7 +26,7 @@ import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation } from './syste
 import { exportSpriteSheet, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -73,7 +74,7 @@ function bakeAnimation(baseAnim, overrides, animOffsets) {
 const EMPTY_OBJ = {};
 
 // Weapon scale clamps (matched by the −/+ buttons and the input).
-const MIN_WEAPON_SCALE = 0.5;
+const MIN_WEAPON_SCALE = 0.1;
 const MAX_WEAPON_SCALE = 3.0;
 const WEAPON_SCALE_STEP = 0.1;
 
@@ -87,6 +88,7 @@ const ANIMATION_COMPLETE_TARGETS = {
   rifle_jump:                 'rifle_idle',
   rocket_jump:                'rocket_idle',
   rocket_fire:                'rocket_idle',
+  pistol_jump:                'pistol_idle',
 };
 
 function cloneSkinOverrides(src) {
@@ -116,6 +118,7 @@ function newCharacter(name) {
       weaponOffsets:     cloneNested(DEFAULT_WEAPON_OFFSETS,      1),
       weaponAnimOffsets: cloneNested(DEFAULT_WEAPON_ANIM_OFFSETS, 2),
       weaponScales:      { ...DEFAULT_WEAPON_SCALES },
+      accessoryOffset: { x: 0, y: 0, rotation: 0 },
     },
     boneOffsets,
     skinOverrides,
@@ -215,7 +218,8 @@ export default function App() {
   const headerMenuRef = useRef(null);
 
   // Weapon PNG upload dialog
-  const [weaponUploadOpen, setWeaponUploadOpen] = useState(false);
+  const [weaponUploadOpen,    setWeaponUploadOpen]    = useState(false);
+  const [accessoryUploadOpen, setAccessoryUploadOpen] = useState(false);
 
   // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
   // Captured at open time so changes to active selection don't disturb the open dialog.
@@ -381,6 +385,9 @@ export default function App() {
           weaponAnimOffsets: cloneNested(src.parts.weaponAnimOffsets ?? {}, 2),
           weaponScales:      { ...(src.parts.weaponScales      ?? {}) },
           weaponImages:      { ...(src.parts.weaponImages      ?? {}) },
+          accessoryOffset:      { ...(src.parts.accessoryOffset      ?? { x: 0, y: 0, rotation: 0 }) },
+          accessoryAnimOffsets: cloneNested(src.parts.accessoryAnimOffsets ?? {}, 1),
+          accessoryImages:      { ...(src.parts.accessoryImages ?? {}) },
         },
         boneOffsets:          { ...src.boneOffsets },
         skinOverrides:        cloneSkinOverrides(src.skinOverrides),
@@ -474,6 +481,37 @@ export default function App() {
     }));
   }, [activeCharId]);
 
+  const updateAccessoryImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const weapon = c.parts.weapon;
+      const images = { ...(c.parts.accessoryImages ?? {}) };
+      if (dataUrl) images[weapon] = dataUrl;
+      else         delete images[weapon];
+      return { ...c, parts: { ...c.parts, accessoryImages: images } };
+    }));
+  }, [activeCharId]);
+
+  const setAccessoryOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const anim = currentAnimation;
+      const animOffsets = { ...(c.parts.accessoryAnimOffsets ?? {}) };
+      animOffsets[anim] = { x: newOffset.x ?? 0, y: newOffset.y ?? 0, rotation: newOffset.rotation ?? 0 };
+      return { ...c, parts: { ...c.parts, accessoryAnimOffsets: animOffsets } };
+    }));
+  }, [activeCharId, currentAnimation]);
+
+  const resetAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const anim = currentAnimation;
+      const animOffsets = { ...(c.parts.accessoryAnimOffsets ?? {}) };
+      delete animOffsets[anim];
+      return { ...c, parts: { ...c.parts, accessoryAnimOffsets: animOffsets } };
+    }));
+  }, [activeCharId, currentAnimation]);
+
   const updateBoneOffsets = useCallback((newOffsets) => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, boneOffsets: newOffsets } : c
@@ -536,8 +574,7 @@ export default function App() {
       const weapon = c.parts.weapon;
       if (!weapon || weapon === 'none') return c;
       const scales = { ...(c.parts.weaponScales ?? {}) };
-      if (Math.abs(newScale - 1) < 0.001) delete scales[weapon];
-      else                                 scales[weapon] = newScale;
+      scales[weapon] = newScale;
       return { ...c, parts: { ...c.parts, weaponScales: scales } };
     }));
   }, [activeCharId]);
@@ -876,6 +913,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.weaponAnimOffsets, activeChar.parts.weaponOffsets, activeChar.parts.weaponOffset, activeChar.parts.weapon, currentAnimation],
   );
+  const accessoryOffset = useMemo(
+    () => resolveAccessoryOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.accessoryAnimOffsets, activeChar.parts.accessoryOffset, currentAnimation],
+  );
   const curveAnimKeyframeOverrides = (activeChar.animKeyframeOverrides ?? EMPTY_OBJ)[currentAnimation] ?? EMPTY_OBJ;
   const curveAnimation = useMemo(
     () => resolveAnimation(
@@ -1090,7 +1132,7 @@ export default function App() {
                       title={currentWeaponImage ? `Replace ${activeChar.parts.weapon} PNG` : `Upload a PNG to skin the ${activeChar.parts.weapon}`}
                     >
                       <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                      {currentWeaponImage ? "Edit Weapon's Skin" : 'Upload PNG'}
+                      {currentWeaponImage ? "Edit Weapon's Skin" : 'Upload Weapon PNG'}
                     </Button>
                     {currentWeaponImage && (
                       <Button
@@ -1118,6 +1160,50 @@ export default function App() {
                     title="Reset weapon offset"
                   >
                     Reset offset
+                  </button>
+                ) : null;
+              })()}
+
+              {/* Accessory PNG upload — stored per-animation, like weaponImages per weapon type */}
+              {(() => {
+                const currentAccessoryImage = activeChar.parts.accessoryImages?.[activeChar.parts.weapon];
+                return (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAccessoryUploadOpen(true)}
+                      title={currentAccessoryImage ? 'Replace accessory PNG for this animation' : 'Upload a PNG accessory for this animation'}
+                    >
+                      <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                      {currentAccessoryImage ? "Edit Accessory's Skin" : 'Upload Accessories PNG'}
+                    </Button>
+                    {currentAccessoryImage && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => updateAccessoryImage(null)}
+                        title="Remove accessory image for this animation"
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Reset accessory offset — shown in Edit Animation mode when offset is non-zero */}
+              {activeChar.parts.accessoryImages?.[activeChar.parts.weapon] && editAnimPose && (() => {
+                const ao = resolveAccessoryOffset(activeChar.parts, currentAnimation);
+                const isDirty = ao.x !== 0 || ao.y !== 0 || ao.rotation !== 0;
+                return isDirty ? (
+                  <button
+                    onClick={resetAccessoryOffset}
+                    className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                    title="Reset accessory offset"
+                  >
+                    Reset accessory offset
                   </button>
                 ) : null;
               })()}
@@ -1204,6 +1290,8 @@ export default function App() {
                 onSaveDefault={saveCharacterDefault}
                 weaponOffset={weaponOffset}
                 onWeaponOffsetSet={setWeaponOffsetAbsolute}
+                accessoryOffset={accessoryOffset}
+                onAccessoryOffsetSet={setAccessoryOffsetAbsolute}
               />
           </main>
 
@@ -1372,6 +1460,13 @@ export default function App() {
         currentImage={activeChar.parts.weaponImages?.[activeChar.parts.weapon]}
         onPick={updateWeaponImage}
         onClose={() => setWeaponUploadOpen(false)}
+      />
+
+      <AccessoryUploadDialog
+        open={accessoryUploadOpen}
+        currentImage={activeChar.parts.accessoryImages?.[activeChar.parts.weapon]}
+        onPick={updateAccessoryImage}
+        onClose={() => setAccessoryUploadOpen(false)}
       />
 
       <SpritePreviewDialog

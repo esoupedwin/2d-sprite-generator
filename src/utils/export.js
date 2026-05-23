@@ -62,12 +62,13 @@ async function loadRenderAssets(character, animationName) {
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
   const parts = character.parts ?? {};
-  const [bodyImage, headImage, weaponImage] = await Promise.all([
+  const [bodyImage, headImage, weaponImage, accessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
     loadImage(resolveHeadUrl(parts, animationName)),
     loadImage(parts.weaponImages?.[parts.weapon]),
+    loadImage(parts.accessoryImages?.[parts.weapon]),
   ]);
-  return { skins, parts, bodyImage, headImage, weaponImage };
+  return { skins, parts, bodyImage, headImage, weaponImage, accessoryImage };
 }
 
 /**
@@ -102,7 +103,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImage, weaponImage } = await loadRenderAssets(character, animationName);
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
 
   const cols = Math.min(frameCount, SHEET_COLS);
   const rows = Math.ceil(frameCount / cols);
@@ -145,6 +146,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       bodyImage,
       headImage,
       weaponImage,
+      accessoryImage,
       partsFilter,
     });
     ctx.restore();
@@ -222,7 +224,7 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImage, weaponImage } = await loadRenderAssets(character, animationName);
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
 
   const canvas = document.createElement('canvas');
   canvas.width  = POSE_W * POSE_PIXEL_RATIO;
@@ -241,6 +243,7 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
     bodyImage,
     headImage,
     weaponImage,
+    accessoryImage,
   });
 
   const pngDataUrl = canvas.toDataURL('image/png');
@@ -341,8 +344,8 @@ export async function exportPartsSheetSVG(character, animationName, currentTime 
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImage, weaponImage } = await loadRenderAssets(character, animationName);
-  const imgOpts = { skins, bodyImage, headImage, weaponImage, animation: animationName };
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
+  const imgOpts = { skins, bodyImage, headImage, weaponImage, accessoryImage, animation: animationName };
 
   // Build label for weapon from part definition
   const groups = SHEET_GROUPS

@@ -32,3 +32,14 @@ export function resolveWeaponScale(parts) {
       ?? parts.partScales?.weapon
       ?? 1;
 }
+
+// Accessory offset fallback chain:
+//   parts.accessoryAnimOffsets[animation]  — per-animation
+//   parts.accessoryOffset                  — default
+//   { x:0, y:0, rotation:0 }
+export function resolveAccessoryOffset(parts, animation) {
+  if (!parts) return ZERO_OFFSET;
+  return parts.accessoryAnimOffsets?.[animation]
+      ?? parts.accessoryOffset
+      ?? ZERO_OFFSET;
+}

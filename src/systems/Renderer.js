@@ -1,5 +1,5 @@
 import { CHARACTER_PARTS } from '../data/characterParts.js';
-import { resolveWeaponOffset, resolveWeaponScale } from '../utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset } from '../utils/weaponSettings.js';
 import {
   drawSkin, drawSkinImage, drawSkinPinned,
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
@@ -19,9 +19,10 @@ function getScale(character, partKey) {
   return character.partScales?.[partKey] ?? 1;
 }
 
-// Longest-dimension target for user-uploaded weapon PNGs (bone-local units).
+// Longest-dimension target for user-uploaded weapon/accessory PNGs (bone-local units).
 // partScales.weapon multiplies on top of this so the user can tune size.
-const WEAPON_IMAGE_TARGET = 80;
+const WEAPON_IMAGE_TARGET    = 80;
+const ACCESSORY_IMAGE_TARGET = 80;
 
 function drawPart(ctx, partKey, character, worldTransforms, weaponImage, animation) {
   const partDef = CHARACTER_PARTS[partKey];
@@ -60,6 +61,23 @@ function drawPart(ctx, partKey, character, worldTransforms, weaponImage, animati
   ctx.restore();
 }
 
+function drawAccessory(ctx, character, worldTransforms, accessoryImage, animation) {
+  if (!accessoryImage) return;
+  const bone = worldTransforms['left_hand'];
+  if (!bone) return;
+  const ao = resolveAccessoryOffset(character, animation);
+  const factor = ACCESSORY_IMAGE_TARGET / Math.max(accessoryImage.naturalWidth, accessoryImage.naturalHeight);
+  const w = accessoryImage.naturalWidth  * factor;
+  const h = accessoryImage.naturalHeight * factor;
+  ctx.save();
+  ctx.translate(bone.x, bone.y);
+  ctx.rotate(bone.rotation);
+  if (ao.x || ao.y) ctx.translate(ao.x, ao.y);
+  if (ao.rotation)  ctx.rotate(ao.rotation);
+  ctx.drawImage(accessoryImage, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
 function drawExtras(ctx, partKey, character, worldTransforms) {
   const option = CHARACTER_PARTS[partKey]?.options[character[partKey]];
   if (!option?.drawExtras) return;
@@ -81,7 +99,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   const {
     originX = 0, originY = 0, scale = 1,
     showBones = false, highlightBone = null,
-    skins = {}, bodyImage = null, headImage = null, weaponImage = null,
+    skins = {}, bodyImage = null, headImage = null, weaponImage = null, accessoryImage = null,
     animation = '',
     // partsFilter: 'all' (default) | 'no-legs' | 'legs-only'.
     // Used by the split-export mode to render the body and legs onto
@@ -153,6 +171,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // always in front of the weapon so the grip is visible.
     drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'),  getScale(character, 'left_arm'));
     drawPart(ctx, 'head_prop', character, worldTransforms);
+    drawAccessory(ctx, character, worldTransforms, accessoryImage, animation);
   }
 
   if (showBones) {
