@@ -394,14 +394,12 @@ export default function App() {
         skinOverrides:        cloneSkinOverrides(src.skinOverrides),
         defaultBoneOffsets:   { ...src.defaultBoneOffsets },
         defaultSkinOverrides: cloneSkinOverrides(src.defaultSkinOverrides),
-        customAnimations:     (src.customAnimations ?? []).map(a => ({
-          ...a,
-          tracks: Object.fromEntries(Object.entries(a.tracks).map(([k, kfs]) => [k, kfs.map(kf => ({ ...kf }))])),
-        })),
+        // Custom animations are per-character and not carried over on duplication.
         animBoneOffsets:       cloneNested(src.animBoneOffsets       ?? {}, 2),
         animKeyframeOverrides: cloneNested(src.animKeyframeOverrides ?? {}, 3),
       };
       setActiveCharId(copy.id);
+      setCurrentAnimation('idle');
       return [...prev, copy];
     });
   }, []);
