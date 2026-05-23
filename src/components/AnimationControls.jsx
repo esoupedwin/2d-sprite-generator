@@ -30,13 +30,14 @@ function OnceTag() {
 }
 
 export const AnimationControls = memo(function AnimationControls({
-  currentAnimation, weapon,
+  currentAnimation, weapon, customWeapons,
   editAnimPose,
   customAnimations, poseEditorOpen,
   onAnimationChange,
   onNewAnimation, onDeleteAnimation,
 }) {
-  const allowedKeys = WEAPON_ANIMATION_SETS[weapon ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
+  const weaponTemplate = customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
+  const allowedKeys = WEAPON_ANIMATION_SETS[weaponTemplate ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
 
   return (
     <div className="flex flex-col gap-3 w-full">

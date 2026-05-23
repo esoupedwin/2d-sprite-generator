@@ -34,6 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
 import { genId } from './utils/genId.js';
 import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
+import { NewWeaponDialog } from './components/NewWeaponDialog.jsx';
 import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
 const CHARS_STORAGE         = '2dsprite:characters';
@@ -414,10 +415,11 @@ export default function App() {
       return { ...c, parts: { ...c.parts, [partKey]: optionKey, customColors } };
     }));
     if (partKey === 'weapon') {
-      setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[optionKey] ?? 'idle');
+      const animTemplate = customWeapons.find(w => w.key === optionKey)?.template ?? optionKey;
+      setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[animTemplate] ?? 'idle');
       setIsPlaying(true);
     }
-  }, [activeCharId]);
+  }, [activeCharId, customWeapons]);
 
   const updateColor = useCallback((partKey, hexColor) => {
     setCharacters(prev => prev.map(c => {
@@ -792,9 +794,9 @@ export default function App() {
   }, [activeCharId]);
 
   // ── Custom weapon callbacks ──────────────────────────────────────────────────
-  const addCustomWeapon = useCallback((label) => {
+  const addCustomWeapon = useCallback((label, template = 'none') => {
     const key = 'cw_' + genId();
-    setCustomWeapons(prev => [...prev, { key, label }]);
+    setCustomWeapons(prev => [...prev, { key, label, template }]);
     setWeaponDialog(null);
     updatePart('weapon', key);
   }, [updatePart]);
@@ -1122,6 +1124,7 @@ export default function App() {
               <AnimationControls
                 currentAnimation={currentAnimation}
                 weapon={activeChar.parts.weapon}
+                customWeapons={customWeapons}
                 editAnimPose={editAnimPose}
                 customAnimations={activeChar.customAnimations}
                 poseEditorOpen={poseEditorOpen}
@@ -1334,16 +1337,19 @@ export default function App() {
         onSave={confirmSaveTemplate}
       />
 
+      <NewWeaponDialog
+        open={weaponDialog?.mode === 'create'}
+        onClose={() => setWeaponDialog(null)}
+        onSave={(name, template) => addCustomWeapon(name, template)}
+      />
+
       <SaveTemplateDialog
-        open={!!weaponDialog}
+        open={weaponDialog?.mode === 'rename'}
         defaultName={weaponDialog?.defaultName}
-        title={weaponDialog?.mode === 'rename' ? 'Rename Weapon Mode' : 'New Weapon Mode'}
+        title="Rename Weapon Mode"
         inputLabel="Weapon name"
         onClose={() => setWeaponDialog(null)}
-        onSave={name => weaponDialog?.mode === 'rename'
-          ? renameCustomWeapon(weaponDialog.key, name)
-          : addCustomWeapon(name)
-        }
+        onSave={name => renameCustomWeapon(weaponDialog.key, name)}
       />
 
       <NewAnimationDialog
