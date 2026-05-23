@@ -1,6 +1,7 @@
 import { ANIMATIONS, WEAPON_ANIMATION_SETS } from '../systems/AnimationSystem.js';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
 import { X } from 'lucide-react';
 
@@ -38,6 +39,7 @@ export function AnimationControls({
 
   return (
     <div className="flex flex-col gap-3 w-full">
+      <SectionTitle>Actions</SectionTitle>
       <div className="flex flex-wrap gap-1.5 border border-border rounded-md p-2">
         {Object.entries(ANIMATIONS).filter(([key]) => allowedKeys.includes(key)).map(([key, anim]) => (
           <AnimChip key={key} active={currentAnimation === key} disabled={poseEditorOpen} onClick={() => onAnimationChange(key)}>

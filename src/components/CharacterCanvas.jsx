@@ -299,7 +299,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const ctx = canvas.getContext('2d');
     const CANVAS_W = s.canvasW, CANVAS_H = s.canvasH;
 
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = '#FFE699';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
     const { zoom, panX, panY } = viewRef.current;
@@ -321,7 +321,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const yGridStart = Math.ceil (yMin / GRID_STEP) * GRID_STEP;
     const yGridEnd   = Math.floor(yMax / GRID_STEP) * GRID_STEP;
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.07)';
     ctx.lineWidth = 1;
     for (let x = xGridStart; x <= xGridEnd; x += GRID_STEP) {
       const cx = originX + x * scale;
@@ -333,7 +333,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     }
 
     // Axis emphasis at x=0 / y=0
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
     if (originX >= 0 && originX <= CANVAS_W) {
       ctx.beginPath(); ctx.moveTo(originX, 0); ctx.lineTo(originX, CANVAS_H); ctx.stroke();
     }
@@ -351,7 +351,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const yLabelStart = Math.ceil (yMin / labelStep) * labelStep;
     const yLabelEnd   = Math.floor(yMax / labelStep) * labelStep;
 
-    ctx.fillStyle = 'rgba(255,255,255,0.32)';
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
     ctx.font = '10px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';

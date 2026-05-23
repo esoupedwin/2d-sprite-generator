@@ -28,7 +28,7 @@ function offsetLine(off) {
 export function AnimationCurvePanel({
   animation, offsets, overrides,
   activeKeyframe, onKeyframeClick,
-  onCommitOverrides,
+  onCommitOverrides, onSaveAsTemplate,
 }) {
   if (!animation) {
     return (
@@ -50,15 +50,24 @@ export function AnimationCurvePanel({
         </span>
       </div>
 
-      {hasOverrides && (
+      <div className="flex gap-2 flex-wrap">
+        {hasOverrides && (
+          <button
+            type="button"
+            onClick={onCommitOverrides}
+            className="text-[11px] px-2 py-0.5 rounded border border-amber-400/40 text-amber-400 hover:bg-amber-400/10 transition-colors"
+          >
+            Commit edits
+          </button>
+        )}
         <button
           type="button"
-          onClick={onCommitOverrides}
-          className="self-start text-[11px] px-2 py-0.5 rounded border border-amber-400/40 text-amber-400 hover:bg-amber-400/10 transition-colors"
+          onClick={onSaveAsTemplate}
+          className="text-[11px] px-2 py-0.5 rounded border border-teal-400/40 text-teal-400 hover:bg-teal-400/10 transition-colors"
         >
-          Commit edits
+          Save as template
         </button>
-      )}
+      </div>
 
       <div className="text-xs text-muted-foreground/70 leading-snug">
         Click a <span className="font-mono">t=…</span> row to pause the animation at that

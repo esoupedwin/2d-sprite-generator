@@ -33,8 +33,40 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
 import { genId } from './utils/genId.js';
+import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
+import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
-const CHARS_STORAGE = '2dsprite:characters';
+const CHARS_STORAGE         = '2dsprite:characters';
+const TEMPLATES_STORAGE     = '2dsprite:templates';
+const CUSTOM_WEAPONS_STORAGE = '2dsprite:custom-weapons';
+
+// Bake keyframe overrides + time-invariant pose offsets into animation tracks.
+// Returns a new animation object with merged tracks; does not mutate inputs.
+function bakeAnimation(baseAnim, overrides, animOffsets) {
+  let resolved = resolveAnimation(baseAnim, overrides);
+  if (Object.keys(animOffsets).length > 0) {
+    const tracks = { ...resolved.tracks };
+    for (const [boneId, offset] of Object.entries(animOffsets)) {
+      const ox = offset.x ?? 0, oy = offset.y ?? 0, or_ = offset.rotation ?? 0;
+      if (!ox && !oy && !or_) continue;
+      if (tracks[boneId]) {
+        tracks[boneId] = tracks[boneId].map(kf => ({
+          ...kf,
+          ...(ox  !== 0 ? { x:        (kf.x        ?? 0) + ox  } : {}),
+          ...(oy  !== 0 ? { y:        (kf.y        ?? 0) + oy  } : {}),
+          ...(or_ !== 0 ? { rotation: (kf.rotation ?? 0) + or_ } : {}),
+        }));
+      } else {
+        tracks[boneId] = [
+          { time: 0,                 x: ox, y: oy, rotation: or_ },
+          { time: resolved.duration, x: ox, y: oy, rotation: or_ },
+        ];
+      }
+    }
+    resolved = { ...resolved, tracks };
+  }
+  return resolved;
+}
 
 // Weapon scale clamps (matched by the −/+ buttons and the input).
 const MIN_WEAPON_SCALE = 0.5;
@@ -191,6 +223,27 @@ export default function App() {
   // When set, the canvas pauses + seeks to this time. Drags on the named bone
   // write back to character.animKeyframeOverrides[currentAnimation][bone][time].
   const [activeKeyframe, setActiveKeyframe] = useState(null); // { boneId, time } | null
+
+  // ── Animation templates (global, persisted to localStorage) ──────────────────
+  const [animTemplates, setAnimTemplates] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(TEMPLATES_STORAGE) ?? '[]'); }
+    catch { return []; }
+  });
+  useEffect(() => {
+    localStorage.setItem(TEMPLATES_STORAGE, JSON.stringify(animTemplates));
+  }, [animTemplates]);
+  const [newAnimDialogOpen,    setNewAnimDialogOpen]    = useState(false);
+  const [saveTemplateDialog,   setSaveTemplateDialog]   = useState(null); // { defaultName, resolved } | null
+
+  // ── Custom weapon modes (global, persisted) ───────────────────────────────────
+  const [customWeapons, setCustomWeapons] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CUSTOM_WEAPONS_STORAGE) ?? '[]'); }
+    catch { return []; }
+  });
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_WEAPONS_STORAGE, JSON.stringify(customWeapons));
+  }, [customWeapons]);
+  const [weaponDialog, setWeaponDialog] = useState(null); // { mode:'create'|'rename', key?, defaultName? }
 
   // ── Pose editor ───────────────────────────────────────────────────────────────
   const [poseEditorOpen,  setPoseEditorOpen]  = useState(false);
@@ -543,43 +596,16 @@ export default function App() {
     const overrides   = (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {};
     const animOffsets = (activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {};
     if (Object.keys(overrides).length === 0 && Object.keys(animOffsets).length === 0) return;
-
     const baseAnim = activeChar.customAnimations?.find(a => a.id === currentAnimation)
       ?? ANIMATIONS[currentAnimation];
     if (!baseAnim) return;
-
-    let resolved = resolveAnimation(baseAnim, overrides);
-
-    // Bake time-invariant pose offsets into every keyframe
-    if (Object.keys(animOffsets).length > 0) {
-      const tracks = { ...resolved.tracks };
-      for (const [boneId, offset] of Object.entries(animOffsets)) {
-        const ox = offset.x ?? 0, oy = offset.y ?? 0, or_ = offset.rotation ?? 0;
-        if (!ox && !oy && !or_) continue;
-        if (tracks[boneId]) {
-          tracks[boneId] = tracks[boneId].map(kf => ({
-            ...kf,
-            ...(ox  !== 0 ? { x:        (kf.x        ?? 0) + ox  } : {}),
-            ...(oy  !== 0 ? { y:        (kf.y        ?? 0) + oy  } : {}),
-            ...(or_ !== 0 ? { rotation: (kf.rotation ?? 0) + or_ } : {}),
-          }));
-        } else {
-          tracks[boneId] = [
-            { time: 0,                 x: ox, y: oy, rotation: or_ },
-            { time: resolved.duration, x: ox, y: oy, rotation: or_ },
-          ];
-        }
-      }
-      resolved = { ...resolved, tracks };
-    }
-
+    const resolved = bakeAnimation(baseAnim, overrides, animOffsets);
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
       const ov = { ...(c.animKeyframeOverrides ?? {}) };
       delete ov[currentAnimation];
       const ao = { ...(c.animBoneOffsets ?? {}) };
       delete ao[currentAnimation];
-      // Upsert: replace existing baked entry or append — same ID as the original animation
       const bakedAnim = { ...resolved, id: currentAnimation, custom: true };
       const existing = (c.customAnimations ?? []).some(a => a.id === currentAnimation);
       const customAnimations = existing
@@ -587,9 +613,46 @@ export default function App() {
         : [...(c.customAnimations ?? []), bakedAnim];
       return { ...c, customAnimations, animKeyframeOverrides: ov, animBoneOffsets: ao };
     }));
-
     charCanvasRef.current?.resetAnimBoneOffsets(currentAnimation);
   }, [activeCharId, activeChar, currentAnimation]);
+
+  const saveAnimAsTemplate = useCallback(() => {
+    const overrides   = (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {};
+    const animOffsets = (activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {};
+    const baseAnim = activeChar.customAnimations?.find(a => a.id === currentAnimation)
+      ?? ANIMATIONS[currentAnimation];
+    if (!baseAnim) return;
+    const resolved = bakeAnimation(baseAnim, overrides, animOffsets);
+    const weaponKey   = activeChar.parts.weapon ?? 'none';
+    const weaponLabel = CHARACTER_PARTS.weapon?.options?.[weaponKey]?.label ?? weaponKey;
+    const defaultName = weaponKey === 'none'
+      ? resolved.name
+      : `${weaponLabel}-${resolved.name}`;
+    setSaveTemplateDialog({ defaultName, resolved });
+  }, [activeChar, currentAnimation]);
+
+  const confirmSaveTemplate = useCallback((name) => {
+    if (!saveTemplateDialog) return;
+    const { resolved } = saveTemplateDialog;
+    setAnimTemplates(prev => [...prev, {
+      id: genId(), name, duration: resolved.duration,
+      loop: resolved.loop, tracks: resolved.tracks,
+    }]);
+    setSaveTemplateDialog(null);
+  }, [saveTemplateDialog]);
+
+  const deleteAnimTemplate = useCallback((id) => {
+    setAnimTemplates(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const createAnimFromTemplate = useCallback((template) => {
+    const newAnim = { ...template, id: genId(), name: `Copy of ${template.name}`, custom: true };
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, customAnimations: [...(c.customAnimations ?? []), newAnim] } : c
+    ));
+    setCurrentAnimation(newAnim.id);
+    setNewAnimDialogOpen(false);
+  }, [activeCharId]);
 
   // Click on a keyframe row in the curve panel: pause + seek + remember which
   // keyframe is "active" so ragdoll drags route to it.
@@ -723,6 +786,27 @@ export default function App() {
     ));
     setCurrentAnimation(cur => cur === animId ? 'idle' : cur);
   }, [activeCharId]);
+
+  // ── Custom weapon callbacks ──────────────────────────────────────────────────
+  const addCustomWeapon = useCallback((label) => {
+    const key = 'cw_' + genId();
+    setCustomWeapons(prev => [...prev, { key, label }]);
+    setWeaponDialog(null);
+    updatePart('weapon', key);
+  }, [updatePart]);
+
+  const renameCustomWeapon = useCallback((key, label) => {
+    setCustomWeapons(prev => prev.map(w => w.key === key ? { ...w, label } : w));
+    setWeaponDialog(null);
+  }, []);
+
+  const deleteCustomWeapon = useCallback((key) => {
+    setCustomWeapons(prev => prev.filter(w => w.key !== key));
+    setCharacters(prev => prev.map(c =>
+      c.parts.weapon === key ? { ...c, parts: { ...c.parts, weapon: 'none' } } : c
+    ));
+    setCurrentAnimation(cur => (activeChar.parts.weapon === key ? 'idle' : cur));
+  }, [activeChar]);
 
   // ── Workspace save/load ───────────────────────────────────────────────────────
   const loadWorkspace = useCallback(({ characters: newChars, activeCharId: newActive, uiState }) => {
@@ -907,6 +991,8 @@ export default function App() {
                   </div>
                 );
               })()}
+              <div className="flex flex-col gap-1.5">
+              <SectionTitle>Types</SectionTitle>
               <div className="flex flex-wrap gap-1">
                 {Object.entries(CHARACTER_PARTS.weapon.options).map(([key, opt]) => (
                   <button
@@ -922,6 +1008,47 @@ export default function App() {
                     {opt.label}
                   </button>
                 ))}
+                {customWeapons.map(w => (
+                  <div key={w.key} className="flex items-center">
+                    <button
+                      onClick={() => updatePart('weapon', w.key)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-l text-xs whitespace-nowrap border-y border-l transition-colors',
+                        activeChar.parts.weapon === w.key
+                          ? 'bg-primary border-primary text-primary-foreground font-semibold'
+                          : 'bg-secondary border-border text-foreground hover:border-primary',
+                      )}
+                    >
+                      {w.label}
+                    </button>
+                    <button
+                      onClick={() => setWeaponDialog({ mode: 'rename', key: w.key, defaultName: w.label })}
+                      title="Rename weapon"
+                      className={cn(
+                        'px-1 py-1 border-y border-x transition-colors',
+                        activeChar.parts.weapon === w.key
+                          ? 'bg-primary border-primary text-primary-foreground hover:bg-primary/80'
+                          : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-primary',
+                      )}
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                    </button>
+                    <button
+                      onClick={() => deleteCustomWeapon(w.key)}
+                      title="Delete weapon"
+                      className="px-1 py-1 rounded-r border-y border-r border-border bg-secondary text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setWeaponDialog({ mode: 'create', defaultName: '' })}
+                  className="px-2.5 py-1 rounded text-xs whitespace-nowrap border border-dashed border-border text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
+                >
+                  + Weapon
+                </button>
+              </div>
               </div>
 
               {/* User-uploaded PNG that replaces the procedural weapon drawing.
@@ -979,7 +1106,7 @@ export default function App() {
                 customAnimations={activeChar.customAnimations}
                 poseEditorOpen={poseEditorOpen}
                 onAnimationChange={handleAnimationChange}
-                onNewAnimation={openPoseEditor}
+                onNewAnimation={() => setNewAnimDialogOpen(true)}
                 onDeleteAnimation={deleteCustomAnimation}
               />
             </div>
@@ -1153,6 +1280,7 @@ export default function App() {
                   activeKeyframe={activeKeyframe}
                   onKeyframeClick={onKeyframeClick}
                   onCommitOverrides={commitAnimKeyframeOverrides}
+                  onSaveAsTemplate={saveAnimAsTemplate}
                 />
               )}
             </aside>
@@ -1182,6 +1310,34 @@ export default function App() {
           </div>
         )}
       </div>
+
+      <SaveTemplateDialog
+        open={!!saveTemplateDialog}
+        defaultName={saveTemplateDialog?.defaultName}
+        onClose={() => setSaveTemplateDialog(null)}
+        onSave={confirmSaveTemplate}
+      />
+
+      <SaveTemplateDialog
+        open={!!weaponDialog}
+        defaultName={weaponDialog?.defaultName}
+        title={weaponDialog?.mode === 'rename' ? 'Rename Weapon Mode' : 'New Weapon Mode'}
+        inputLabel="Weapon name"
+        onClose={() => setWeaponDialog(null)}
+        onSave={name => weaponDialog?.mode === 'rename'
+          ? renameCustomWeapon(weaponDialog.key, name)
+          : addCustomWeapon(name)
+        }
+      />
+
+      <NewAnimationDialog
+        open={newAnimDialogOpen}
+        onClose={() => setNewAnimDialogOpen(false)}
+        templates={animTemplates}
+        onDeleteTemplate={deleteAnimTemplate}
+        onBlank={openPoseEditor}
+        onFromTemplate={createAnimFromTemplate}
+      />
 
       <WeaponUploadDialog
         open={weaponUploadOpen}
