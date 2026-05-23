@@ -30,7 +30,7 @@ function OnceTag() {
 }
 
 export const AnimationControls = memo(function AnimationControls({
-  currentAnimation, weapon, customWeapons,
+  currentAnimation, weapon, customWeapons, characterName,
   editAnimPose,
   customAnimations, poseEditorOpen,
   onAnimationChange,
@@ -38,6 +38,7 @@ export const AnimationControls = memo(function AnimationControls({
 }) {
   const weaponTemplate = customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
   const allowedKeys = WEAPON_ANIMATION_SETS[weaponTemplate ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
+  const ownAnimations = customAnimations?.filter(a => !ANIMATIONS[a.id]) ?? [];
 
   return (
     <div className="flex flex-col gap-3 w-full">
@@ -49,9 +50,18 @@ export const AnimationControls = memo(function AnimationControls({
           </AnimChip>
         ))}
 
-        {customAnimations?.filter(a => !ANIMATIONS[a.id]).length > 0 && <Separator className="my-0.5 w-full" />}
+        {ownAnimations.length > 0 && (
+          <>
+            <Separator className="my-0.5 w-full" />
+            {characterName && (
+              <span className="w-full text-[10px] text-muted-foreground/60 px-0.5 -mb-0.5">
+                {characterName} only
+              </span>
+            )}
+          </>
+        )}
 
-        {customAnimations?.filter(a => !ANIMATIONS[a.id]).map(anim => (
+        {ownAnimations.map(anim => (
           <div key={anim.id} className="flex items-center gap-1">
             <AnimChip active={currentAnimation === anim.id} disabled={poseEditorOpen} onClick={() => onAnimationChange(anim.id)}>
               {anim.name}{!anim.loop && <OnceTag />}

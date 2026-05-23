@@ -1118,6 +1118,7 @@ export default function App() {
                 currentAnimation={currentAnimation}
                 weapon={activeChar.parts.weapon}
                 customWeapons={customWeapons}
+                characterName={activeChar.name}
                 editAnimPose={editAnimPose}
                 customAnimations={activeChar.customAnimations}
                 poseEditorOpen={poseEditorOpen}
@@ -1352,6 +1353,7 @@ export default function App() {
         onDeleteTemplate={deleteAnimTemplate}
         onBlank={openPoseEditor}
         onFromTemplate={createAnimFromTemplate}
+        characterName={activeChar.name}
       />
 
       <WeaponUploadDialog
