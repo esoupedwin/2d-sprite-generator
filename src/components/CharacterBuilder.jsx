@@ -131,7 +131,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
       </>)}
     </aside>
   );
-}
+});
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;
@@ -267,5 +267,5 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
       )}
     </section>
   );
-});
+}
 
