@@ -37,9 +37,8 @@ import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
 import { NewWeaponDialog } from './components/NewWeaponDialog.jsx';
 import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
-const CHARS_STORAGE         = '2dsprite:characters';
-const TEMPLATES_STORAGE     = '2dsprite:templates';
-const CUSTOM_WEAPONS_STORAGE = '2dsprite:custom-weapons';
+const CHARS_STORAGE     = '2dsprite:characters';
+const TEMPLATES_STORAGE = '2dsprite:templates';
 
 // Bake keyframe overrides + time-invariant pose offsets into animation tracks.
 // Returns a new animation object with merged tracks; does not mutate inputs.
@@ -124,6 +123,7 @@ function newCharacter(name) {
     defaultSkinOverrides:  cloneSkinOverrides(DEFAULT_BUILD_SKIN_OVERRIDES),
     animBoneOffsets:       cloneNested(DEFAULT_ANIM_BONE_OFFSETS,       2),
     animKeyframeOverrides: cloneNested(DEFAULT_ANIM_KEYFRAME_OVERRIDES, 3),
+    customWeapons:         [],
   };
 }
 
@@ -240,14 +240,6 @@ export default function App() {
   const [newAnimDialogOpen,    setNewAnimDialogOpen]    = useState(false);
   const [saveTemplateDialog,   setSaveTemplateDialog]   = useState(null); // { defaultName, resolved } | null
 
-  // ── Custom weapon modes (global, persisted) ───────────────────────────────────
-  const [customWeapons, setCustomWeapons] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(CUSTOM_WEAPONS_STORAGE) ?? '[]'); }
-    catch { return []; }
-  });
-  useEffect(() => {
-    localStorage.setItem(CUSTOM_WEAPONS_STORAGE, JSON.stringify(customWeapons));
-  }, [customWeapons]);
   const [weaponDialog, setWeaponDialog] = useState(null); // { mode:'create'|'rename', key?, defaultName? }
 
   // ── Pose editor ───────────────────────────────────────────────────────────────
@@ -397,6 +389,7 @@ export default function App() {
         // Custom animations are per-character and not carried over on duplication.
         animBoneOffsets:       cloneNested(src.animBoneOffsets       ?? {}, 2),
         animKeyframeOverrides: cloneNested(src.animKeyframeOverrides ?? {}, 3),
+        customWeapons:         (src.customWeapons ?? []).map(w => ({ ...w })),
       };
       setActiveCharId(copy.id);
       setCurrentAnimation('idle');
@@ -413,11 +406,11 @@ export default function App() {
       return { ...c, parts: { ...c.parts, [partKey]: optionKey, customColors } };
     }));
     if (partKey === 'weapon') {
-      const animTemplate = customWeapons.find(w => w.key === optionKey)?.template ?? optionKey;
+      const animTemplate = (activeChar.customWeapons ?? []).find(w => w.key === optionKey)?.template ?? optionKey;
       setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[animTemplate] ?? 'idle');
       setIsPlaying(true);
     }
-  }, [activeCharId, customWeapons]);
+  }, [activeCharId, activeChar.customWeapons]);
 
   const updateColor = useCallback((partKey, hexColor) => {
     setCharacters(prev => prev.map(c => {
@@ -794,21 +787,38 @@ export default function App() {
   // ── Custom weapon callbacks ──────────────────────────────────────────────────
   const addCustomWeapon = useCallback((label, template = 'none') => {
     const key = 'cw_' + genId();
-    setCustomWeapons(prev => [...prev, { key, label, template }]);
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      return {
+        ...c,
+        parts: { ...c.parts, weapon: key },
+        customWeapons: [...(c.customWeapons ?? []), { key, label, template }],
+      };
+    }));
     setWeaponDialog(null);
-    updatePart('weapon', key);
-  }, [updatePart]);
+    setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[template] ?? 'idle');
+    setIsPlaying(true);
+  }, [activeCharId]);
 
   const renameCustomWeapon = useCallback((key, label) => {
-    setCustomWeapons(prev => prev.map(w => w.key === key ? { ...w, label } : w));
+    setCharacters(prev => prev.map(c =>
+      c.id !== activeCharId ? c : {
+        ...c,
+        customWeapons: (c.customWeapons ?? []).map(w => w.key === key ? { ...w, label } : w),
+      }
+    ));
     setWeaponDialog(null);
-  }, []);
+  }, [activeCharId]);
 
   const deleteCustomWeapon = useCallback((key) => {
-    setCustomWeapons(prev => prev.filter(w => w.key !== key));
-    setCharacters(prev => prev.map(c =>
-      c.parts.weapon === key ? { ...c, parts: { ...c.parts, weapon: 'none' } } : c
-    ));
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      return {
+        ...c,
+        customWeapons: (c.customWeapons ?? []).filter(w => w.key !== key),
+        parts: c.parts.weapon === key ? { ...c.parts, weapon: 'none' } : c.parts,
+      };
+    }));
     setCurrentAnimation(cur => (activeChar.parts.weapon === key ? 'idle' : cur));
   }, [activeChar]);
 
@@ -1028,7 +1038,7 @@ export default function App() {
                     {opt.label}
                   </button>
                 ))}
-                {customWeapons.map(w => (
+                {(activeChar.customWeapons ?? []).map(w => (
                   <div key={w.key} className="flex items-center gap-0.5">
                     <button
                       onClick={() => updatePart('weapon', w.key)}
@@ -1117,7 +1127,7 @@ export default function App() {
               <AnimationControls
                 currentAnimation={currentAnimation}
                 weapon={activeChar.parts.weapon}
-                customWeapons={customWeapons}
+                customWeapons={activeChar.customWeapons}
                 characterName={activeChar.name}
                 editAnimPose={editAnimPose}
                 customAnimations={activeChar.customAnimations}
