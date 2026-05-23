@@ -1031,11 +1031,11 @@ export default function App() {
                   </button>
                 ))}
                 {customWeapons.map(w => (
-                  <div key={w.key} className="flex items-center">
+                  <div key={w.key} className="flex items-center gap-0.5">
                     <button
                       onClick={() => updatePart('weapon', w.key)}
                       className={cn(
-                        'px-2.5 py-1 rounded-l text-xs whitespace-nowrap border-y border-l transition-colors',
+                        'px-2.5 py-1 rounded text-xs whitespace-nowrap border transition-colors',
                         activeChar.parts.weapon === w.key
                           ? 'bg-primary border-primary text-primary-foreground font-semibold'
                           : 'bg-secondary border-border text-foreground hover:border-primary',
@@ -1046,19 +1046,14 @@ export default function App() {
                     <button
                       onClick={() => setWeaponDialog({ mode: 'rename', key: w.key, defaultName: w.label })}
                       title="Rename weapon"
-                      className={cn(
-                        'px-1 py-1 border-y border-x transition-colors',
-                        activeChar.parts.weapon === w.key
-                          ? 'bg-primary border-primary text-primary-foreground hover:bg-primary/80'
-                          : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-primary',
-                      )}
+                      className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <Pencil className="h-2.5 w-2.5" />
                     </button>
                     <button
                       onClick={() => deleteCustomWeapon(w.key)}
                       title="Delete weapon"
-                      className="px-1 py-1 rounded-r border-y border-r border-border bg-secondary text-muted-foreground hover:text-destructive hover:border-destructive/50 transition-colors"
+                      className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
                     >
                       <X className="h-2.5 w-2.5" />
                     </button>
