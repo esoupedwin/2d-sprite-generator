@@ -1282,6 +1282,7 @@ export default function App() {
                 selectedSkin={selectedSkin}
                 editAnimPose={poseEditorOpen ? false : editAnimPose}
                 customAnimations={activeChar.customAnimations}
+                customWeapons={activeChar.customWeapons}
                 onAnimationComplete={handleAnimationComplete}
                 onBoneOffsetsChange={poseEditorOpen ? updatePoseFrameBones : updateBoneOffsets}
                 onSkinOverridesChange={updateSkinOverrides}

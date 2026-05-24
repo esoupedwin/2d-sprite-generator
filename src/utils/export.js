@@ -7,7 +7,7 @@ import {
   LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
 } from '../systems/SkinSystem.js';
 import { DEFAULT_SKINS, getSkin } from '../systems/VectorEditor.js';
-import { renderCharacter, renderPartGroup } from '../systems/Renderer.js';
+import { renderCharacter, renderPartGroup, MELEE_WEAPONS } from '../systems/Renderer.js';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
 import {
@@ -104,6 +104,8 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
   const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
+  const isMelee = MELEE_WEAPONS.has(parts.weapon) ||
+    (character.customWeapons ?? []).some(w => w.key === parts.weapon && MELEE_WEAPONS.has(w.template));
 
   const cols = Math.min(frameCount, SHEET_COLS);
   const rows = Math.ceil(frameCount / cols);
@@ -147,6 +149,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       headImage,
       weaponImage,
       accessoryImage,
+      isMelee,
       partsFilter,
     });
     ctx.restore();
@@ -225,6 +228,8 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
   const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
+  const isMelee = MELEE_WEAPONS.has(parts.weapon) ||
+    (character.customWeapons ?? []).some(w => w.key === parts.weapon && MELEE_WEAPONS.has(w.template));
 
   const canvas = document.createElement('canvas');
   canvas.width  = POSE_W * POSE_PIXEL_RATIO;
@@ -244,6 +249,7 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
     headImage,
     weaponImage,
     accessoryImage,
+    isMelee,
   });
 
   const pngDataUrl = canvas.toDataURL('image/png');

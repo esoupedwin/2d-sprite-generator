@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { ANIMATIONS, getPoseAtTime, resolveAnimation, keyframeTimeKey } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
-import { renderCharacter } from '../systems/Renderer.js';
+import { renderCharacter, MELEE_WEAPONS } from '../systems/Renderer.js';
 import {
   DEFAULT_SKINS, SKIN_COLORS, getSkin,
   renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
@@ -70,6 +70,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   showBones, showFrame, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
   editAnimPose,
   customAnimations,
+  customWeapons,
   onAnimationComplete,
   onBoneOffsetsChange,
   onSkinOverridesChange,
@@ -173,6 +174,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.ragdollOverlay   = ragdollOverlay;
   stateRef.current.animBoneOffsets  = animBoneOffsets;
   stateRef.current.customAnimations = customAnimations;
+  stateRef.current.customWeapons    = customWeapons;
   stateRef.current.animKeyframeOverrides = animKeyframeOverridesProp ?? {};
   stateRef.current.activeKeyframe   = activeKeyframe ?? null;
   stateRef.current.weaponOffset       = weaponOffset    ?? { x: 0, y: 0, rotation: 0 };
@@ -410,6 +412,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const skins = s.cachedSkins;
 
     const drag = dragRef.current;
+    const weapon = s.character?.weapon;
+    const isMelee = MELEE_WEAPONS.has(weapon) ||
+      (s.customWeapons ?? []).some(w => w.key === weapon && MELEE_WEAPONS.has(w.template));
     renderCharacter(ctx, s.character, worldTransforms, {
       originX, originY, scale,
       showBones:     s.showBones,
@@ -420,6 +425,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       headImage:       headImageRef.current,
       weaponImage:     weaponImageRef.current,
       accessoryImage:  accessoryImageRef.current,
+      isMelee,
     });
 
     if (s.showVectors) {

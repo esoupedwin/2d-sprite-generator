@@ -6,7 +6,7 @@ import {
   HEAD_SKIN, BODY_SKIN,
 } from './SkinSystem.js';
 
-const MELEE_WEAPONS = new Set(['sword']);
+export const MELEE_WEAPONS = new Set(['sword']);
 
 function getColor(character, partKey) {
   if (character.customColors?.[partKey]) return character.customColors[partKey];
@@ -101,6 +101,11 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     showBones = false, highlightBone = null,
     skins = {}, bodyImage = null, headImage = null, weaponImage = null, accessoryImage = null,
     animation = '',
+    // isMelee: pass explicitly when the caller has access to customWeapons
+    // so that custom weapons (key='cw_…') whose template='sword' draw behind
+    // the head rather than in front of it.  Falls back to the MELEE_WEAPONS
+    // set check when omitted.
+    isMelee: isMeleeOpt = null,
     // partsFilter: 'all' (default) | 'no-legs' | 'legs-only'.
     // Used by the split-export mode to render the body and legs onto
     // separate sprite sheets at identical frame coords so they overlay
@@ -127,7 +132,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   //
   // Bone-name caveat: `right_arm` = character's LEFT (support) arm;
   //                   `left_arm`  = character's RIGHT (dominant) arm.
-  const isMelee   = MELEE_WEAPONS.has(character.weapon);
+  const isMelee   = isMeleeOpt !== null ? isMeleeOpt : MELEE_WEAPONS.has(character.weapon);
   // With no weapon equipped, the character's left arm sits BEHIND the legs
   // (unarmed silhouettes look more relaxed with the support arm tucked
   // behind). Once any weapon is drawn it goes back to the standard order.
