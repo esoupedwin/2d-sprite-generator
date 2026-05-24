@@ -34,7 +34,7 @@ export function AccessoryUploadDialog({ open, onClose, onPick, currentImage }) {
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 id="accessory-upload-title" className="text-sm font-semibold text-foreground">
-            Upload Accessory PNG
+            Upload Right Arm Accessory PNG
           </h2>
           <button
             type="button"
@@ -48,7 +48,7 @@ export function AccessoryUploadDialog({ open, onClose, onPick, currentImage }) {
 
         <div className="p-4 flex flex-col gap-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Upload a PNG for your character's accessory. The image is drawn
+            Upload a PNG for your character's right arm accessory. The image is drawn
             <strong className="text-foreground"> centered on its anchor point</strong>, which is
             attached to joint 6 (dominant hand). Use the <strong className="text-foreground">Edit Animation</strong> mode
             to drag the anchor and rotation handle to position it anywhere on the character.
@@ -70,7 +70,7 @@ export function AccessoryUploadDialog({ open, onClose, onPick, currentImage }) {
           <ul className="text-[11px] text-muted-foreground/80 list-disc list-inside space-y-0.5">
             <li>Transparent PNG recommended.</li>
             <li>Longest side scales to ~80 units; drag the anchor in Edit Animation to reposition.</li>
-            <li>The accessory moves with joint 6 (dominant hand) by default.</li>
+            <li>The right arm accessory moves with joint 6 (dominant hand) by default.</li>
           </ul>
         </div>
 

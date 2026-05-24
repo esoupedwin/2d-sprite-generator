@@ -33,6 +33,15 @@ export function resolveWeaponScale(parts) {
       ?? 1;
 }
 
+// Accessory scale — stored per weapon key so each weapon's right-arm
+// accessory can be sized independently.
+export function resolveAccessoryScale(parts) {
+  if (!parts) return 1;
+  const weapon = parts.weapon;
+  if (!weapon || weapon === 'none') return 1;
+  return parts.accessoryScales?.[weapon] ?? 1;
+}
+
 // Accessory offset fallback chain:
 //   parts.accessoryAnimOffsets[animation]  — per-animation
 //   parts.accessoryOffset                  — default

@@ -26,7 +26,7 @@ import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation } from './syste
 import { exportSpriteSheet, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset, resolveAccessoryOffset } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -77,6 +77,9 @@ const EMPTY_OBJ = {};
 const MIN_WEAPON_SCALE = 0.1;
 const MAX_WEAPON_SCALE = 3.0;
 const WEAPON_SCALE_STEP = 0.1;
+const MIN_ACCESSORY_SCALE = 0.1;
+const MAX_ACCESSORY_SCALE = 3.0;
+const ACCESSORY_SCALE_STEP = 0.1;
 
 // When a one-shot animation finishes, where to land. Looping animations never
 // trigger onAnimationComplete, so entries for loop:true animations are harmless
@@ -388,6 +391,7 @@ export default function App() {
           accessoryOffset:      { ...(src.parts.accessoryOffset      ?? { x: 0, y: 0, rotation: 0 }) },
           accessoryAnimOffsets: cloneNested(src.parts.accessoryAnimOffsets ?? {}, 1),
           accessoryImages:      { ...(src.parts.accessoryImages ?? {}) },
+          accessoryScales:     { ...(src.parts.accessoryScales ?? {}) },
         },
         boneOffsets:          { ...src.boneOffsets },
         skinOverrides:        cloneSkinOverrides(src.skinOverrides),
@@ -501,6 +505,17 @@ export default function App() {
       return { ...c, parts: { ...c.parts, accessoryAnimOffsets: animOffsets } };
     }));
   }, [activeCharId, currentAnimation]);
+
+  const updateAccessoryScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const weapon = c.parts.weapon;
+      if (!weapon || weapon === 'none') return c;
+      const scales = { ...(c.parts.accessoryScales ?? {}) };
+      scales[weapon] = newScale;
+      return { ...c, parts: { ...c.parts, accessoryScales: scales } };
+    }));
+  }, [activeCharId]);
 
   const resetAccessoryOffset = useCallback(() => {
     setCharacters(prev => prev.map(c => {
@@ -1038,31 +1053,6 @@ export default function App() {
               )}
             </div>
             <div className="flex flex-col gap-3 mt-4">
-              {(() => {
-                const w = activeChar.parts.weapon;
-                const curScale = activeChar.parts.weaponScales?.[w]
-                              ?? activeChar.parts.partScales?.weapon
-                              ?? 1;
-                if (!editAnimPose || w === 'none') return null;
-                return (
-                  <div className="flex items-center justify-end gap-0.5">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Weapon scale</span>
-                    <button
-                      onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
-                      disabled={curScale <= MIN_WEAPON_SCALE}
-                      className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                    >−</button>
-                    <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                      {Math.round(curScale * 100)}%
-                    </span>
-                    <button
-                      onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
-                      disabled={curScale >= MAX_WEAPON_SCALE}
-                      className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                    >+</button>
-                  </div>
-                );
-              })()}
               <div className="flex flex-col gap-1.5">
               <SectionTitle>Types</SectionTitle>
               <div className="flex flex-wrap gap-1">
@@ -1118,94 +1108,132 @@ export default function App() {
               </div>
               </div>
 
-              {/* User-uploaded PNG that replaces the procedural weapon drawing.
-                  Stored per-weapon at parts.weaponImages[currentWeapon] so
-                  swapping Sword ↔ Rifle keeps each one's image. */}
+              {/* ── Weapon skin + scale ───────────────────────────────────── */}
               {activeChar.parts.weapon !== 'none' && (() => {
-                const currentWeaponImage = activeChar.parts.weaponImages?.[activeChar.parts.weapon];
+                const weapon = activeChar.parts.weapon;
+                const currentWeaponImage = activeChar.parts.weaponImages?.[weapon];
+                const curScale = activeChar.parts.weaponScales?.[weapon]
+                              ?? activeChar.parts.partScales?.weapon
+                              ?? 1;
                 return (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setWeaponUploadOpen(true)}
-                      title={currentWeaponImage ? `Replace ${activeChar.parts.weapon} PNG` : `Upload a PNG to skin the ${activeChar.parts.weapon}`}
-                    >
-                      <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                      {currentWeaponImage ? "Edit Weapon's Skin" : 'Upload Weapon PNG'}
-                    </Button>
-                    {currentWeaponImage && (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        onClick={() => updateWeaponImage(null)}
-                        title={`Remove ${activeChar.parts.weapon} image (revert to procedural)`}
-                        className="text-muted-foreground hover:text-destructive"
+                        size="sm"
+                        onClick={() => setWeaponUploadOpen(true)}
+                        title={currentWeaponImage ? `Replace ${weapon} PNG` : `Upload a PNG to skin the ${weapon}`}
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                        {currentWeaponImage ? "Edit Weapon's Skin" : 'Upload Weapon PNG'}
                       </Button>
-                    )}
+                      {currentWeaponImage && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => updateWeaponImage(null)}
+                          title={`Remove ${weapon} image (revert to procedural)`}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-end gap-0.5">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Weapon scale</span>
+                      <button
+                        onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
+                        disabled={curScale <= MIN_WEAPON_SCALE}
+                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                      >−</button>
+                      <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                        {Math.round(curScale * 100)}%
+                      </span>
+                      <button
+                        onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
+                        disabled={curScale >= MAX_WEAPON_SCALE}
+                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                      >+</button>
+                    </div>
+                    {editAnimPose && (() => {
+                      const wo = resolveWeaponOffset(activeChar.parts, currentAnimation);
+                      const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
+                      return isDirty ? (
+                        <button
+                          onClick={resetWeaponOffset}
+                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                          title="Reset weapon offset"
+                        >
+                          Reset offset
+                        </button>
+                      ) : null;
+                    })()}
                   </div>
                 );
               })()}
 
-              {/* Reset weapon offset — shown in Edit Animation mode when offset is non-zero */}
-              {activeChar.parts.weapon !== 'none' && editAnimPose && (() => {
-                const wo = resolveWeaponOffset(activeChar.parts, currentAnimation);
-                const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
-                return isDirty ? (
-                  <button
-                    onClick={resetWeaponOffset}
-                    className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
-                    title="Reset weapon offset"
-                  >
-                    Reset offset
-                  </button>
-                ) : null;
-              })()}
-
-              {/* Accessory PNG upload — stored per-animation, like weaponImages per weapon type */}
+              {/* ── Right arm accessory skin + scale ──────────────────────── */}
               {(() => {
-                const currentAccessoryImage = activeChar.parts.accessoryImages?.[activeChar.parts.weapon];
+                const weapon = activeChar.parts.weapon;
+                const currentAccessoryImage = activeChar.parts.accessoryImages?.[weapon];
+                const curScale = resolveAccessoryScale(activeChar.parts);
                 return (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setAccessoryUploadOpen(true)}
-                      title={currentAccessoryImage ? 'Replace accessory PNG for this animation' : 'Upload a PNG accessory for this animation'}
-                    >
-                      <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                      {currentAccessoryImage ? "Edit Accessory's Skin" : 'Upload Accessories PNG'}
-                    </Button>
-                    {currentAccessoryImage && (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       <Button
                         variant="ghost"
-                        size="icon"
-                        onClick={() => updateAccessoryImage(null)}
-                        title="Remove accessory image for this animation"
-                        className="text-muted-foreground hover:text-destructive"
+                        size="sm"
+                        onClick={() => setAccessoryUploadOpen(true)}
+                        title={currentAccessoryImage ? 'Replace right arm accessory PNG' : 'Upload a PNG for the right arm accessory'}
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                        {currentAccessoryImage ? "Edit Right Arm's Skin" : 'Upload Right Arm Accessory'}
                       </Button>
+                      {currentAccessoryImage && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => updateAccessoryImage(null)}
+                          title="Remove right arm accessory image"
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    {currentAccessoryImage && (
+                      <div className="flex items-center justify-end gap-0.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Right arm scale</span>
+                        <button
+                          onClick={() => updateAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale <= MIN_ACCESSORY_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >−</button>
+                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                          {Math.round(curScale * 100)}%
+                        </span>
+                        <button
+                          onClick={() => updateAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale >= MAX_ACCESSORY_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >+</button>
+                      </div>
                     )}
+                    {currentAccessoryImage && editAnimPose && (() => {
+                      const ao = resolveAccessoryOffset(activeChar.parts, currentAnimation);
+                      const isDirty = ao.x !== 0 || ao.y !== 0 || ao.rotation !== 0;
+                      return isDirty ? (
+                        <button
+                          onClick={resetAccessoryOffset}
+                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                          title="Reset right arm accessory offset"
+                        >
+                          Reset right arm offset
+                        </button>
+                      ) : null;
+                    })()}
                   </div>
                 );
-              })()}
-
-              {/* Reset accessory offset — shown in Edit Animation mode when offset is non-zero */}
-              {activeChar.parts.accessoryImages?.[activeChar.parts.weapon] && editAnimPose && (() => {
-                const ao = resolveAccessoryOffset(activeChar.parts, currentAnimation);
-                const isDirty = ao.x !== 0 || ao.y !== 0 || ao.rotation !== 0;
-                return isDirty ? (
-                  <button
-                    onClick={resetAccessoryOffset}
-                    className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
-                    title="Reset accessory offset"
-                  >
-                    Reset accessory offset
-                  </button>
-                ) : null;
               })()}
             </div>
 

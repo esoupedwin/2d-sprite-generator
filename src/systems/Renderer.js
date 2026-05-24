@@ -1,5 +1,5 @@
 import { CHARACTER_PARTS } from '../data/characterParts.js';
-import { resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset } from '../utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset, resolveAccessoryScale } from '../utils/weaponSettings.js';
 import {
   drawSkin, drawSkinImage, drawSkinPinned,
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
@@ -66,6 +66,7 @@ function drawAccessory(ctx, character, worldTransforms, accessoryImage, animatio
   const bone = worldTransforms['left_hand'];
   if (!bone) return;
   const ao = resolveAccessoryOffset(character, animation);
+  const s  = resolveAccessoryScale(character);
   const factor = ACCESSORY_IMAGE_TARGET / Math.max(accessoryImage.naturalWidth, accessoryImage.naturalHeight);
   const w = accessoryImage.naturalWidth  * factor;
   const h = accessoryImage.naturalHeight * factor;
@@ -74,6 +75,7 @@ function drawAccessory(ctx, character, worldTransforms, accessoryImage, animatio
   ctx.rotate(bone.rotation);
   if (ao.x || ao.y) ctx.translate(ao.x, ao.y);
   if (ao.rotation)  ctx.rotate(ao.rotation);
+  if (s !== 1)      ctx.scale(s, s);
   ctx.drawImage(accessoryImage, -w / 2, -h / 2, w, h);
   ctx.restore();
 }
