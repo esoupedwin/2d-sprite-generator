@@ -13,7 +13,7 @@ src/
     SkeletonSystem.js     — BONES hierarchy, computeWorldTransforms(pose)
     AnimationSystem.js    — ANIMATIONS, getPoseAtTime(), resolveAnimation(), WEAPON_ANIMATION_SETS
     SkinSystem.js         — drawSkin(), skin template constants (HEAD_SKIN etc.)
-    Renderer.js           — renderCharacter() — orchestrates draw order + z-layering
+    Renderer.js           — renderCharacter(), MELEE_WEAPONS — draw order + z-layering
     VectorEditor.js       — overlay rendering, hit-testing, addSkinPoint, updateSkinPoint
     IKSystem.js           — inverse kinematics helpers
   data/
@@ -31,11 +31,12 @@ src/
     ExportMenu.jsx        — Export controls
     SpriteExportDialog.jsx / SpritePreviewDialog.jsx — Export flow
     WeaponUploadDialog.jsx — PNG upload for weapon skin
+    AccessoryUploadDialog.jsx — PNG upload for right-arm accessory (per weapon type)
     CharacterManagerDialog.jsx / WorkspaceMenu.jsx
   utils/
     transforms.js         — mergeOffsets() shared by CharacterCanvas and export
     export.js             — exportSpriteSheet(), exportAnimationJSON()
-    weaponSettings.js     — resolveWeaponOffset(), resolveWeaponScale() (fallback chains)
+    weaponSettings.js     — resolveWeaponOffset/Scale/AccessoryOffset/Scale (fallback chains)
     poseToAnimation.js    — framesToAnimation() — converts recorded frames to animation data
     genId.js              — genId() — generates unique IDs
     mathUtils.js          — shared math helpers
@@ -72,8 +73,8 @@ torso
   ├─ lower_torso    (localY = +50)
   │    ├─ left_leg  → left_shin  → left_foot
   │    └─ right_leg → right_shin → right_foot
-  ├─ left_arm  → left_forearm  → left_hand
-  └─ right_arm → right_forearm → right_hand
+  ├─ left_arm  → left_forearm  → left_hand   (joint 6 = dominant/right hand)
+  └─ right_arm → right_forearm → right_hand  (joint 9 = support/left hand)
 ```
 
 `worldTransforms[boneId] = { x, y, rotation }` — character-local space with `torso` at origin ~(0, 0). The canvas applies `translate(originX, originY); scale(BASE_SCALE * zoom, ...)` on top.
@@ -81,6 +82,15 @@ torso
 All rotations in **radians**. Positive = clockwise (canvas coords). Y increases downward.
 
 **Facing convention:** the character always faces **+X (right)**. Any directional animation — punch, attack, walk push-off, weapon swing — should be oriented toward +X.
+
+**Arm bone naming** (inverted — memorise this):
+- `left_arm` / `left_forearm` / `left_hand` (joint 6) = character's **RIGHT** (dominant/trigger) arm
+- `right_arm` / `right_forearm` / `right_hand` (joint 9) = character's **LEFT** (support) arm
+
+**Approximate idle arm rotations** (useful when authoring new animations):
+- `left_arm`: −1.023 rad (hanging forward-right); fully raised (V-pose): ≈ −2.65 rad
+- `right_arm`:  +1.022 rad (hanging forward-right, mirrored); fully raised: ≈ +2.65 rad
+- `left_forearm`: −0.318 rad; `right_forearm`: −0.558 rad
 
 ## Skin template format
 
@@ -98,10 +108,17 @@ Universal order, back → front. **No per-weapon or per-animation z flags.**
 
 Described from the **character's** perspective:
 ```
-legs → LEFT arm → body → head (+ extras) → weapon → RIGHT arm → head_prop
+legs → LEFT arm → body → head (+ extras) → weapon → RIGHT arm → head_prop → accessory
 ```
 
-> **Bone-name caveat:** bones in `SkeletonSystem.js` are named *opposite* to the character's body — `right_arm` is on the character's LEFT side (support), `left_arm` is on the RIGHT side (dominant/trigger). Code order in `renderCharacter()` is: `left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop`.
+> **Bone-name caveat:** `right_arm` is on the character's LEFT side (support), `left_arm` is on the RIGHT side (dominant/trigger). Code order in `renderCharacter()` is: `left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop → accessory`.
+
+**Melee vs ranged z-split:** melee weapons (sword) draw **behind the head**; ranged weapons draw **in front**. `MELEE_WEAPONS` is exported from `Renderer.js`. Always compute `isMelee` as:
+```js
+const isMelee = MELEE_WEAPONS.has(weapon) ||
+  (customWeapons ?? []).some(w => w.key === weapon && MELEE_WEAPONS.has(w.template));
+```
+Then pass `isMelee` explicitly to `renderCharacter` — do not rely on the internal fallback, which cannot resolve custom weapon templates.
 
 Do **not** add `aboveHead`, `rightArmInFront`, or animation-specific z-overrides. The canonical order handles all weapons. If a pose looks wrong, fix the keyframes.
 
@@ -119,18 +136,39 @@ Do **not** add `aboveHead`, `rightArmInFront`, or animation-specific z-overrides
     weaponScales:     { [weaponKey]: 1.0 },   // per-weapon size multiplier
     weaponOffsets:    { [weaponKey]: {x,y,rotation} },           // per-weapon default anchor
     weaponAnimOffsets:{ [weaponKey]: { [animId]: {x,y,rotation} } }, // per-(weapon×anim) anchor
+    accessoryImages:  { [weaponKey]: dataUrl },// right-arm accessory PNG, per weapon type
+    accessoryScales:  { [weaponKey]: 1.0 },   // right-arm accessory size, per weapon type
+    accessoryOffset:  { x, y, rotation },     // default accessory anchor (legacy single offset)
+    accessoryAnimOffsets: { [animId]: {x,y,rotation} }, // per-animation accessory anchor
   },
   boneOffsets:           { [boneId]: {x?,y?,rotation?} },  // drag-adjusted global pose
   skinOverrides:         { [skinKey]: [[...], ...] },       // edited skin templates
   animBoneOffsets:       { [animId]: { [boneId]: {x?,y?,rotation?} } }, // per-anim pose offset layer
   animKeyframeOverrides: { [animId]: { [boneId]: { [timeKey]: {x?,y?,rotation?} } } }, // ragdoll edits
   customAnimations:      [{ id, name, duration, loop, tracks }], // per-character animation library
+  customWeapons:         [{ key: 'cw_<id>', label: 'Staff', template: 'none' }], // per-character
   defaultBoneOffsets:    { ... },   // saved checkpoint
   defaultSkinOverrides:  { ... },
 }
 ```
 
-`resolveWeaponOffset(parts, animId)` and `resolveWeaponScale(parts)` in `src/utils/weaponSettings.js` centralise the weapon offset/scale fallback chains — always use these helpers rather than reading `parts.weaponAnimOffsets` directly.
+> **`customWeapons` is per-character** (stored inside the character object, not global state). Each entry carries a `template` field that names the built-in weapon whose animation set and melee z-order rules it inherits. `template: 'none'` → generic set; `template: 'sword'` → melee z-order + sword animations.
+
+Always read weapon/accessory offsets and scales through the helpers in `weaponSettings.js`:
+- `resolveWeaponOffset(parts, animId)` / `resolveWeaponScale(parts)`
+- `resolveAccessoryOffset(parts, animId)` / `resolveAccessoryScale(parts)`
+
+Never access `parts.weaponAnimOffsets` or `parts.accessoryAnimOffsets` directly.
+
+## Right-arm accessory system
+
+The accessory is a user-uploaded PNG attached to **joint 6** (`left_hand` bone — the character's right/dominant hand). It has the highest z-order (drawn last, on top of everything).
+
+- **Per weapon type**: `parts.accessoryImages[weaponKey]` — switching weapon type changes both weapon PNG and accessory PNG independently.
+- **Anchor editing**: purple handles rendered in Edit Animation mode (position: `#A855F7`, rotation: `#C084FC`). Drag types: `accessory-pos` and `accessory-rot`.
+- **Offset fallback chain**: `parts.accessoryAnimOffsets[animId]` → `parts.accessoryOffset` → `{x:0,y:0,rotation:0}`.
+- **Scale**: `parts.accessoryScales[weaponKey]` — independent per weapon type.
+- The accessory PNG is drawn **centered** on its anchor point (`drawImage` at `−w/2, −h/2`). Upload a PNG with the item centered; reposition via the anchor handle. Longest side scales to 80 canvas units before `accessoryScales` multiplier.
 
 ## Animation layers (how overrides compose)
 
@@ -155,36 +193,37 @@ Three additive layers sit on top of the base animation data:
 **Per-character custom animations** (`character.customAnimations[]`) hold animations created or committed by the user. Each entry has the same shape as a built-in `ANIMATIONS` value plus an `id` field.
 
 - If `id` matches a built-in key → shadows the built-in for that character (Commit edits uses this).
-- If `id` is a new UUID → appears as a new chip below the separator in the Actions panel.
+- If `id` is a new UUID → appears as a new chip below the separator in the Actions panel (labelled with the character's name).
 - `AnimationControls.jsx` filters out baked built-ins (`!ANIMATIONS[a.id]`) so they don't show as duplicates.
 
 **Global animation templates** (`animTemplates` state, `2dsprite:templates` localStorage) are shared across all characters. Saved via "Save as template" in `AnimationCurvePanel.jsx`, default name is `WeaponLabel-AnimName`. Cloned into a character's `customAnimations` via the "+ New" dialog (`NewAnimationDialog.jsx`).
 
 ## Custom weapon modes
 
-`customWeapons` state (`2dsprite:custom-weapons` localStorage) holds runtime weapon types:
+`customWeapons` is **per-character** (moved from global state). Shape:
 ```js
-[{ key: 'cw_<id>', label: 'Staff' }, ...]
+[{ key: 'cw_<id>', label: 'Staff', template: 'none' }, ...]
 ```
 - Custom weapon chips appear after the built-ins in the TYPES panel.
-- Each has a rename (pencil) and delete (×) button.
-- The visual is a user-uploaded PNG via "Edit Weapon's Skin".
-- Animation set falls back to `WEAPON_ANIMATION_SETS.none` (generic idle/walk/run etc.) via `WEAPON_ANIMATION_SETS[key] ?? WEAPON_ANIMATION_SETS.none`.
-- `Renderer.js` guards `if (!useWeaponImage && !option?.draw) return;` — safe for unknown weapon keys.
+- `template` determines: (1) which animation set is shown in ACTIONS, (2) whether the weapon uses melee z-order. Set to a built-in weapon key or `'none'`.
+- The visual is a user-uploaded PNG via "Edit Weapon's Skin" — stored in `parts.weaponImages[key]`.
+- `AnimationControls.jsx` resolves the animation set via `WEAPON_ANIMATION_SETS[weaponTemplate] ?? WEAPON_ANIMATION_SETS.none`.
+- `App.jsx` resolves the default animation on weapon-switch: `WEAPON_DEFAULT_ANIMATIONS[template] ?? 'idle'`.
 - Deleting a custom weapon reverts any character using it back to `'none'`.
 
 ## Weapon animation sets
 
-`WEAPON_ANIMATION_SETS` in `AnimationSystem.js` maps weapon keys to the list of animation IDs available for that weapon. Custom weapon keys not present in this map automatically fall back to the `none` set — no code change needed when adding custom weapons.
+`WEAPON_ANIMATION_SETS` in `AnimationSystem.js` maps weapon keys (or templates) to the list of animation IDs available for that weapon.
 
 ```js
 WEAPON_ANIMATION_SETS = {
-  none:             ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'throw', 'carry_walk'],
+  none:             ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'throw', 'carry_walk', 'cheer'],
   sword:            ['sword_idle', 'sword_walk', 'sword_slash', 'sword_jump'],
   rifle:            ['rifle_idle', 'rifle_walk', 'rifle_run', 'rifle_jump', 'rifle'],
   rocket:           ['rocket_idle', 'rocket_walk', 'rocket_fire', 'rocket_jump'],
   bow:              ['bow_idle', 'bow_walk', 'bow_fire', 'bow_jump'],
   grenade_launcher: ['grenade_launcher_idle', ...],
+  pistol:           ['pistol_idle', 'pistol_walk', 'pistol_fire', 'pistol_jump'],
 }
 ```
 
@@ -207,7 +246,12 @@ my_anim: {
 }
 ```
 
-Then add it to the relevant `WEAPON_ANIMATION_SETS` entry and handle completion in `App.jsx → handleAnimationComplete` if `loop: false`. The button renders automatically from the set — no manual chip needed.
+Then add it to the relevant `WEAPON_ANIMATION_SETS` entry. The button renders automatically — no manual chip needed. If `loop: false`, add it to `ANIMATION_COMPLETE_TARGETS` in `App.jsx` to specify what plays next.
+
+**Reference rotations for cheer/jump-style animations:**
+- Crouch: `torso.y ≈ +20`, shins ≈ 0.62 rad
+- Apex: `torso.y ≈ −82`, shins ≈ 0.50 rad (tucked), feet ≈ 0.30 rad (pointed)
+- Arms fully raised V-pose: `left_arm ≈ −2.65`, `right_arm ≈ +2.65`; forearms ≈ −0.10
 
 ## Adding a new body part
 
@@ -246,13 +290,20 @@ character.customAnimations?.find(a => a.id === animationName) ?? ANIMATIONS[anim
 
 Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTransforms → renderCharacter`
 
+`loadRenderAssets` preloads `weaponImage` from `parts.weaponImages[parts.weapon]` and `accessoryImage` from `parts.accessoryImages[parts.weapon]`. Both are passed into `renderCharacter`. `isMelee` is also resolved (with template fallback) and passed explicitly.
+
 ## Canvas interaction (CharacterCanvas.jsx)
 
-- **stateRef pattern**: mutable state the RAF loop reads without triggering re-renders. All frequently-read values (animation, boneOffsets, etc.) are mirrored into `stateRef.current` on every render.
-- **dragRef**: `{ type:'bone'|'anchor'|'handleIn'|'handleOut', boneId?, skinKey?, pointIndex? }`
+- **stateRef pattern**: mutable state the RAF loop reads without triggering re-renders. All frequently-read values (animation, boneOffsets, accessoryOffset, customWeapons, etc.) are mirrored into `stateRef.current` on every render.
+- **dragRef**: `{ type:'bone'|'anchor'|'handleIn'|'handleOut'|'weapon-pos'|'weapon-rot'|'accessory-pos'|'accessory-rot', ... }`
 - **panDragRef**: middle-mouse pan
 - Undo history in `historyRef` (session only, capped at 60). `pushHistory()` before any bone/skin mutation.
 - Canvas size: 620×640 px. Origin at (310, 490). `BASE_SCALE = 2.5`. Background: `#FFE699`.
+
+**Accessory anchor handles** (shown when `editAnimPose && accessoryImageRef.current`):
+- Position handle: purple circle `#A855F7` at `left_hand` + current accessory offset
+- Rotation handle: lighter purple `#C084FC` circle offset 22 units from position handle
+- Drag `accessory-pos` → calls `onAccessoryOffsetSet({ x, y, rotation })` via stateRef
 
 ## Reusable dialog shell (SaveTemplateDialog.jsx)
 
@@ -273,18 +324,20 @@ Auto-selects text on open. Enter key confirms. Save disabled when input is empty
 
 | Data | Storage |
 |---|---|
-| Characters | `localStorage` (`2dsprite:characters`) + `characters.json` via `/api/characters` Vite plugin. File wins on load. |
+| Characters (incl. `customWeapons`) | `localStorage` (`2dsprite:characters`) + `characters.json` via `/api/characters` Vite plugin. File wins on load. |
 | Default build | `character-defaults.json` via `/api/defaults` |
 | Animation templates | `localStorage` (`2dsprite:templates`) only — global, shared across characters |
-| Custom weapon modes | `localStorage` (`2dsprite:custom-weapons`) only — global |
+
+> **`customWeapons` is no longer in global storage** — it moved into each character object so different characters can have different weapon types.
 
 ## Common pitfalls
 
-- **Custom-first lookup**: always use `customAnimations?.find(a => a.id === key) ?? ANIMATIONS[key]` — never read `ANIMATIONS[key]` directly in the render path, as it misses baked overrides.
+- **Custom-first lookup**: always use `customAnimations?.find(a => a.id === key) ?? ANIMATIONS[key]` — never read `ANIMATIONS[key]` directly in the render path.
 - **Same-ID shadowing**: "Commit edits" stores the baked animation with the original built-in ID. The baked entry does NOT appear as a new chip — `AnimationControls` filters it out via `!ANIMATIONS[a.id]`.
 - **timeKey precision**: keyframe override keys are `time.toFixed(2)` strings (e.g. `"0.35"`). Use `keyframeTimeKey(time)` from `AnimationSystem.js` for consistent formatting.
 - **worldToLocal** in `VectorEditor.js` is inverse rotation only — assumes input is already character-local.
 - Skin point handles are bone-local offsets FROM the anchor, not from the bone origin.
 - `DRAW_ORDER` in `characterParts.js` is legacy/unused — `Renderer.js` controls draw order directly.
-- When adding a new animation with `loop: false`, add it to `ANIMATION_COMPLETE_TARGETS` in `App.jsx` to specify what animation plays next.
-- Weapon offset/scale: always read through `resolveWeaponOffset()` / `resolveWeaponScale()` in `weaponSettings.js` — do not access `parts.weaponAnimOffsets` directly.
+- **isMelee for custom weapons**: `MELEE_WEAPONS.has(weapon)` alone is wrong for `cw_…` keys. Always check `w.template` too: `MELEE_WEAPONS.has(w.template)`. Pass the resolved `isMelee` to `renderCharacter` — never rely on the internal fallback.
+- **Accessory vs weapon keying**: both are keyed by `parts.weapon` (the weapon type key, e.g. `'sword'` or `'cw_abc'`), not by animation ID. Switching the weapon type changes both sets.
+- Weapon/accessory offset + scale: always read through `resolveWeaponOffset/Scale` and `resolveAccessoryOffset/Scale` in `weaponSettings.js`.

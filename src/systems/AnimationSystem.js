@@ -2014,15 +2014,405 @@ export const ANIMATIONS = {
     },
   },
 
+  // ── Pistol animations ────────────────────────────────────────────────────────
+  // One-handed sidearm. Character's left arm (right_arm bone) holds and fires
+  // the pistol; character's right arm (left_arm bone) hangs free.
+
+  pistol_idle: {
+    name: 'Idle',
+    duration: 2.0,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.0, y: 0,  rotation: 0.06 },
+        { time: 1.0, y: -2, rotation: 0.07 },
+        { time: 2.0, y: 0,  rotation: 0.06 },
+      ],
+      lower_torso: [
+        { time: 0.0, y: 0 },
+        { time: 1.0, y: -1 },
+        { time: 2.0, y: 0 },
+      ],
+      head: [
+        { time: 0.0, rotation: -0.02 },
+        { time: 1.5, rotation:  0.01 },
+        { time: 2.0, rotation: -0.02 },
+      ],
+      // Pistol arm (char's left = right_arm bone): raised low-ready
+      right_arm:    [{ time: 0.0, rotation: 1.30 }, { time: 1.0, rotation: 1.27 }, { time: 2.0, rotation: 1.30 }],
+      right_forearm:[{ time: 0.0, rotation:-1.45 }, { time: 1.0, rotation:-1.42 }, { time: 2.0, rotation:-1.45 }],
+      right_hand:   [{ time: 0.0, rotation: 0.00 }, { time: 2.0, rotation: 0.00 }],
+      // Free arm (char's right = left_arm bone): natural hang
+      left_arm:     [{ time: 0.0, rotation:-1.02 }, { time: 1.0, rotation:-0.99 }, { time: 2.0, rotation:-1.02 }],
+      left_forearm: [{ time: 0.0, rotation:-0.32 }, { time: 1.0, rotation:-0.28 }, { time: 2.0, rotation:-0.32 }],
+      left_hand:    [{ time: 0.0, rotation: 0.06 }, { time: 2.0, rotation: 0.06 }],
+      left_shin:    [{ time: 0.0, rotation: 0.10 }, { time: 1.0, rotation: 0.12 }, { time: 2.0, rotation: 0.10 }],
+      right_shin:   [{ time: 0.0, rotation: 0.10 }, { time: 1.0, rotation: 0.12 }, { time: 2.0, rotation: 0.10 }],
+      left_foot:    [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+      right_foot:   [{ time: 0.0, rotation: 0.05 }, { time: 2.0, rotation: 0.05 }],
+    },
+  },
+
+  pistol_walk: {
+    name: 'Walk',
+    duration: 0.72,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.00, y:  0, rotation: 0.10 },
+        { time: 0.18, y: -6, rotation: 0.12 },
+        { time: 0.36, y:  0, rotation: 0.10 },
+        { time: 0.54, y: -6, rotation: 0.12 },
+        { time: 0.72, y:  0, rotation: 0.10 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.14 },
+        { time: 0.18, rotation:  0.00 },
+        { time: 0.36, rotation: -0.14 },
+        { time: 0.54, rotation:  0.00 },
+        { time: 0.72, rotation:  0.14 },
+      ],
+      head: [
+        { time: 0.00, rotation: -0.04 },
+        { time: 0.22, rotation:  0.01 },
+        { time: 0.36, rotation: -0.04 },
+        { time: 0.58, rotation:  0.01 },
+        { time: 0.72, rotation: -0.04 },
+      ],
+      // Pistol arm held at low-ready with small stride bob
+      right_arm:    [{ time: 0.00, rotation: 1.30 }, { time: 0.18, rotation: 1.27 }, { time: 0.36, rotation: 1.30 }, { time: 0.54, rotation: 1.27 }, { time: 0.72, rotation: 1.30 }],
+      right_forearm:[{ time: 0.00, rotation:-1.45 }, { time: 0.18, rotation:-1.42 }, { time: 0.36, rotation:-1.45 }, { time: 0.54, rotation:-1.42 }, { time: 0.72, rotation:-1.45 }],
+      right_hand:   [{ time: 0.0,  rotation: 0.00 }, { time: 0.72, rotation: 0.00 }],
+      // Free arm swings naturally as counterweight
+      left_arm:     [{ time: 0.00, rotation:-1.02 }, { time: 0.18, rotation:-0.94 }, { time: 0.36, rotation:-1.12 }, { time: 0.54, rotation:-0.94 }, { time: 0.72, rotation:-1.02 }],
+      left_forearm: [{ time: 0.00, rotation:-0.32 }, { time: 0.18, rotation:-0.26 }, { time: 0.36, rotation:-0.38 }, { time: 0.54, rotation:-0.26 }, { time: 0.72, rotation:-0.32 }],
+      left_hand:    [{ time: 0.0,  rotation: 0.06 }, { time: 0.72, rotation: 0.06 }],
+      left_leg:  [{ time: 0.00, rotation:-0.42 }, { time: 0.36, rotation: 0.42 }, { time: 0.72, rotation:-0.42 }],
+      left_shin: [{ time: 0.00, rotation:0.10 }, { time: 0.18, rotation:0.08 }, { time: 0.36, rotation:0.18 }, { time: 0.54, rotation:0.65 }, { time: 0.72, rotation:0.10 }],
+      left_foot: [{ time: 0.00, rotation:-0.22 }, { time: 0.18, rotation:0.00 }, { time: 0.36, rotation:0.30 }, { time: 0.54, rotation:-0.10 }, { time: 0.72, rotation:-0.22 }],
+      right_leg:  [{ time: 0.00, rotation: 0.42 }, { time: 0.36, rotation:-0.42 }, { time: 0.72, rotation: 0.42 }],
+      right_shin: [{ time: 0.00, rotation:0.18 }, { time: 0.18, rotation:0.65 }, { time: 0.36, rotation:0.10 }, { time: 0.54, rotation:0.08 }, { time: 0.72, rotation:0.18 }],
+      right_foot: [{ time: 0.00, rotation:0.30 }, { time: 0.18, rotation:-0.10 }, { time: 0.36, rotation:-0.22 }, { time: 0.54, rotation:0.00 }, { time: 0.72, rotation:0.30 }],
+    },
+  },
+
+  pistol_fire: {
+    name: 'Shoot',
+    duration: 0.60,
+    loop: true,
+    tracks: {
+      // Torso rocks back on fire, overshoots forward, settles
+      torso: [
+        { time: 0.00, y:  0, rotation:  0.08 },
+        { time: 0.03, y:  2, rotation: -0.04 },
+        { time: 0.18, y: -1, rotation:  0.10 },
+        { time: 0.40, y:  0, rotation:  0.08 },
+        { time: 0.60, y:  0, rotation:  0.08 },
+      ],
+      lower_torso: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.03, rotation: -0.06 },
+        { time: 0.30, rotation:  0.00 },
+        { time: 0.60, rotation:  0.00 },
+      ],
+      head: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.05, rotation:  0.05 },
+        { time: 0.30, rotation: -0.02 },
+        { time: 0.60, rotation:  0.00 },
+      ],
+      // Pistol arm raised to aim; muzzle rise on fire then recovers
+      right_arm: [
+        { time: 0.00, rotation: 1.10 },
+        { time: 0.03, rotation: 1.00 },          // arm kicks up on recoil
+        { time: 0.25, rotation: 1.13 },          // overshoot
+        { time: 0.60, rotation: 1.10 },
+      ],
+      right_forearm: [
+        { time: 0.00, rotation: -1.50 },
+        { time: 0.03, rotation: -1.82 },         // muzzle rise
+        { time: 0.25, rotation: -1.44 },         // overshoot down
+        { time: 0.60, rotation: -1.50 },
+      ],
+      right_hand: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.03, rotation:  0.22 },         // wrist snaps on fire
+        { time: 0.30, rotation:  0.00 },
+        { time: 0.60, rotation:  0.00 },
+      ],
+      // Free arm: slightly pulled back for balance
+      left_arm:     [{ time: 0.00, rotation: -0.88 }, { time: 0.60, rotation: -0.88 }],
+      left_forearm: [{ time: 0.00, rotation: -0.40 }, { time: 0.60, rotation: -0.40 }],
+      left_hand:    [{ time: 0.00, rotation:  0.06 }, { time: 0.60, rotation:  0.06 }],
+      // Legs: braced wide stance
+      left_leg:   [{ time: 0.0, rotation: -0.15 }, { time: 0.6, rotation: -0.15 }],
+      left_shin:  [{ time: 0.0, rotation:  0.22 }, { time: 0.6, rotation:  0.22 }],
+      left_foot:  [{ time: 0.0, rotation: -0.05 }, { time: 0.6, rotation: -0.05 }],
+      right_leg:  [{ time: 0.0, rotation:  0.12 }, { time: 0.6, rotation:  0.12 }],
+      right_shin: [{ time: 0.0, rotation:  0.25 }, { time: 0.6, rotation:  0.25 }],
+      right_foot: [{ time: 0.0, rotation:  0.06 }, { time: 0.6, rotation:  0.06 }],
+    },
+  },
+
+  pistol_jump: {
+    name: 'Jump',
+    duration: 1.9,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.0,  y:   0, rotation: 0.10 },
+        { time: 0.12, y:  26, rotation: 0.08 },
+        { time: 0.35, y: -88, rotation: 0.06 },
+        { time: 0.58, y: -16, rotation: 0.08 },
+        { time: 0.68, y:  16, rotation: 0.07 },
+        { time: 0.80, y:  -2, rotation: 0.09 },
+        { time: 0.9,  y:   0, rotation: 0.10 },
+      ],
+      lower_torso: [
+        { time: 0.0,  y:  0 },
+        { time: 0.12, y:  6 },
+        { time: 0.35, y: -6 },
+        { time: 0.68, y:  4 },
+        { time: 0.9,  y:  0 },
+      ],
+      head: [
+        { time: 0.0,  rotation: -0.02 },
+        { time: 0.35, rotation: -0.08 },
+        { time: 0.68, rotation:  0.02 },
+        { time: 0.9,  rotation: -0.02 },
+      ],
+      // Pistol arm held through the jump with small variation
+      right_arm: [
+        { time: 0.0,  rotation: 1.30 },
+        { time: 0.12, rotation: 1.35 },
+        { time: 0.35, rotation: 1.20 },
+        { time: 0.68, rotation: 1.38 },
+        { time: 0.9,  rotation: 1.30 },
+      ],
+      right_forearm: [
+        { time: 0.0,  rotation:-1.45 },
+        { time: 0.35, rotation:-1.50 },
+        { time: 0.9,  rotation:-1.45 },
+      ],
+      right_hand: [
+        { time: 0.0,  rotation: 0.00 },
+        { time: 0.9,  rotation: 0.00 },
+      ],
+      // Free arm swings for balance during jump
+      left_arm: [
+        { time: 0.0,  rotation:-1.02 },
+        { time: 0.12, rotation:-0.95 },
+        { time: 0.35, rotation:-1.15 },
+        { time: 0.68, rotation:-0.92 },
+        { time: 0.9,  rotation:-1.02 },
+      ],
+      left_forearm: [
+        { time: 0.0,  rotation:-0.32 },
+        { time: 0.35, rotation:-0.28 },
+        { time: 0.9,  rotation:-0.32 },
+      ],
+      left_hand: [
+        { time: 0.0,  rotation: 0.06 },
+        { time: 0.9,  rotation: 0.06 },
+      ],
+      left_leg: [
+        { time: 0.0,  rotation:  0 },
+        { time: 0.12, rotation: -0.35 },
+        { time: 0.35, rotation: -0.5 },
+        { time: 0.58, rotation:  0.1 },
+        { time: 0.68, rotation: -0.25 },
+        { time: 0.9,  rotation:  0 },
+      ],
+      right_leg: [
+        { time: 0.0,  rotation:  0 },
+        { time: 0.12, rotation:  0.35 },
+        { time: 0.35, rotation:  0.5 },
+        { time: 0.58, rotation: -0.1 },
+        { time: 0.68, rotation:  0.25 },
+        { time: 0.9,  rotation:  0 },
+      ],
+      left_shin: [
+        { time: 0.0,  rotation: 0.10 },
+        { time: 0.12, rotation: 0.65 },
+        { time: 0.35, rotation: 0.10 },
+        { time: 0.68, rotation: 0.55 },
+        { time: 0.9,  rotation: 0.10 },
+      ],
+      right_shin: [
+        { time: 0.0,  rotation: 0.10 },
+        { time: 0.12, rotation: 0.65 },
+        { time: 0.35, rotation: 0.10 },
+        { time: 0.68, rotation: 0.55 },
+        { time: 0.9,  rotation: 0.10 },
+      ],
+      left_foot: [
+        { time: 0.0,  rotation:  0.05 },
+        { time: 0.12, rotation: -0.20 },
+        { time: 0.35, rotation:  0.35 },
+        { time: 0.68, rotation:  0.10 },
+        { time: 0.9,  rotation:  0.05 },
+      ],
+      right_foot: [
+        { time: 0.0,  rotation:  0.05 },
+        { time: 0.12, rotation: -0.20 },
+        { time: 0.35, rotation:  0.35 },
+        { time: 0.68, rotation:  0.10 },
+        { time: 0.9,  rotation:  0.05 },
+      ],
+    },
+  },
+
+  cheer: {
+    name: 'Cheer',
+    // Victory jump: quick crouch → leap → fully raised V-pose at apex →
+    // land with arms still up → hold victory → arms return for next jump.
+    duration: 1.20,
+    loop: true,
+    tracks: {
+      torso: [
+        { time: 0.00, y:   0, rotation:  0.00 },  // standing
+        { time: 0.15, y:  20, rotation:  0.03 },  // crouch push-off
+        { time: 0.38, y: -82, rotation: -0.05 },  // apex — lean back in joy
+        { time: 0.55, y:   8, rotation:  0.04 },  // land impact
+        { time: 0.65, y:  14, rotation:  0.02 },  // knees absorb
+        { time: 0.82, y:   0, rotation:  0.00 },  // recover
+        { time: 1.20, y:   0, rotation:  0.00 },  // hold, ready for next jump
+      ],
+      lower_torso: [
+        { time: 0.00, y:  0 },
+        { time: 0.15, y:  5 },
+        { time: 0.38, y: -5 },
+        { time: 0.65, y:  4 },
+        { time: 0.82, y:  0 },
+        { time: 1.20, y:  0 },
+      ],
+      head: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.15, rotation:  0.05 },  // nods forward on crouch
+        { time: 0.38, rotation: -0.22 },  // tilts back in joy at apex
+        { time: 0.65, rotation:  0.08 },  // nods on landing
+        { time: 0.82, rotation: -0.10 },  // looks up — victory!
+        { time: 1.20, rotation:  0.00 },
+      ],
+      // Character's RIGHT arm (bone: left_arm) — raised into full V-pose
+      left_arm: [
+        { time: 0.00, rotation: -1.073 },  // rest, arm at side
+        { time: 0.15, rotation: -0.623 },  // drops slightly on crouch
+        { time: 0.38, rotation: -2.650 },  // fully raised at apex — V-pose
+        { time: 0.55, rotation: -2.400 },  // stay raised through landing
+        { time: 0.82, rotation: -2.600 },  // hold victory pose
+        { time: 1.10, rotation: -1.073 },  // lower ready for next jump
+        { time: 1.20, rotation: -1.073 },
+      ],
+      left_forearm: [
+        { time: 0.00, rotation: -0.318 },
+        { time: 0.15, rotation:  0.100 },  // hangs loose on drop
+        { time: 0.38, rotation: -0.100 },  // extends upward with arm
+        { time: 0.55, rotation: -0.150 },
+        { time: 0.82, rotation: -0.100 },  // hold extended
+        { time: 1.10, rotation: -0.318 },
+        { time: 1.20, rotation: -0.318 },
+      ],
+      left_hand: [
+        { time: 0.00, rotation:  0.06 },
+        { time: 0.38, rotation: -0.20 },  // open hand pointing up
+        { time: 0.82, rotation: -0.20 },
+        { time: 1.20, rotation:  0.06 },
+      ],
+      // Character's LEFT arm (bone: right_arm) — mirror of left_arm
+      right_arm: [
+        { time: 0.00, rotation:  1.073 },
+        { time: 0.15, rotation:  0.623 },
+        { time: 0.38, rotation:  2.650 },  // fully raised — V-pose
+        { time: 0.55, rotation:  2.400 },
+        { time: 0.82, rotation:  2.600 },  // hold victory pose
+        { time: 1.10, rotation:  1.073 },
+        { time: 1.20, rotation:  1.073 },
+      ],
+      right_forearm: [
+        { time: 0.00, rotation: -0.558 },
+        { time: 0.15, rotation: -0.100 },
+        { time: 0.38, rotation: -0.100 },
+        { time: 0.55, rotation: -0.150 },
+        { time: 0.82, rotation: -0.100 },
+        { time: 1.10, rotation: -0.558 },
+        { time: 1.20, rotation: -0.558 },
+      ],
+      right_hand: [
+        { time: 0.00, rotation: -0.06 },
+        { time: 0.38, rotation:  0.20 },  // open hand pointing up (mirror)
+        { time: 0.82, rotation:  0.20 },
+        { time: 1.20, rotation: -0.06 },
+      ],
+      // Legs kick slightly apart at apex; hard bend on landing
+      left_leg: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.15, rotation: -0.30 },  // crouch — push-off
+        { time: 0.38, rotation: -0.40 },  // tuck at apex
+        { time: 0.55, rotation:  0.10 },  // extend for landing
+        { time: 0.65, rotation: -0.20 },  // absorb impact
+        { time: 0.82, rotation:  0.00 },
+        { time: 1.20, rotation:  0.00 },
+      ],
+      right_leg: [
+        { time: 0.00, rotation:  0.00 },
+        { time: 0.15, rotation:  0.30 },
+        { time: 0.38, rotation:  0.40 },
+        { time: 0.55, rotation: -0.10 },
+        { time: 0.65, rotation:  0.20 },
+        { time: 0.82, rotation:  0.00 },
+        { time: 1.20, rotation:  0.00 },
+      ],
+      left_shin: [
+        { time: 0.00, rotation: 0.08 },
+        { time: 0.15, rotation: 0.62 },  // hard crouch bend
+        { time: 0.38, rotation: 0.50 },  // tucked at apex
+        { time: 0.55, rotation: 0.08 },  // extend for landing
+        { time: 0.65, rotation: 0.55 },  // absorb impact
+        { time: 0.82, rotation: 0.08 },
+        { time: 1.20, rotation: 0.08 },
+      ],
+      right_shin: [
+        { time: 0.00, rotation: 0.08 },
+        { time: 0.15, rotation: 0.62 },
+        { time: 0.38, rotation: 0.50 },
+        { time: 0.55, rotation: 0.08 },
+        { time: 0.65, rotation: 0.55 },
+        { time: 0.82, rotation: 0.08 },
+        { time: 1.20, rotation: 0.08 },
+      ],
+      // Feet: tuck on crouch, point at apex, flex up to absorb landing
+      left_foot: [
+        { time: 0.00, rotation:  0.05 },
+        { time: 0.15, rotation: -0.18 },  // tuck on crouch
+        { time: 0.38, rotation:  0.30 },  // point down at apex
+        { time: 0.55, rotation: -0.18 },  // flex up for landing
+        { time: 0.65, rotation:  0.10 },  // absorb
+        { time: 0.82, rotation:  0.05 },
+        { time: 1.20, rotation:  0.05 },
+      ],
+      right_foot: [
+        { time: 0.00, rotation:  0.05 },
+        { time: 0.15, rotation: -0.18 },
+        { time: 0.38, rotation:  0.30 },
+        { time: 0.55, rotation: -0.18 },
+        { time: 0.65, rotation:  0.10 },
+        { time: 0.82, rotation:  0.05 },
+        { time: 1.20, rotation:  0.05 },
+      ],
+    },
+  },
+
 };
 
 export const WEAPON_ANIMATION_SETS = {
-  none:    ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'throw', 'carry_walk'],
+  none:    ['idle', 'walk', 'run', 'scared_run', 'jump', 'punch', 'throw', 'carry_walk', 'cheer'],
   sword:   ['sword_idle', 'sword_walk', 'sword_slash', 'sword_jump'],
   rifle:   ['rifle_idle', 'rifle_walk', 'rifle_run', 'rifle_jump', 'rifle'],
   rocket:  ['rocket_idle', 'rocket_walk', 'rocket_fire', 'rocket_jump'],
   bow:     ['bow_idle', 'bow_walk', 'bow_fire', 'bow_jump'],
   grenade_launcher: ['grenade_launcher_idle', 'grenade_launcher_walk', 'grenade_launcher_fire', 'grenade_launcher_jump'],
+  pistol: ['pistol_idle', 'pistol_walk', 'pistol_fire', 'pistol_jump'],
 };
 
 export const WEAPON_DEFAULT_ANIMATIONS = {
@@ -2032,6 +2422,7 @@ export const WEAPON_DEFAULT_ANIMATIONS = {
   rocket:           'rocket_idle',
   bow:              'bow_idle',
   grenade_launcher: 'grenade_launcher_idle',
+  pistol:           'pistol_idle',
 };
 
 function lerp(a, b, t) {
