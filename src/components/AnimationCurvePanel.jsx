@@ -76,7 +76,7 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
         written to a per-character keyframe override.
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-border pt-2 font-mono">
+      <div className="flex flex-col gap-2 border border-border rounded-md p-2 font-mono max-h-[756px] overflow-y-auto pr-1">
         {boneIds.length === 0 && (
           <div className="text-xs text-muted-foreground">No tracks.</div>
         )}
