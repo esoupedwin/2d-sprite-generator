@@ -219,6 +219,11 @@ export default function App() {
 
   const charCanvasRef = useRef(null);
   const headerMenuRef = useRef(null);
+  // Records which header tab was open at pointer-down, before Radix's
+  // onValueChange (which fires on press) mutates headerTab. The trigger's
+  // onClick (which fires on release) uses this to decide whether the click
+  // was a re-click on the already-open tab — only then should it close.
+  const headerTabDownRef = useRef('');
 
   // Weapon PNG upload dialog
   const [weaponUploadOpen,    setWeaponUploadOpen]    = useState(false);
@@ -950,15 +955,19 @@ export default function App() {
         <h1 className="text-sm font-semibold text-foreground">2D Character Generator</h1>
         <span className="text-muted-foreground/30 select-none">·</span>
         <span className="text-xs text-muted-foreground">Skeletal animation · Modular parts · Export ready</span>
-        <div ref={headerMenuRef} className="ml-auto relative flex items-end">
+        <div
+          ref={headerMenuRef}
+          className="ml-auto relative flex items-end"
+          onPointerDownCapture={() => { headerTabDownRef.current = headerTab; }}
+        >
           <Tabs value={headerTab} onValueChange={setHeaderTab}>
             <TabsList variant="line">
               <TabsTrigger value="workspace" variant="line"
-                onClick={() => headerTab === 'workspace' && setHeaderTab('')}>
+                onClick={() => { if (headerTabDownRef.current === 'workspace') setHeaderTab(''); }}>
                 Workspace
               </TabsTrigger>
               <TabsTrigger value="export" variant="line"
-                onClick={() => headerTab === 'export' && setHeaderTab('')}>
+                onClick={() => { if (headerTabDownRef.current === 'export') setHeaderTab(''); }}>
                 Export
               </TabsTrigger>
             </TabsList>
