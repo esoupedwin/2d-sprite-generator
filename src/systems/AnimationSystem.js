@@ -2429,33 +2429,91 @@ function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function trackValueAt(keyframes, time, prop) {
-  if (!keyframes || keyframes.length === 0) return 0;
+// Per-keyframe interpolation modes. `ease` lives on the keyframe and shapes the
+// segment LEAVING it toward the next keyframe. Default 'auto' = Catmull-Rom
+// spline (momentum carries through keyframes). The others let an animator opt a
+// single pose out of the spline for snappy or stepped motion.
+//   auto        — cubic Hermite, Catmull-Rom tangents (smooth, default)
+//   linear      — constant-velocity straight line
+//   hold        — step: keep this keyframe's value until the next one
+//   ease-in     — accelerate from rest (slow start, fast arrival)
+//   ease-out    — decelerate to rest (fast start, slow arrival)
+//   ease-in-out — smoothstep (slow at both ends; the old global behaviour)
+export const EASE_MODES = ['auto', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'hold'];
 
-  if (time <= keyframes[0].time) return keyframes[0][prop] ?? 0;
-  const last = keyframes[keyframes.length - 1];
-  if (time >= last.time) return last[prop] ?? 0;
+const EASE_SHAPE = {
+  linear:        u => u,
+  'ease-in':     u => u * u,
+  'ease-out':    u => u * (2 - u),
+  'ease-in-out': u => u * u * (3 - 2 * u),
+};
 
-  for (let i = 0; i < keyframes.length - 1; i++) {
-    const a = keyframes[i];
-    const b = keyframes[i + 1];
-    if (time >= a.time && time <= b.time) {
-      const t      = (time - a.time) / (b.time - a.time);
-      const smooth = t * t * (3 - 2 * t);
-      return lerp(a[prop] ?? 0, b[prop] ?? 0, smooth);
-    }
+// Returns {t, v} for a keyframe index that may sit outside [0, n). Non-loop
+// clamps to the endpoint (yields a one-sided tangent ≈ segment slope, so the
+// curve doesn't fly off the end). Loop wraps by ±duration assuming the first
+// and last keyframe coincide, giving a seamless velocity across the loop seam.
+function neighborKf(kfs, idx, prop, loop, duration) {
+  const n = kfs.length;
+  if (idx >= 0 && idx < n) return { t: kfs[idx].time, v: kfs[idx][prop] ?? 0 };
+  if (!loop || duration <= 0) {
+    const c = idx < 0 ? 0 : n - 1;
+    return { t: kfs[c].time, v: kfs[c][prop] ?? 0 };
   }
+  if (idx < 0) {
+    const w = kfs[n - 1 + idx];      // idx = -1 → kfs[n-2]
+    return { t: w.time - duration, v: w[prop] ?? 0 };
+  }
+  const w = kfs[idx - n + 1];        // idx = n  → kfs[1]
+  return { t: w.time + duration, v: w[prop] ?? 0 };
+}
 
-  return 0;
+function trackValueAt(keyframes, time, prop, loop = false, duration = 0) {
+  const n = keyframes ? keyframes.length : 0;
+  if (n === 0) return 0;
+  if (n === 1) return keyframes[0][prop] ?? 0;
+  if (time <= keyframes[0].time) return keyframes[0][prop] ?? 0;
+  if (time >= keyframes[n - 1].time) return keyframes[n - 1][prop] ?? 0;
+
+  // Locate the segment a..b that contains `time`.
+  let i = 0;
+  while (i < n - 1 && time > keyframes[i + 1].time) i++;
+  const a  = keyframes[i];
+  const b  = keyframes[i + 1];
+  const dt = b.time - a.time;
+  if (dt <= 0) return b[prop] ?? 0;
+
+  const u  = (time - a.time) / dt;
+  const va = a[prop] ?? 0;
+  const vb = b[prop] ?? 0;
+  const ease = a.ease ?? 'auto';
+
+  if (ease === 'hold')      return va;
+  if (EASE_SHAPE[ease])     return lerp(va, vb, EASE_SHAPE[ease](u));
+
+  // 'auto' → Catmull-Rom: cubic Hermite with finite-difference tangents.
+  const prev = neighborKf(keyframes, i - 1, prop, loop, duration);
+  const next = neighborKf(keyframes, i + 2, prop, loop, duration);
+  // Per-second velocities at the two endpoints (centered differences).
+  const m0 = (vb - prev.v) / (b.time - prev.t);
+  const m1 = (next.v - va) / (next.t - a.time);
+  // Hermite basis; tangents scaled by dt to convert per-second → per-segment.
+  const t2 = u * u, t3 = t2 * u;
+  const h00 = 2 * t3 - 3 * t2 + 1;
+  const h10 = t3 - 2 * t2 + u;
+  const h01 = -2 * t3 + 3 * t2;
+  const h11 = t3 - t2;
+  return h00 * va + h10 * (m0 * dt) + h01 * vb + h11 * (m1 * dt);
 }
 
 export function getPoseAtTime(animation, time) {
+  const loop     = animation.loop !== false;
+  const duration = animation.duration ?? 0;
   const pose = {};
   for (const [boneId, keyframes] of Object.entries(animation.tracks)) {
     pose[boneId] = {
-      x:        trackValueAt(keyframes, time, 'x'),
-      y:        trackValueAt(keyframes, time, 'y'),
-      rotation: trackValueAt(keyframes, time, 'rotation'),
+      x:        trackValueAt(keyframes, time, 'x',        loop, duration),
+      y:        trackValueAt(keyframes, time, 'y',        loop, duration),
+      rotation: trackValueAt(keyframes, time, 'rotation', loop, duration),
     };
   }
   return pose;

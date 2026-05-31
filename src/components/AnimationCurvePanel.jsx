@@ -1,5 +1,8 @@
-import { memo } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { SectionTitle } from '@/components/ui/section-title.jsx';
+import { getPoseAtTime, EASE_MODES } from '../systems/AnimationSystem.js';
+import { AnimationTimeline } from './AnimationTimeline.jsx';
+import { Trash2 } from 'lucide-react';
 
 // Format a number for compact, readable display
 function fmt(n) {
@@ -7,14 +10,6 @@ function fmt(n) {
   const abs = Math.abs(n);
   if (abs < 0.0005) return '0';
   return (n > 0 ? '+' : '') + n.toFixed(3).replace(/\.?0+$/, '');
-}
-
-function partsOf(kf) {
-  const out = [];
-  if (kf.x !== undefined)        out.push(`x ${fmt(kf.x)}`);
-  if (kf.y !== undefined)        out.push(`y ${fmt(kf.y)}`);
-  if (kf.rotation !== undefined) out.push(`rot ${fmt(kf.rotation)}`);
-  return out.join('  ');
 }
 
 function offsetLine(off) {
@@ -26,32 +21,164 @@ function offsetLine(off) {
   return out.length ? out.join('  ') : null;
 }
 
+const PROP_COLORS = { rotation: '#5eead4', x: '#fca5a5', y: '#93c5fd' };
+const EASE_LABEL  = { auto: 'Auto', linear: 'Lin', 'ease-in': 'In', 'ease-out': 'Out', 'ease-in-out': 'S', hold: 'Hold' };
+
+// Per-bone mini curve graph. Samples the REAL interpolation engine (Catmull-Rom
+// + ease + loop) so the drawn shape matches playback exactly — overshoot and
+// stop-and-go are visible here. Each animated prop is normalized independently
+// so its shape reads regardless of unit (radians vs px).
+function CurveGraph({ boneId, kfs, duration, loop }) {
+  const W = 220, H = 34, PAD = 3, N = 56;
+  const props = ['rotation', 'x', 'y'].filter(p => kfs.some(k => k[p] !== undefined));
+  if (props.length === 0 || duration <= 0) return null;
+
+  const mini = { duration, loop, tracks: { [boneId]: kfs } };
+  const samples = [];
+  for (let i = 0; i <= N; i++) {
+    const t = (i / N) * duration;
+    samples.push({ t, v: getPoseAtTime(mini, t)[boneId] });
+  }
+
+  const xAt = (t) => PAD + (t / duration) * (W - 2 * PAD);
+  const lineFor = (p) => {
+    let lo = Infinity, hi = -Infinity;
+    for (const s of samples) { lo = Math.min(lo, s.v[p]); hi = Math.max(hi, s.v[p]); }
+    const span = hi - lo || 1;
+    const yAt = (val) => H - PAD - ((val - lo) / span) * (H - 2 * PAD);
+    const d = samples.map((s, i) => `${i === 0 ? 'M' : 'L'}${xAt(s.t).toFixed(1)},${yAt(s.v[p]).toFixed(1)}`).join(' ');
+    const dots = kfs
+      .filter(k => k[p] !== undefined)
+      .map(k => ({ x: xAt(k.time), y: yAt(k[p]) }));
+    return { d, dots };
+  };
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block my-0.5">
+      <rect x="0" y="0" width={W} height={H} rx="3" fill="rgba(255,255,255,0.02)" />
+      {props.map(p => {
+        const { d, dots } = lineFor(p);
+        return (
+          <g key={p}>
+            <path d={d} fill="none" stroke={PROP_COLORS[p]} strokeWidth="1" opacity="0.85" vectorEffect="non-scaling-stroke" />
+            {dots.map((dt, i) => (
+              <circle key={i} cx={dt.x} cy={dt.y} r="1.6" fill={PROP_COLORS[p]} />
+            ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// Editable controls revealed when a keyframe row is selected: numeric value
+// entry per prop, time (retime), ease mode, and delete.
+function KeyframeEditor({ boneId, kf, duration, onSetValue, onSetEase, onRetime, onDelete }) {
+  const ease = kf.ease ?? 'auto';
+  const props = ['rotation', 'x', 'y'].filter(p => kf[p] !== undefined);
+
+  return (
+    <div className="mt-1 mb-1.5 ml-2 flex flex-col gap-1.5 rounded border border-border/70 bg-secondary/30 p-1.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <label className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          t=
+          <input
+            type="number" step="0.01" min="0" max={duration}
+            defaultValue={kf.time.toFixed(2)}
+            key={`t-${boneId}-${kf.time}`}
+            onBlur={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v) && Math.abs(v - kf.time) > 1e-4) onRetime(boneId, kf.time, v); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            className="w-12 bg-background border border-border rounded px-1 py-0.5 text-[11px] font-mono text-foreground"
+          />
+        </label>
+        {props.map(p => (
+          <label key={p} className="flex items-center gap-1 text-[10px]" style={{ color: PROP_COLORS[p] }}>
+            {p === 'rotation' ? 'rot' : p}
+            <input
+              type="number" step="0.01"
+              defaultValue={(kf[p] ?? 0).toFixed(3)}
+              key={`${p}-${boneId}-${kf.time}-${kf[p]}`}
+              onBlur={(e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v) && Math.abs(v - (kf[p] ?? 0)) > 1e-5) onSetValue(boneId, kf.time, p, +v.toFixed(4)); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+              className="w-14 bg-background border border-border rounded px-1 py-0.5 text-[11px] font-mono text-foreground"
+            />
+          </label>
+        ))}
+        <button
+          type="button"
+          onClick={() => onDelete(boneId, kf.time)}
+          title="Delete this keyframe"
+          className="ml-auto text-muted-foreground hover:text-destructive transition-colors"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="text-[9px] uppercase tracking-wider text-muted-foreground/60 mr-0.5">Ease</span>
+        {EASE_MODES.map(m => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onSetEase(boneId, kf.time, m)}
+            title={m}
+            className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+              ease === m
+                ? 'border-teal-400 bg-teal-400/15 text-teal-300'
+                : 'border-border text-muted-foreground hover:border-teal-400/50'
+            }`}
+          >
+            {EASE_LABEL[m]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const AnimationCurvePanel = memo(function AnimationCurvePanel({
   animation, offsets, overrides,
   activeKeyframe, onKeyframeClick,
   onCommitOverrides, onSaveAsTemplate,
+  // editing
+  getTime, onScrub, onAddKeyframe,
+  onDeleteKeyframe, onRetimeKeyframe, onSetEase, onSetValue, onSetDuration,
+  onionSkin, onToggleOnion,
 }) {
+  const [durDraft, setDurDraft] = useState('');
+  useEffect(() => { setDurDraft(animation?.duration != null ? String(animation.duration) : ''); }, [animation?.duration]);
+
   if (!animation) {
-    return (
-      <div className="text-xs text-muted-foreground">No animation data.</div>
-    );
+    return <div className="text-xs text-muted-foreground">No animation data.</div>;
   }
 
   const tracks = animation.tracks ?? {};
   const boneIds = Object.keys(tracks);
+  const loop = animation.loop !== false;
+  const duration = animation.duration ?? 0;
+
   const hasOverrides = (overrides && Object.values(overrides).some(boneOv => Object.keys(boneOv).length > 0))
     || (offsets && Object.keys(offsets).length > 0);
+
+  // Union of all keyframe times for the timeline ticks.
+  const keyTimes = Array.from(new Set(
+    boneIds.flatMap(b => tracks[b].map(k => +k.time.toFixed(3)))
+  )).sort((a, b) => a - b);
+
+  const commitDuration = () => {
+    const v = parseFloat(durDraft);
+    if (!Number.isNaN(v) && Math.abs(v - duration) > 1e-4) onSetDuration(v);
+  };
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <SectionTitle>Animation Data</SectionTitle>
         <span className="text-[11px] text-muted-foreground font-mono">
-          {animation.name} · {animation.duration?.toFixed?.(2) ?? animation.duration}s · {animation.loop ? 'loop' : 'once'}
+          {animation.name} · {loop ? 'loop' : 'once'}
         </span>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         {hasOverrides && (
           <button
             type="button"
@@ -70,13 +197,41 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
         </button>
       </div>
 
-      <div className="text-xs text-muted-foreground/70 leading-snug">
-        Click a <span className="font-mono">t=…</span> row to pause the animation at that
-        time. Drag joints to retune that keyframe via ragdoll — the value is
-        written to a per-character keyframe override.
+      {/* Duration + onion-skin */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          Duration
+          <input
+            type="number" step="0.05" min="0.1" max="10"
+            value={durDraft}
+            onChange={(e) => setDurDraft(e.target.value)}
+            onBlur={commitDuration}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            className="w-16 bg-background border border-border rounded px-1 py-0.5 text-[11px] font-mono text-foreground normal-case tracking-normal"
+          />
+          s
+        </label>
+        <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground cursor-pointer select-none">
+          <input type="checkbox" checked={!!onionSkin} onChange={onToggleOnion} className="accent-teal-400" />
+          Onion skin
+        </label>
       </div>
 
-      <div className="flex flex-col gap-2 border border-border rounded-md p-2 font-mono max-h-[756px] overflow-y-auto pr-1">
+      <AnimationTimeline
+        duration={duration}
+        keyTimes={keyTimes}
+        activeTime={activeKeyframe?.time ?? null}
+        getTime={getTime}
+        onScrub={onScrub}
+        onAddKeyframe={onAddKeyframe}
+      />
+
+      <div className="text-xs text-muted-foreground/70 leading-snug">
+        Scrub the timeline to any moment, then <span className="text-teal-400">+ Key</span> or drag a joint to
+        author there. Click a keyframe to edit its values, timing &amp; easing.
+      </div>
+
+      <div className="flex flex-col gap-2 border border-border rounded-md p-2 font-mono max-h-[640px] overflow-y-auto pr-1">
         {boneIds.length === 0 && (
           <div className="text-xs text-muted-foreground">No tracks.</div>
         )}
@@ -89,33 +244,53 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
               <div className="flex items-center justify-between text-sm">
                 <span className="text-foreground">{boneId}</span>
                 {off && (
-                  <span className="text-teal-400 text-xs" title="Edit Pose offset">
-                    Δ {off}
-                  </span>
+                  <span className="text-teal-400 text-xs" title="Edit Pose offset">Δ {off}</span>
                 )}
               </div>
-              <div className="flex flex-col gap-px pl-2 text-xs">
+
+              <CurveGraph boneId={boneId} kfs={kfs} duration={duration} loop={loop} />
+
+              <div className="flex flex-col gap-px pl-1 text-xs">
                 {kfs.map((kf, i) => {
                   const key = kf.time.toFixed(2);
-                  const isActive  = activeKeyframe && activeKeyframe.boneId === boneId && activeKeyframe.time.toFixed(2) === key;
+                  const isActive   = activeKeyframe && activeKeyframe.boneId === boneId && activeKeyframe.time.toFixed(2) === key;
                   const overridden = boneOv && boneOv[key];
+                  const ease = kf.ease ?? 'auto';
                   const cls = isActive
                     ? 'text-yellow-300 bg-yellow-300/10'
                     : overridden
                       ? 'text-amber-300 hover:bg-secondary'
                       : 'text-muted-foreground hover:bg-secondary';
                   return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => onKeyframeClick?.(boneId, kf.time)}
-                      className={`flex gap-2 text-left px-1 -mx-1 rounded transition-colors ${cls}`}
-                      title={overridden ? 'Overridden — click to edit' : 'Click to edit at this time'}
-                    >
-                      <span className="opacity-70 w-10">t={key}</span>
-                      <span>{partsOf(kf) || '—'}</span>
-                      {overridden && <span className="ml-auto opacity-70">·edited</span>}
-                    </button>
+                    <div key={i}>
+                      <button
+                        type="button"
+                        onClick={() => onKeyframeClick?.(boneId, kf.time)}
+                        className={`w-full flex gap-2 items-center text-left px-1 -mx-1 rounded transition-colors ${cls}`}
+                        title="Click to select / edit at this time"
+                      >
+                        <span className="opacity-70 w-10">t={key}</span>
+                        <span className="flex-1">
+                          {['rotation', 'x', 'y'].filter(p => kf[p] !== undefined)
+                            .map(p => `${p === 'rotation' ? 'rot' : p} ${fmt(kf[p])}`).join('  ') || '—'}
+                        </span>
+                        {ease !== 'auto' && (
+                          <span className="text-[9px] uppercase tracking-wider text-teal-400/70">{EASE_LABEL[ease]}</span>
+                        )}
+                        {overridden && <span className="opacity-70 text-[10px]">·edited</span>}
+                      </button>
+                      {isActive && (
+                        <KeyframeEditor
+                          boneId={boneId}
+                          kf={kf}
+                          duration={duration}
+                          onSetValue={onSetValue}
+                          onSetEase={onSetEase}
+                          onRetime={onRetimeKeyframe}
+                          onDelete={onDeleteKeyframe}
+                        />
+                      )}
+                    </div>
                   );
                 })}
               </div>

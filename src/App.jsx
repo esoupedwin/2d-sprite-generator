@@ -22,7 +22,7 @@ import {
   DEFAULT_WEAPON_ANIM_OFFSETS,
   DEFAULT_WEAPON_SCALES,
 } from './data/defaultBuild.js';
-import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation } from './systems/AnimationSystem.js';
+import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation, getPoseAtTime } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
@@ -240,6 +240,9 @@ export default function App() {
   // When set, the canvas pauses + seeks to this time. Drags on the named bone
   // write back to character.animKeyframeOverrides[currentAnimation][bone][time].
   const [activeKeyframe, setActiveKeyframe] = useState(null); // { boneId, time } | null
+  // Onion-skinning: faint ghost of the pose just before/after the playhead,
+  // shown while paused in Edit Animation so the user can judge spacing.
+  const [onionSkin, setOnionSkin] = useState(false);
 
   // ── Animation templates (global, persisted to localStorage) ──────────────────
   const [animTemplates, setAnimTemplates] = useState(() => {
@@ -669,6 +672,126 @@ export default function App() {
     }));
     charCanvasRef.current?.resetAnimBoneOffsets(currentAnimation);
   }, [activeCharId, activeChar, currentAnimation]);
+
+  // ── Structural keyframe edits (add / delete / retime / duration / ease) ──────
+  // Bakes the current resolved animation (base + pending overrides + offsets)
+  // into a per-character custom animation, then mutates its concrete tracks via
+  // `mutate(anim)`. Return the mutated anim to apply, or null to abort (no-op).
+  // The baked entry reuses the animation id so the custom-first lookup picks it
+  // up with no new chip; pending override/offset layers are cleared.
+  const TIME_EPS = 0.005;
+  const bakeAndMutateTracks = useCallback((mutate) => {
+    const base = activeChar.customAnimations?.find(a => a.id === currentAnimation)
+      ?? ANIMATIONS[currentAnimation];
+    if (!base) return;
+    const overrides   = (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {};
+    const animOffsets = (activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {};
+    const resolved = bakeAnimation(base, overrides, animOffsets);
+    const tracks = {};
+    for (const [b, kfs] of Object.entries(resolved.tracks)) tracks[b] = kfs.map(k => ({ ...k }));
+    const next = mutate({ ...resolved, tracks });
+    if (!next) return;
+    const baked = { ...next, id: currentAnimation, custom: true };
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const ov = { ...(c.animKeyframeOverrides ?? {}) }; delete ov[currentAnimation];
+      const ao = { ...(c.animBoneOffsets ?? {}) };       delete ao[currentAnimation];
+      const exists = (c.customAnimations ?? []).some(a => a.id === currentAnimation);
+      const customAnimations = exists
+        ? c.customAnimations.map(a => a.id === currentAnimation ? baked : a)
+        : [...(c.customAnimations ?? []), baked];
+      return { ...c, customAnimations, animKeyframeOverrides: ov, animBoneOffsets: ao };
+    }));
+    charCanvasRef.current?.resetAnimBoneOffsets(currentAnimation);
+  }, [activeChar, activeCharId, currentAnimation]);
+
+  // Snapshot the current interpolated pose at `time` into explicit keyframes on
+  // every animated bone, so a new column appears on the timeline to edit.
+  const addKeyframeAtTime = useCallback((time) => {
+    const t = +Number(time).toFixed(2);
+    bakeAndMutateTracks((anim) => {
+      if (t <= 0 || t >= anim.duration) return null; // don't duplicate endpoints
+      const pose = getPoseAtTime(anim, t);
+      let changed = false;
+      for (const [boneId, kfs] of Object.entries(anim.tracks)) {
+        if (kfs.some(k => Math.abs(k.time - t) < TIME_EPS)) continue;
+        const kf = { time: t };
+        let any = false;
+        for (const p of ['x', 'y', 'rotation']) {
+          if (kfs.some(k => k[p] !== undefined)) { kf[p] = +pose[boneId][p].toFixed(4); any = true; }
+        }
+        if (!any) continue;
+        kfs.push(kf);
+        kfs.sort((a, b) => a.time - b.time);
+        changed = true;
+      }
+      return changed ? anim : null;
+    });
+    setActiveKeyframe({ boneId: null, time: t });
+  }, [bakeAndMutateTracks]);
+
+  const deleteKeyframeAt = useCallback((boneId, time) => {
+    bakeAndMutateTracks((anim) => {
+      const kfs = anim.tracks[boneId];
+      if (!kfs || kfs.length <= 2) return null;          // keep a usable track
+      const idx = kfs.findIndex(k => Math.abs(k.time - Number(time)) < TIME_EPS);
+      if (idx < 0) return null;
+      kfs.splice(idx, 1);
+      return anim;
+    });
+  }, [bakeAndMutateTracks]);
+
+  const retimeKeyframe = useCallback((boneId, oldTime, newTime) => {
+    bakeAndMutateTracks((anim) => {
+      const kfs = anim.tracks[boneId];
+      if (!kfs) return null;
+      const k = kfs.find(kf => Math.abs(kf.time - Number(oldTime)) < TIME_EPS);
+      if (!k) return null;
+      k.time = Math.max(0, Math.min(anim.duration, +Number(newTime).toFixed(2)));
+      kfs.sort((a, b) => a.time - b.time);
+      return anim;
+    });
+  }, [bakeAndMutateTracks]);
+
+  const setKeyframeEase = useCallback((boneId, time, ease) => {
+    bakeAndMutateTracks((anim) => {
+      const kfs = anim.tracks[boneId];
+      if (!kfs) return null;
+      const k = kfs.find(kf => Math.abs(kf.time - Number(time)) < TIME_EPS);
+      if (!k) return null;
+      if (ease === 'auto') delete k.ease; else k.ease = ease;
+      return anim;
+    });
+  }, [bakeAndMutateTracks]);
+
+  const setAnimationDuration = useCallback((newDur) => {
+    const d = Math.max(0.1, Math.min(10, +Number(newDur).toFixed(2)));
+    bakeAndMutateTracks((anim) => {
+      const old = anim.duration || 1;
+      if (Math.abs(old - d) < 1e-6) return null;
+      const k = d / old;
+      for (const kfs of Object.values(anim.tracks)) {
+        for (const kf of kfs) kf.time = +(kf.time * k).toFixed(4);
+      }
+      anim.duration = d;
+      return anim;
+    });
+  }, [bakeAndMutateTracks]);
+
+  // Direct numeric edit of one keyframe value — routes through the override
+  // layer (mergeable, reversible via Commit) rather than baking.
+  const setKeyframeValue = useCallback((boneId, time, prop, value) => {
+    updateAnimKeyframeOverride(currentAnimation, boneId, time, { [prop]: value });
+  }, [updateAnimKeyframeOverride, currentAnimation]);
+
+  // Scrub: pause, mark this time as the active edit point, seek the canvas.
+  const seekToTime = useCallback((time) => {
+    setIsPlaying(false);
+    setActiveKeyframe(prev => ({ boneId: prev?.boneId ?? null, time }));
+    charCanvasRef.current?.seekTime?.(time);
+  }, []);
+
+  const getCurrentTime = useCallback(() => charCanvasRef.current?.getCurrentTime?.() ?? 0, []);
 
   const saveAnimAsTemplate = useCallback(() => {
     const overrides   = (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {};
@@ -1318,6 +1441,7 @@ export default function App() {
                 showBinds={poseEditorOpen ? false : showBinds}
                 selectedSkin={selectedSkin}
                 editAnimPose={poseEditorOpen ? false : editAnimPose}
+                onionSkin={onionSkin && editAnimPose && !poseEditorOpen}
                 customAnimations={activeChar.customAnimations}
                 customWeapons={activeChar.customWeapons}
                 onAnimationComplete={handleAnimationComplete}
@@ -1430,6 +1554,16 @@ export default function App() {
                   onKeyframeClick={onKeyframeClick}
                   onCommitOverrides={commitAnimKeyframeOverrides}
                   onSaveAsTemplate={saveAnimAsTemplate}
+                  getTime={getCurrentTime}
+                  onScrub={seekToTime}
+                  onAddKeyframe={addKeyframeAtTime}
+                  onDeleteKeyframe={deleteKeyframeAt}
+                  onRetimeKeyframe={retimeKeyframe}
+                  onSetEase={setKeyframeEase}
+                  onSetValue={setKeyframeValue}
+                  onSetDuration={setAnimationDuration}
+                  onionSkin={onionSkin}
+                  onToggleOnion={() => setOnionSkin(p => !p)}
                 />
               )}
             </aside>

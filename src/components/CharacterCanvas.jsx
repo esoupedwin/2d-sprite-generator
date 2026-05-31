@@ -68,7 +68,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   onKeyframeOverrideChange,
   currentAnimation, isPlaying,
   showBones, showFrame, showVectors, ragdoll, editStructure, rebindMode, showBinds, selectedSkin,
-  editAnimPose,
+  editAnimPose, onionSkin,
   customAnimations,
   customWeapons,
   onAnimationComplete,
@@ -169,6 +169,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.showBinds        = showBinds;
   stateRef.current.selectedSkin     = selectedSkin;
   stateRef.current.editAnimPose     = editAnimPose;
+  stateRef.current.onionSkin        = onionSkin;
   stateRef.current.boneOffsets      = boneOffsets;
   stateRef.current.skinOverrides    = skinOverrides;
   stateRef.current.ragdollOverlay   = ragdollOverlay;
@@ -415,6 +416,33 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const weapon = s.character?.weapon;
     const isMelee = MELEE_WEAPONS.has(weapon) ||
       (s.customWeapons ?? []).some(w => w.key === weapon && MELEE_WEAPONS.has(w.template));
+
+    // Onion skin: faint ghosts of the pose just before/after the playhead so
+    // the user can judge spacing while paused in Edit Animation. Drawn behind
+    // the live character; skipped during playback (would just smear).
+    if (anim && s.onionSkin && s.editAnimPose && !s.isPlaying) {
+      const dt = Math.min(0.12, (anim.duration || 1) * 0.08);
+      const ghost = (gt) => {
+        let t = gt;
+        if (anim.loop) t = ((t % anim.duration) + anim.duration) % anim.duration;
+        else t = Math.max(0, Math.min(anim.duration, t));
+        const gp = computeWorldTransforms(
+          mergeOffsets(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets), neckOff),
+        );
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        renderCharacter(ctx, s.character, gp, {
+          originX, originY, scale, skins, animation: s.currentAnimation,
+          bodyImage: bodyImageRef.current, headImage: headImageRef.current,
+          weaponImage: weaponImageRef.current, accessoryImage: accessoryImageRef.current,
+          isMelee,
+        });
+        ctx.restore();
+      };
+      ghost(s.time - dt);
+      ghost(s.time + dt);
+    }
+
     renderCharacter(ctx, s.character, worldTransforms, {
       originX, originY, scale,
       showBones:     s.showBones,
