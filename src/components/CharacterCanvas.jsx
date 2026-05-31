@@ -446,7 +446,11 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     renderCharacter(ctx, s.character, worldTransforms, {
       originX, originY, scale,
       showBones:     s.showBones,
-      highlightBone: drag?.type === 'bone' ? drag.boneId : null,
+      // Highlight the joint being dragged, or — when editing an animation — the
+      // joint whose keyframe is selected in the curve panel, so the abstract
+      // bone name maps to a limb on the canvas.
+      highlightBone: drag?.type === 'bone' ? drag.boneId
+                   : (s.editAnimPose ? (s.activeKeyframe?.boneId ?? null) : null),
       skins,
       animation:       s.currentAnimation,
       bodyImage:       bodyImageRef.current,

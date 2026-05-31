@@ -1,4 +1,4 @@
-import { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { SectionTitle } from '@/components/ui/section-title.jsx';
 import { getPoseAtTime, EASE_MODES } from '../systems/AnimationSystem.js';
 import { AnimationTimeline } from './AnimationTimeline.jsx';
@@ -25,12 +25,36 @@ const PROP_COLORS = { rotation: '#5eead4', x: '#fca5a5', y: '#93c5fd' };
 const EASE_LABEL  = { auto: 'Auto', linear: 'Lin', 'ease-in': 'In', 'ease-out': 'Out', 'ease-in-out': 'S', hold: 'Hold' };
 
 // Per-bone mini curve graph. Samples the REAL interpolation engine (Catmull-Rom
-// + ease + loop) so the drawn shape matches playback exactly — overshoot and
-// stop-and-go are visible here. Each animated prop is normalized independently
-// so its shape reads regardless of unit (radians vs px).
-function CurveGraph({ boneId, kfs, duration, loop }) {
-  const W = 220, H = 34, PAD = 3, N = 56;
+// + ease + loop) so the drawn shape matches playback exactly. The graph is a
+// direct-manipulation surface, not decoration:
+//   • click/drag the background → scrub the playhead to that time
+//   • click a keyframe dot → select that keyframe (opens its editor below)
+//   • a shared live playhead (driven by the parent's --ph CSS var) sweeps
+//     across every graph so the timeline, curves, and values stay tied together.
+// Each animated prop is normalized independently so its shape reads regardless
+// of unit (radians vs px).
+function CurveGraph({ boneId, kfs, duration, loop, activeKeyframe, onKeyframeClick, onScrub }) {
+  const wrapRef = useRef(null);
+  const W = 220, H = 34, PAD = 4, N = 56;
   const props = ['rotation', 'x', 'y'].filter(p => kfs.some(k => k[p] !== undefined));
+
+  const scrubFromEvent = useCallback((e) => {
+    const el = wrapRef.current;
+    if (!el || duration <= 0) return;
+    const r = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    onScrub(+(x * duration).toFixed(2));
+  }, [duration, onScrub]);
+
+  const onPointerDown = useCallback((e) => {
+    e.preventDefault();
+    scrubFromEvent(e);
+    const move = (ev) => scrubFromEvent(ev);
+    const up   = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }, [scrubFromEvent]);
+
   if (props.length === 0 || duration <= 0) return null;
 
   const mini = { duration, loop, tracks: { [boneId]: kfs } };
@@ -40,34 +64,52 @@ function CurveGraph({ boneId, kfs, duration, loop }) {
     samples.push({ t, v: getPoseAtTime(mini, t)[boneId] });
   }
 
-  const xAt = (t) => PAD + (t / duration) * (W - 2 * PAD);
+  const xAt = (t) => (t / duration) * W;
+  const activeKey = activeKeyframe?.boneId === boneId ? activeKeyframe.time.toFixed(2) : null;
+
   const lineFor = (p) => {
     let lo = Infinity, hi = -Infinity;
     for (const s of samples) { lo = Math.min(lo, s.v[p]); hi = Math.max(hi, s.v[p]); }
     const span = hi - lo || 1;
     const yAt = (val) => H - PAD - ((val - lo) / span) * (H - 2 * PAD);
     const d = samples.map((s, i) => `${i === 0 ? 'M' : 'L'}${xAt(s.t).toFixed(1)},${yAt(s.v[p]).toFixed(1)}`).join(' ');
-    const dots = kfs
-      .filter(k => k[p] !== undefined)
-      .map(k => ({ x: xAt(k.time), y: yAt(k[p]) }));
+    const dots = kfs.filter(k => k[p] !== undefined)
+      .map(k => ({ x: xAt(k.time), y: yAt(k[p]), time: k.time, active: k.time.toFixed(2) === activeKey }));
     return { d, dots };
   };
 
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block my-0.5">
-      <rect x="0" y="0" width={W} height={H} rx="3" fill="rgba(255,255,255,0.02)" />
-      {props.map(p => {
-        const { d, dots } = lineFor(p);
-        return (
-          <g key={p}>
-            <path d={d} fill="none" stroke={PROP_COLORS[p]} strokeWidth="1" opacity="0.85" vectorEffect="non-scaling-stroke" />
-            {dots.map((dt, i) => (
-              <circle key={i} cx={dt.x} cy={dt.y} r="1.6" fill={PROP_COLORS[p]} />
-            ))}
-          </g>
-        );
-      })}
-    </svg>
+    <div ref={wrapRef} onPointerDown={onPointerDown} className="relative my-0.5 cursor-pointer select-none">
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block">
+        <rect x="0" y="0" width={W} height={H} rx="3" fill="rgba(255,255,255,0.02)" />
+        {props.map(p => {
+          const { d, dots } = lineFor(p);
+          return (
+            <g key={p}>
+              <path d={d} fill="none" stroke={PROP_COLORS[p]} strokeWidth="1" opacity="0.85" vectorEffect="non-scaling-stroke" />
+              {dots.map((dt, i) => (
+                <g key={i}>
+                  <circle cx={dt.x} cy={dt.y} r={dt.active ? 2.8 : 1.6}
+                    fill={dt.active ? '#fde047' : PROP_COLORS[p]}
+                    stroke={dt.active ? '#000' : 'none'} strokeWidth="0.5" />
+                  {/* enlarged invisible hit target ON TOP so a precise click on
+                      the dot selects the keyframe instead of scrubbing */}
+                  <circle
+                    cx={dt.x} cy={dt.y} r="7" fill="transparent" className="cursor-pointer"
+                    onPointerDown={(e) => { e.stopPropagation(); onKeyframeClick?.(boneId, dt.time); }}
+                  />
+                </g>
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+      {/* live playhead — position set by parent via the --ph CSS variable */}
+      <div
+        className="absolute top-0 bottom-0 w-px bg-teal-400/70 pointer-events-none"
+        style={{ left: 'var(--ph, 0%)' }}
+      />
+    </div>
   );
 }
 
@@ -146,6 +188,23 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
 }) {
   const [durDraft, setDurDraft] = useState('');
   useEffect(() => { setDurDraft(animation?.duration != null ? String(animation.duration) : ''); }, [animation?.duration]);
+
+  // One RAF drives a shared playhead across every curve graph: it sets the --ph
+  // CSS variable on the track container, and each graph's playhead reads it.
+  // No per-frame React state, so the editor doesn't re-render 60×/s.
+  const tracksRef = useRef(null);
+  const dur = animation?.duration ?? 0;
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      const t = getTime?.() ?? 0;
+      const pct = dur > 0 ? Math.max(0, Math.min(100, (t / dur) * 100)) : 0;
+      tracksRef.current?.style.setProperty('--ph', `${pct}%`);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [getTime, dur]);
 
   if (!animation) {
     return <div className="text-xs text-muted-foreground">No animation data.</div>;
@@ -231,7 +290,7 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
         author there. Click a keyframe to edit its values, timing &amp; easing.
       </div>
 
-      <div className="flex flex-col gap-2 border border-border rounded-md p-2 font-mono max-h-[640px] overflow-y-auto pr-1">
+      <div ref={tracksRef} className="flex flex-col gap-2 border border-border rounded-md p-2 font-mono max-h-[640px] overflow-y-auto pr-1">
         {boneIds.length === 0 && (
           <div className="text-xs text-muted-foreground">No tracks.</div>
         )}
@@ -248,7 +307,10 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
                 )}
               </div>
 
-              <CurveGraph boneId={boneId} kfs={kfs} duration={duration} loop={loop} />
+              <CurveGraph
+                boneId={boneId} kfs={kfs} duration={duration} loop={loop}
+                activeKeyframe={activeKeyframe} onKeyframeClick={onKeyframeClick} onScrub={onScrub}
+              />
 
               <div className="flex flex-col gap-px pl-1 text-xs">
                 {kfs.map((kf, i) => {
