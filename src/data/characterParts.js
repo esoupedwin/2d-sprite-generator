@@ -357,6 +357,56 @@ export const CHARACTER_PARTS = {
           ctx.fillRect(-4, 22, 6, 12);
         },
       },
+      pistol: {
+        label: 'Pistol',
+        draw(ctx) {
+          // Compact one-handed sidearm. Hand grips at origin (0, 0).
+          // +Y = muzzle (forward), -Y = rear of slide.
+          // Slide spans most of the length; grip/frame hangs below.
+
+          // Rear sight
+          ctx.fillStyle = '#1A1A1A';
+          ctx.fillRect(-4, -12, 8, 4);
+
+          // Slide (upper receiver housing barrel)
+          ctx.fillStyle = '#2E2E2E';
+          ctx.fillRect(-5, -8, 10, 30);
+
+          // Slide serrations near rear
+          ctx.strokeStyle = '#1A1A1A';
+          ctx.lineWidth = 1;
+          for (const sy of [-4, -1, 2]) {
+            ctx.beginPath(); ctx.moveTo(4, sy); ctx.lineTo(4, sy + 2); ctx.stroke();
+          }
+
+          // Barrel tip (extends past slide)
+          ctx.fillStyle = '#1A1A1A';
+          ctx.fillRect(-2, 20, 4, 14);
+
+          // Frame / grip
+          ctx.fillStyle = '#4A3520';
+          ctx.fillRect(-4, 6, 8, 22);
+
+          // Magazine (inside grip)
+          ctx.fillStyle = '#3A3A3A';
+          ctx.fillRect(-3, 8, 6, 18);
+
+          // Trigger guard arc
+          ctx.strokeStyle = '#252525';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(-0.5, 6, 5.5, 0, Math.PI);
+          ctx.stroke();
+
+          // Muzzle crown
+          ctx.fillStyle = '#111';
+          ctx.fillRect(-3, 32, 6, 4);
+
+          // Front sight nub on slide
+          ctx.fillStyle = '#1A1A1A';
+          ctx.fillRect(-2, 18, 4, 3);
+        },
+      },
       grenade_launcher: {
         label: 'Grenade Launcher',
         draw(ctx) {
