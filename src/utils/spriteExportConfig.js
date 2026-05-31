@@ -1,11 +1,13 @@
 // FRAME_W / FRAME_H are LOGICAL units (the rendering math operates in these).
 // The exported PNG is EXPORT_PIXEL_RATIO× larger per axis, so each frame in
-// the saved file is actually FRAME_W * EXPORT_PIXEL_RATIO × FRAME_H * EXPORT_PIXEL_RATIO
-// pixels. At default 2× that's 512 × 600 raw pixels per cell.
-export const FRAME_W        = 300;
-export const FRAME_H        = 300;
-export const FRAME_ORIGIN_X = 150;
-export const FRAME_ORIGIN_Y = FRAME_H; // bottom of frame sits on world y=0 (torso line)
+// the saved file is actually FRAME_PX × FRAME_PX pixels (512 × 512).
+export const FRAME_W        = 256;
+export const FRAME_H        = 256;
+export const FRAME_ORIGIN_X = 128;
+export const FRAME_ORIGIN_Y = FRAME_H; // world origin sits at the bottom of the logical frame
+
+// Pixel size of each frame cell in the exported PNG (FRAME_W * 2× oversample).
+export const FRAME_PX       = 512;
 export const FRAME_SCALE    = 1.0;
 
 // Sheet layout — max columns per row; overflow wraps to the next row.

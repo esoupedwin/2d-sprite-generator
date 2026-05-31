@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS } from '../utils/spriteExportConfig.js';
+import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS, FRAME_PX } from '../utils/spriteExportConfig.js';
 
 /**
  * Lightweight modal that asks the user how many frames the exported sprite
@@ -103,7 +103,8 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
 
           <div className="text-[11px] text-muted-foreground/80 leading-relaxed">
             Sheet will be <span className="font-mono text-foreground">{cols} × {rows}</span> frames
-            ({fc} total). Maximum 6 frames per row; the rest wrap to the next row.
+            ({fc} total). Each frame is <span className="font-mono text-foreground">{FRAME_PX} × {FRAME_PX}</span> px
+            — total <span className="font-mono text-foreground">{cols * FRAME_PX} × {rows * FRAME_PX}</span> px.
           </div>
 
           {/* Split-export toggle */}
