@@ -2493,9 +2493,15 @@ function trackValueAt(keyframes, time, prop, loop = false, duration = 0) {
   // 'auto' → Catmull-Rom: cubic Hermite with finite-difference tangents.
   const prev = neighborKf(keyframes, i - 1, prop, loop, duration);
   const next = neighborKf(keyframes, i + 2, prop, loop, duration);
-  // Per-second velocities at the two endpoints (centered differences).
-  const m0 = (vb - prev.v) / (b.time - prev.t);
-  const m1 = (next.v - va) / (next.t - a.time);
+  // Per-second velocities at the two endpoints (centered differences), but
+  // zeroed at a local extremum (monotonicity guard). Without this the spline
+  // overshoots past a peak keyframe — swinging a limb through the body on
+  // snappy actions like punch/throw. Smoothness on monotonic runs is kept.
+  const dPrev = va - prev.v;     // slope entering keyframe a
+  const dNext = vb - va;         // slope of this segment (a→b)
+  const dNN   = next.v - vb;     // slope leaving keyframe b
+  const m0 = (dPrev * dNext <= 0) ? 0 : (vb - prev.v) / (b.time - prev.t);
+  const m1 = (dNext * dNN   <= 0) ? 0 : (next.v - va) / (next.t - a.time);
   // Hermite basis; tangents scaled by dt to convert per-second → per-segment.
   const t2 = u * u, t3 = t2 * u;
   const h00 = 2 * t3 - 3 * t2 + 1;
