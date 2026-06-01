@@ -793,6 +793,13 @@ export default function App() {
 
   const getCurrentTime = useCallback(() => charCanvasRef.current?.getCurrentTime?.() ?? 0, []);
 
+  // Click a joint on the canvas → select that bone's track in the curve panel
+  // (at the current playhead time), which also scrolls it into view.
+  const selectBone = useCallback((boneId) => {
+    const t = charCanvasRef.current?.getCurrentTime?.() ?? 0;
+    setActiveKeyframe({ boneId, time: +t.toFixed(2) });
+  }, []);
+
   const saveAnimAsTemplate = useCallback(() => {
     const overrides   = (activeChar.animKeyframeOverrides ?? {})[currentAnimation] ?? {};
     const animOffsets = (activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {};
@@ -1454,6 +1461,7 @@ export default function App() {
                 onWeaponOffsetSet={setWeaponOffsetAbsolute}
                 accessoryOffset={accessoryOffset}
                 onAccessoryOffsetSet={setAccessoryOffsetAbsolute}
+                onSelectBone={editAnimPose && !poseEditorOpen ? selectBone : undefined}
               />
           </main>
 

@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { SectionTitle } from '@/components/ui/section-title.jsx';
 import { getPoseAtTime, EASE_MODES } from '../systems/AnimationSystem.js';
+import { BONE_IDS } from '../systems/Renderer.js';
 import { AnimationTimeline } from './AnimationTimeline.jsx';
 import { Trash2 } from 'lucide-react';
 
@@ -350,7 +351,17 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
           return (
             <div key={boneId} ref={el => { boneRefs.current[boneId] = el; }} className="flex flex-col gap-0.5 scroll-mt-1">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-foreground">{boneId}</span>
+                <span className="text-foreground flex items-center gap-1.5">
+                  {/* joint number matches the numbered joints on the canvas */}
+                  <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold ${
+                    activeKeyframe?.boneId === boneId
+                      ? 'bg-red-500 text-white'
+                      : 'bg-yellow-400/20 text-yellow-300'
+                  }`}>
+                    {BONE_IDS[boneId] ?? '·'}
+                  </span>
+                  {boneId}
+                </span>
                 {off && (
                   <span className="text-teal-400 text-xs" title="Edit Pose offset">Δ {off}</span>
                 )}

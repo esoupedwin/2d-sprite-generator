@@ -81,6 +81,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   onWeaponOffsetSet,
   accessoryOffset,
   onAccessoryOffsetSet,
+  onSelectBone,
 }, ref) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -116,6 +117,10 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
   const dragRef    = useRef(null);
   const panDragRef = useRef(null);
+  // Tracks a potential click-to-select on a bone joint: set on mousedown over a
+  // joint in Edit Animation, cleared once the pointer moves enough to count as a
+  // drag. On mouseup without movement → select that bone in the curve panel.
+  const clickCandidateRef = useRef(null);
   const viewRef    = useRef({ zoom: 1, panX: 0, panY: 0 });
   // Decoded HTMLImageElements for character body/head/weapon PNGs.
   // The hook handles cancellation so rapid weapon swaps don't race.
@@ -182,6 +187,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.onWeaponOffsetSet  = onWeaponOffsetSet  ?? null;
   stateRef.current.accessoryOffset    = accessoryOffset ?? { x: 0, y: 0, rotation: 0 };
   stateRef.current.onAccessoryOffsetSet = onAccessoryOffsetSet ?? null;
+  stateRef.current.onSelectBone       = onSelectBone ?? null;
 
   // When a keyframe row is clicked, snap to its time and lock there.
   useEffect(() => {
@@ -839,6 +845,10 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       dragRef.current = (target.type === 'weapon-pos' || target.type === 'accessory-pos')
         ? { ...target, initCharX: charPos.x, initCharY: charPos.y }
         : target;
+      // Joint click in Edit Animation → candidate for select-on-release.
+      clickCandidateRef.current = (s0.editAnimPose && target.type === 'bone')
+        ? { boneId: target.boneId, x: e.clientX, y: e.clientY, moved: false }
+        : null;
       if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
       e.preventDefault();
     } else if (e.ctrlKey && stateRef.current.currentAnimation === 'edit') {
@@ -854,6 +864,12 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   }, [getCharPos, findTarget]);
 
   const handleMouseMove = useCallback((e) => {
+    // Promote a click candidate to a drag once the pointer moves past a few px.
+    const cc = clickCandidateRef.current;
+    if (cc && !cc.moved) {
+      const dx = e.clientX - cc.x, dy = e.clientY - cc.y;
+      if (dx * dx + dy * dy > 9) cc.moved = true;
+    }
     if (panDragRef.current) {
       const dp     = panDragRef.current;
       const canvas = canvasRef.current;
@@ -1187,6 +1203,10 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   }, [getCharPos, findTarget]);
 
   const stopDrag = useCallback(() => {
+    // A joint pressed-and-released without dragging = select that bone's track.
+    const cc = clickCandidateRef.current;
+    clickCandidateRef.current = null;
+    if (cc && !cc.moved) stateRef.current.onSelectBone?.(cc.boneId);
     dragRef.current    = null;
     panDragRef.current = null;
     if (canvasRef.current) canvasRef.current.style.cursor = 'default';

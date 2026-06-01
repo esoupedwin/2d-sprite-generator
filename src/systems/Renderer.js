@@ -230,7 +230,7 @@ export function renderPartGroup(ctx, groupId, character, worldTransforms, option
 }
 
 // Stable numeric IDs for each bone joint, shown in the debug overlay.
-const BONE_IDS = {
+export const BONE_IDS = {
   torso:         1,
   head:          2,
   lower_torso:   3,
