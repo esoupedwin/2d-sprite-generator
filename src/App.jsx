@@ -1564,6 +1564,8 @@ export default function App() {
                   onSetDuration={setAnimationDuration}
                   onionSkin={onionSkin}
                   onToggleOnion={() => setOnionSkin(p => !p)}
+                  isPlaying={isPlaying}
+                  onTogglePlay={() => setIsPlaying(p => !p)}
                 />
               )}
             </aside>

@@ -185,15 +185,26 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
   getTime, onScrub, onAddKeyframe,
   onDeleteKeyframe, onRetimeKeyframe, onSetEase, onSetValue, onSetDuration,
   onionSkin, onToggleOnion,
+  isPlaying, onTogglePlay,
 }) {
   const [durDraft, setDurDraft] = useState('');
   useEffect(() => { setDurDraft(animation?.duration != null ? String(animation.duration) : ''); }, [animation?.duration]);
+
+  // Derived (computed before the early return so hooks below can use them).
+  const tracks   = animation?.tracks ?? {};
+  const boneIds  = Object.keys(tracks);
+  const loop     = animation?.loop !== false;
+  const duration = animation?.duration ?? 0;
+  const dur      = duration;
+  // Union of all keyframe times for the timeline ticks / step navigation.
+  const keyTimes = Array.from(new Set(
+    boneIds.flatMap(b => tracks[b].map(k => +k.time.toFixed(3)))
+  )).sort((a, b) => a - b);
 
   // One RAF drives a shared playhead across every curve graph: it sets the --ph
   // CSS variable on the track container, and each graph's playhead reads it.
   // No per-frame React state, so the editor doesn't re-render 60×/s.
   const tracksRef = useRef(null);
-  const dur = animation?.duration ?? 0;
   useEffect(() => {
     let raf;
     const tick = () => {
@@ -206,22 +217,45 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
     return () => cancelAnimationFrame(raf);
   }, [getTime, dur]);
 
+  // Step the playhead to the previous / next keyframe time (any bone).
+  const stepTo = useCallback((dir) => {
+    const t = getTime?.() ?? 0;
+    const eps = 1e-3;
+    let target;
+    if (dir < 0) { target = 0;        for (const k of keyTimes) { if (k < t - eps) target = k; else break; } }
+    else         { target = duration; for (const k of keyTimes) { if (k > t + eps) { target = k; break; } } }
+    onScrub(+target.toFixed(2));
+  }, [getTime, keyTimes, duration, onScrub]);
+
+  // Editor keyboard shortcuts (mounted only while editing). Ignored when a
+  // text field is focused so numeric entry isn't hijacked.
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+      if (e.code === 'Space')           { e.preventDefault(); onTogglePlay?.(); }
+      else if (e.key === 'ArrowLeft')   { e.preventDefault(); stepTo(-1); }
+      else if (e.key === 'ArrowRight')  { e.preventDefault(); stepTo(1); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [stepTo, onTogglePlay]);
+
+  // Auto-scroll the selected bone's track into view when the selection's bone
+  // changes (e.g. via canvas joint highlight or keyframe-dot click).
+  const boneRefs = useRef({});
+  useEffect(() => {
+    const b = activeKeyframe?.boneId;
+    const el = b && boneRefs.current[b];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [activeKeyframe?.boneId]);
+
   if (!animation) {
     return <div className="text-xs text-muted-foreground">No animation data.</div>;
   }
 
-  const tracks = animation.tracks ?? {};
-  const boneIds = Object.keys(tracks);
-  const loop = animation.loop !== false;
-  const duration = animation.duration ?? 0;
-
   const hasOverrides = (overrides && Object.values(overrides).some(boneOv => Object.keys(boneOv).length > 0))
     || (offsets && Object.keys(offsets).length > 0);
-
-  // Union of all keyframe times for the timeline ticks.
-  const keyTimes = Array.from(new Set(
-    boneIds.flatMap(b => tracks[b].map(k => +k.time.toFixed(3)))
-  )).sort((a, b) => a - b);
 
   const commitDuration = () => {
     const v = parseFloat(durDraft);
@@ -283,11 +317,26 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
         getTime={getTime}
         onScrub={onScrub}
         onAddKeyframe={onAddKeyframe}
+        isPlaying={isPlaying}
+        onTogglePlay={onTogglePlay}
+        onStepPrev={() => stepTo(-1)}
+        onStepNext={() => stepTo(1)}
       />
 
       <div className="text-xs text-muted-foreground/70 leading-snug">
         Scrub the timeline to any moment, then <span className="text-teal-400">+ Key</span> or drag a joint to
         author there. Click a keyframe to edit its values, timing &amp; easing.
+      </div>
+
+      {/* Curve legend — which channel each colored line represents. */}
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+        <span className="uppercase tracking-wider">Curves:</span>
+        {[['rotation', 'rot'], ['x', 'x'], ['y', 'y']].map(([prop, label]) => (
+          <span key={prop} className="flex items-center gap-1">
+            <span className="inline-block w-3 h-0.5 rounded-full" style={{ background: PROP_COLORS[prop] }} />
+            {label}
+          </span>
+        ))}
       </div>
 
       <div ref={tracksRef} className="flex flex-col gap-2 border border-border rounded-md p-2 font-mono max-h-[640px] overflow-y-auto pr-1">
@@ -299,7 +348,7 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
           const off = offsetLine(offsets?.[boneId]);
           const boneOv = overrides?.[boneId] ?? null;
           return (
-            <div key={boneId} className="flex flex-col gap-0.5">
+            <div key={boneId} ref={el => { boneRefs.current[boneId] = el; }} className="flex flex-col gap-0.5 scroll-mt-1">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-foreground">{boneId}</span>
                 {off && (

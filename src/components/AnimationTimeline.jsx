@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Play, Pause, SkipBack, SkipForward } from 'lucide-react';
 
 /**
  * Scrubbable timeline for the animation editor.
@@ -14,6 +14,7 @@ import { Plus } from 'lucide-react';
 export function AnimationTimeline({
   duration, keyTimes, activeTime, getTime,
   onScrub, onAddKeyframe,
+  isPlaying, onTogglePlay, onStepPrev, onStepNext,
 }) {
   const trackRef    = useRef(null);
   const playheadRef = useRef(null);
@@ -60,18 +61,29 @@ export function AnimationTimeline({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Timeline</span>
-        <div className="flex items-center gap-2">
-          <span ref={timeLabelRef} className="text-[11px] font-mono text-teal-400 tabular-nums">0.00s</span>
-          <button
-            type="button"
-            onClick={() => onAddKeyframe(getTime?.() ?? 0)}
-            title="Add a keyframe at the playhead"
-            className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-teal-400/40 text-teal-400 hover:bg-teal-400/10 transition-colors"
-          >
-            <Plus className="h-3 w-3" /> Key
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={onStepPrev} title="Previous keyframe (←)"
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+            <SkipBack className="h-3.5 w-3.5" />
           </button>
+          <button type="button" onClick={onTogglePlay} title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
+            className="p-1 rounded text-foreground hover:bg-secondary transition-colors">
+            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </button>
+          <button type="button" onClick={onStepNext} title="Next keyframe (→)"
+            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+            <SkipForward className="h-3.5 w-3.5" />
+          </button>
+          <span ref={timeLabelRef} className="ml-1 text-[11px] font-mono text-teal-400 tabular-nums">0.00s</span>
         </div>
+        <button
+          type="button"
+          onClick={() => onAddKeyframe(getTime?.() ?? 0)}
+          title="Add a keyframe at the playhead"
+          className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border border-teal-400/40 text-teal-400 hover:bg-teal-400/10 transition-colors"
+        >
+          <Plus className="h-3 w-3" /> Key
+        </button>
       </div>
 
       <div
