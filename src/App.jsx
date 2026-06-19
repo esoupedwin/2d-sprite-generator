@@ -1023,6 +1023,29 @@ export default function App() {
     setCurrentAnimation(cur => cur === animId ? 'idle' : cur);
   }, [activeCharId]);
 
+  // Rename an action chip. The chip label is always sourced from
+  // `animationLabels[animId]` (override) ?? built-in/custom name, so we
+  // always write the override there. For animations that also have a
+  // matching custom record, we additionally update the custom's `name`
+  // so any UI that reads the custom directly stays in sync. Passing an
+  // empty/whitespace name clears the override and falls back to default.
+  const renameAnimation = useCallback((animId, newName) => {
+    const trimmed = (newName ?? '').trim();
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const labels = { ...(c.animationLabels ?? {}) };
+      if (!trimmed) delete labels[animId];
+      else          labels[animId] = trimmed;
+
+      const customs = c.customAnimations ?? [];
+      const updatedCustoms = trimmed
+        ? customs.map(a => a.id === animId ? { ...a, name: trimmed } : a)
+        : customs;
+
+      return { ...c, animationLabels: labels, customAnimations: updatedCustoms };
+    }));
+  }, [activeCharId]);
+
   // ── Custom weapon callbacks ──────────────────────────────────────────────────
   const addCustomWeapon = useCallback((label, template = 'none') => {
     const key = 'cw_' + genId();
@@ -1504,10 +1527,12 @@ export default function App() {
                 characterName={activeChar.name}
                 editAnimPose={editAnimPose}
                 customAnimations={activeChar.customAnimations}
+                animationLabels={activeChar.animationLabels}
                 poseEditorOpen={poseEditorOpen}
                 onAnimationChange={handleAnimationChange}
                 onNewAnimation={() => setNewAnimDialogOpen(true)}
                 onDeleteAnimation={deleteCustomAnimation}
+                onRenameAnimation={renameAnimation}
               />
             </div>
             </>)}

@@ -11,13 +11,13 @@ import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS, FRAME_PX } from '..
  */
 export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
   const [frameCount, setFrameCount] = useState(DEFAULT_FRAMES);
-  const [split, setSplit] = useState(false);
+  const [split, setSplit] = useState(true);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       setFrameCount(DEFAULT_FRAMES);
-      setSplit(false);
+      setSplit(true);
       setBusy(false);
     }
   }, [open]);

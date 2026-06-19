@@ -12,17 +12,50 @@ import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
 import {
   FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y, FRAME_SCALE,
-  SHEET_COLS, DEFAULT_FRAMES,
+  FRAME_PX, SHEET_COLS, DEFAULT_FRAMES,
 } from './spriteExportConfig.js';
 
 // Oversample factor — the backing canvas is this many times larger than the
 // nominal sprite size. Drawing math stays in nominal units (we apply
 // ctx.scale once), so curves rasterize at higher pixel density and edges
-// come out crisp instead of stair-stepped.
-const EXPORT_PIXEL_RATIO = 2;
+// come out crisp instead of stair-stepped. Derived from FRAME_PX so the
+// exported cell is exactly FRAME_PX × FRAME_PX pixels.
+const EXPORT_PIXEL_RATIO = FRAME_PX / FRAME_W;
 
 // Per-animation head PNG override falls back to the character-wide head
 // PNG. Mirrors the live-canvas resolution in CharacterCanvas.jsx.
+// Resolve the human-readable label for an animation: per-character override
+// (animationLabels) → custom animation name → built-in name → raw id.
+// Used for export file names so that renamed chips produce matching files.
+function resolveAnimLabel(character, animationName) {
+  return character?.animationLabels?.[animationName]
+      ?? character?.customAnimations?.find(a => a.id === animationName)?.name
+      ?? ANIMATIONS[animationName]?.name
+      ?? animationName;
+}
+
+function sanitizeFileName(s) {
+  return String(s).trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_-]/gi, '_') || 'animation';
+}
+
+// Filename base: `<weapon>_<action>` (or just `<action>` when no weapon).
+// For custom weapons (cw_…) we use the user-given label (e.g. "Sniper")
+// instead of the underlying template (e.g. "rifle") so the filename
+// matches what the user sees in the UI. Falls back to the template name
+// for unnamed customs.
+// If the sanitized action label already starts with the weapon name, the
+// weapon prefix is omitted to avoid duplication like `sniper_sniper_walk`.
+function exportFileBase(character, animationName) {
+  const action = sanitizeFileName(resolveAnimLabel(character, animationName));
+  const weaponKey = character?.parts?.weapon ?? 'none';
+  const customW   = character?.customWeapons?.find(w => w.key === weaponKey);
+  const weaponName = customW?.label ?? customW?.template ?? weaponKey;
+  if (!weaponName || weaponName === 'none') return action;
+  const w = sanitizeFileName(weaponName);
+  if (action === w || action.startsWith(`${w}_`)) return action;
+  return `${w}_${action}`;
+}
+
 function resolveHeadUrl(parts, animationName) {
   return parts?.animHeadImages?.[animationName] ?? parts?.headImage ?? null;
 }
@@ -179,20 +212,20 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
  */
 export async function exportSpriteSheet(character, animationName, opts = {}) {
   const { split = false, ...sheetOpts } = opts;
-  const safeName = String(animationName).replace(/[^a-z0-9_-]/gi, '_');
+  const base = exportFileBase(character, animationName);
 
   if (!split) {
     const sheet = await buildSpriteSheet(character, animationName, sheetOpts);
     if (!sheet) return;
-    await downloadCanvas(sheet.canvas, `${safeName}_spritesheet.png`);
+    await downloadCanvas(sheet.canvas, `${base}.png`);
     return;
   }
 
   // Split mode: render the two halves at the same frame coords.
   const body = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: 'no-legs' });
   const legs = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: 'legs-only' });
-  if (body) await downloadCanvas(body.canvas, `${safeName}_spritesheet_body.png`);
-  if (legs) await downloadCanvas(legs.canvas, `${safeName}_spritesheet_legs.png`);
+  if (body) await downloadCanvas(body.canvas, `${base}_body.png`);
+  if (legs) await downloadCanvas(legs.canvas, `${base}_legs.png`);
 }
 
 function downloadCanvas(canvas, filename) {
@@ -265,8 +298,7 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
 
   const blob = new Blob([svg], { type: 'image/svg+xml' });
   const url  = URL.createObjectURL(blob);
-  const name = animationName.replace(/[^a-z0-9_-]/gi, '_');
-  download(url, `${name}_pose.svg`);
+  download(url, `${exportFileBase(character, animationName)}_pose.svg`);
   URL.revokeObjectURL(url);
 }
 
@@ -291,7 +323,7 @@ export function exportAnimationJSON(character, animationName) {
 
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  download(url, `${animationName}_animation.json`);
+  download(url, `${exportFileBase(character, animationName)}_animation.json`);
   URL.revokeObjectURL(url);
 }
 
@@ -422,7 +454,7 @@ export async function exportPartsSheetSVG(character, animationName, currentTime 
 
   const blob = new Blob([lines.join('\n')], { type: 'image/svg+xml' });
   const url  = URL.createObjectURL(blob);
-  download(url, `${animationName.replace(/[^a-z0-9_-]/gi, '_')}_parts.svg`);
+  download(url, `${exportFileBase(character, animationName)}_parts.svg`);
   URL.revokeObjectURL(url);
 }
 
