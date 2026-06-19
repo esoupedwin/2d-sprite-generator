@@ -52,3 +52,21 @@ export function resolveAccessoryOffset(parts, animation) {
       ?? parts.accessoryOffset
       ?? ZERO_OFFSET;
 }
+
+// Body accessory — a single PNG anchored to the torso (not per-weapon, so a
+// cape / emblem / backpack persists across weapon swaps).
+export function resolveBodyAccessoryScale(parts) {
+  if (!parts) return 1;
+  return parts.bodyAccessoryScale ?? 1;
+}
+
+// Body accessory offset fallback chain:
+//   parts.bodyAccessoryAnimOffsets[animation]  — per-animation
+//   parts.bodyAccessoryOffset                  — default
+//   { x:0, y:0, rotation:0 }
+export function resolveBodyAccessoryOffset(parts, animation) {
+  if (!parts) return ZERO_OFFSET;
+  return parts.bodyAccessoryAnimOffsets?.[animation]
+      ?? parts.bodyAccessoryOffset
+      ?? ZERO_OFFSET;
+}

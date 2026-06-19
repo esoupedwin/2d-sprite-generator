@@ -81,6 +81,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   onWeaponOffsetSet,
   accessoryOffset,
   onAccessoryOffsetSet,
+  bodyAccessoryOffset,
+  onBodyAccessoryOffsetSet,
   onSelectBone,
 }, ref) {
   const canvasRef = useRef(null);
@@ -132,6 +134,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   const headImageRef   = useImageDataUrl(resolvedHeadUrl);
   const weaponImageRef    = useImageDataUrl(character?.weaponImages?.[character?.weapon]);
   const accessoryImageRef = useImageDataUrl(character?.accessoryImages?.[character?.weapon]);
+  const bodyAccessoryImageRef = useImageDataUrl(character?.bodyAccessoryImage);
 
   // Undo history — session-only, capped at 60 entries
   const historyRef = useRef([]);
@@ -152,6 +155,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     onWeaponOffsetSet: null,
     accessoryOffset: { x: 0, y: 0, rotation: 0 },
     onAccessoryOffsetSet: null,
+    bodyAccessoryOffset: { x: 0, y: 0, rotation: 0 },
+    onBodyAccessoryOffsetSet: null,
+    bodyAccessoryHitTargets: [],
     canvasW: 868, canvasH: 896, originX: 434, originY: 686,
     // Skins cache — rebuilt only when skinOverrides reference changes.
     cachedSkins: null, lastSkinOverrides: null,
@@ -187,6 +193,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.onWeaponOffsetSet  = onWeaponOffsetSet  ?? null;
   stateRef.current.accessoryOffset    = accessoryOffset ?? { x: 0, y: 0, rotation: 0 };
   stateRef.current.onAccessoryOffsetSet = onAccessoryOffsetSet ?? null;
+  stateRef.current.bodyAccessoryOffset = bodyAccessoryOffset ?? { x: 0, y: 0, rotation: 0 };
+  stateRef.current.onBodyAccessoryOffsetSet = onBodyAccessoryOffsetSet ?? null;
   stateRef.current.onSelectBone       = onSelectBone ?? null;
 
   // When a keyframe row is clicked, snap to its time and lock there.
@@ -463,6 +471,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       headImage:       headImageRef.current,
       weaponImage:     weaponImageRef.current,
       accessoryImage:  accessoryImageRef.current,
+      bodyAccessoryImage: bodyAccessoryImageRef.current,
       isMelee,
     });
 
@@ -653,6 +662,70 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       s.accessoryHitTargets = [];
     }
 
+    // Body accessory anchor + rotation handles (editAnimPose, image present).
+    // Anchored to the torso; emerald handles to distinguish from the purple
+    // right-arm accessory handles.
+    if (s.editAnimPose && bodyAccessoryImageRef.current) {
+      const bone = worldTransforms['torso'];
+      if (bone) {
+        const bo   = s.bodyAccessoryOffset;
+        const cosB = Math.cos(bone.rotation), sinB = Math.sin(bone.rotation);
+        const aax  = bone.x + cosB * bo.x - sinB * bo.y;
+        const aay  = bone.y + sinB * bo.x + cosB * bo.y;
+        const accWorldRot = bone.rotation + bo.rotation;
+        const vs   = 1 / zoom;
+        const drag = dragRef.current;
+        const posActive = drag?.type === 'body-accessory-pos';
+        const rotActive = drag?.type === 'body-accessory-rot';
+
+        ctx.save();
+        ctx.translate(originX, originY);
+        ctx.scale(scale, scale);
+
+        const ROT_DIST = 20 * vs;
+        const rhAngle  = accWorldRot - Math.PI / 2;
+        const rhx = aax + Math.cos(rhAngle) * ROT_DIST;
+        const rhy = aay + Math.sin(rhAngle) * ROT_DIST;
+        ctx.setLineDash([2 * vs, 2 * vs]);
+        ctx.strokeStyle = rotActive ? 'rgba(52,211,153,0.95)' : 'rgba(52,211,153,0.55)';
+        ctx.lineWidth   = vs;
+        ctx.beginPath(); ctx.moveTo(aax, aay); ctx.lineTo(rhx, rhy); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Rotation handle (emerald circle)
+        const rr = 3 * vs;
+        ctx.fillStyle   = rotActive ? '#FFF' : '#34D399';
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth   = vs;
+        ctx.beginPath(); ctx.arc(rhx, rhy, rotActive ? rr * 1.4 : rr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+        // Position handle (emerald circle + crosshair)
+        const r = 4.5 * vs;
+        ctx.fillStyle   = posActive ? '#FFF' : '#10B981';
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth   = vs;
+        ctx.beginPath(); ctx.arc(aax, aay, posActive ? r * 1.3 : r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        ctx.lineWidth   = 0.7 * vs;
+        const cr = r * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(aax - cr, aay); ctx.lineTo(aax + cr, aay);
+        ctx.moveTo(aax, aay - cr); ctx.lineTo(aax, aay + cr);
+        ctx.stroke();
+
+        ctx.restore();
+
+        s.bodyAccessoryHitTargets = [
+          { type: 'body-accessory-pos', x: aax, y: aay, aax, aay },
+          { type: 'body-accessory-rot', x: rhx, y: rhy, aax, aay },
+        ];
+      } else {
+        s.bodyAccessoryHitTargets = [];
+      }
+    } else {
+      s.bodyAccessoryHitTargets = [];
+    }
+
     if (s.showFrame) {
       // Sprite frame boundary — matches export.js constants (via spriteExportConfig.js).
       // FRAME_ORIGIN_X/Y is where world (0,0) sits inside the frame.
@@ -763,6 +836,16 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       }
       if (closest) return closest;
     }
+    // Body accessory handles
+    if (wt && s.editAnimPose && bodyAccessoryImageRef.current) {
+      const r = hitRadius(JOINT_HIT_PX);
+      let closest = null, minDist = r;
+      for (const h of s.bodyAccessoryHitTargets) {
+        const d = Math.hypot(h.x - x, h.y - y);
+        if (d < minDist) { minDist = d; closest = h; }
+      }
+      if (closest) return closest;
+    }
     if (wt && (s.ragdoll || s.editStructure || s.editAnimPose)) {
       const r = hitRadius(JOINT_HIT_PX);
       // Rotation handles take priority over joints (smaller, drawn on top).
@@ -842,7 +925,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         return;
       }
       pushHistory();
-      dragRef.current = (target.type === 'weapon-pos' || target.type === 'accessory-pos')
+      dragRef.current = (target.type === 'weapon-pos' || target.type === 'accessory-pos' || target.type === 'body-accessory-pos')
         ? { ...target, initCharX: charPos.x, initCharY: charPos.y }
         : target;
       // Joint click in Edit Animation → candidate for select-on-release.
@@ -952,6 +1035,32 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       const aay = bone.y + sinB * ao.x + cosB * ao.y;
       const angle = Math.atan2(charPos.y - aay, charPos.x - aax);
       s.onAccessoryOffsetSet?.({ ...ao, rotation: angle + Math.PI / 2 - bone.rotation });
+      return;
+    }
+
+    if (drag.type === 'body-accessory-pos') {
+      const bone = wt['torso'];
+      if (!bone) return;
+      const cosB = Math.cos(bone.rotation), sinB = Math.sin(bone.rotation);
+      const desiredX = charPos.x - (drag.initCharX - drag.aax);
+      const desiredY = charPos.y - (drag.initCharY - drag.aay);
+      const dx = desiredX - bone.x, dy = desiredY - bone.y;
+      const newX =  cosB * dx + sinB * dy;
+      const newY = -sinB * dx + cosB * dy;
+      const cur = s.bodyAccessoryOffset;
+      s.onBodyAccessoryOffsetSet?.({ ...cur, x: newX, y: newY });
+      return;
+    }
+
+    if (drag.type === 'body-accessory-rot') {
+      const bone = wt['torso'];
+      if (!bone) return;
+      const bo   = s.bodyAccessoryOffset;
+      const cosB = Math.cos(bone.rotation), sinB = Math.sin(bone.rotation);
+      const aax = bone.x + cosB * bo.x - sinB * bo.y;
+      const aay = bone.y + sinB * bo.x + cosB * bo.y;
+      const angle = Math.atan2(charPos.y - aay, charPos.x - aax);
+      s.onBodyAccessoryOffsetSet?.({ ...bo, rotation: angle + Math.PI / 2 - bone.rotation });
       return;
     }
 

@@ -26,7 +26,7 @@ import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation, getPoseAtTime 
 import { exportSpriteSheet, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -228,6 +228,7 @@ export default function App() {
   // Weapon PNG upload dialog
   const [weaponUploadOpen,    setWeaponUploadOpen]    = useState(false);
   const [accessoryUploadOpen, setAccessoryUploadOpen] = useState(false);
+  const [bodyAccessoryUploadOpen, setBodyAccessoryUploadOpen] = useState(false);
 
   // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
   // Captured at open time so changes to active selection don't disturb the open dialog.
@@ -400,6 +401,10 @@ export default function App() {
           accessoryAnimOffsets: cloneNested(src.parts.accessoryAnimOffsets ?? {}, 1),
           accessoryImages:      { ...(src.parts.accessoryImages ?? {}) },
           accessoryScales:     { ...(src.parts.accessoryScales ?? {}) },
+          ...(src.parts.bodyAccessoryImage ? { bodyAccessoryImage: src.parts.bodyAccessoryImage } : {}),
+          ...(src.parts.bodyAccessoryScale != null ? { bodyAccessoryScale: src.parts.bodyAccessoryScale } : {}),
+          bodyAccessoryOffset:      { ...(src.parts.bodyAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
+          bodyAccessoryAnimOffsets: cloneNested(src.parts.bodyAccessoryAnimOffsets ?? {}, 1),
         },
         boneOffsets:          { ...src.boneOffsets },
         skinOverrides:        cloneSkinOverrides(src.skinOverrides),
@@ -535,6 +540,41 @@ export default function App() {
     }));
   }, [activeCharId, currentAnimation]);
 
+  // ── Body accessory (single PNG anchored to the torso, persists across weapons) ──
+  const updateBodyAccessoryImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (dataUrl) parts.bodyAccessoryImage = dataUrl;
+      else         delete parts.bodyAccessoryImage;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  const setBodyAccessoryOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const animOffsets = { ...(c.parts.bodyAccessoryAnimOffsets ?? {}) };
+      animOffsets[currentAnimation] = { x: newOffset.x ?? 0, y: newOffset.y ?? 0, rotation: newOffset.rotation ?? 0 };
+      return { ...c, parts: { ...c.parts, bodyAccessoryAnimOffsets: animOffsets } };
+    }));
+  }, [activeCharId, currentAnimation]);
+
+  const updateBodyAccessoryScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, parts: { ...c.parts, bodyAccessoryScale: newScale } } : c
+    ));
+  }, [activeCharId]);
+
+  const resetBodyAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const animOffsets = { ...(c.parts.bodyAccessoryAnimOffsets ?? {}) };
+      delete animOffsets[currentAnimation];
+      return { ...c, parts: { ...c.parts, bodyAccessoryAnimOffsets: animOffsets } };
+    }));
+  }, [activeCharId, currentAnimation]);
+
   const updateBoneOffsets = useCallback((newOffsets) => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, boneOffsets: newOffsets } : c
@@ -629,6 +669,18 @@ export default function App() {
       if (dataUrl) animImgs[animKey] = dataUrl;
       else         delete animImgs[animKey];
       parts.animHeadImages = animImgs;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  // Size multiplier for the head PNG shown during this animation.
+  const updateAnimHeadImageScale = useCallback((animKey, scale) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts  = { ...c.parts };
+      const scales = { ...(parts.animHeadImageScales ?? {}) };
+      scales[animKey] = scale;
+      parts.animHeadImageScales = scales;
       return { ...c, parts };
     }));
   }, [activeCharId]);
@@ -1068,6 +1120,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.accessoryAnimOffsets, activeChar.parts.accessoryOffset, currentAnimation],
   );
+  const bodyAccessoryOffset = useMemo(
+    () => resolveBodyAccessoryOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.bodyAccessoryAnimOffsets, activeChar.parts.bodyAccessoryOffset, currentAnimation],
+  );
   const curveAnimKeyframeOverrides = (activeChar.animKeyframeOverrides ?? EMPTY_OBJ)[currentAnimation] ?? EMPTY_OBJ;
   const curveAnimation = useMemo(
     () => resolveAnimation(
@@ -1374,6 +1431,69 @@ export default function App() {
                   </div>
                 );
               })()}
+
+              {/* ── Body accessory (anchored to the torso) ─────────────────── */}
+              {(() => {
+                const img = activeChar.parts.bodyAccessoryImage;
+                const curScale = resolveBodyAccessoryScale(activeChar.parts);
+                return (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setBodyAccessoryUploadOpen(true)}
+                        title={img ? "Replace body's back accessory PNG" : "Upload a PNG anchored behind the body"}
+                      >
+                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                        {img ? "Edit Body's Back Accessory" : "Upload Body's Back Accessory"}
+                      </Button>
+                      {img && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => updateBodyAccessoryImage(null)}
+                          title="Remove body accessory image"
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    {img && (
+                      <div className="flex items-center justify-end gap-0.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Body scale</span>
+                        <button
+                          onClick={() => updateBodyAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale <= MIN_ACCESSORY_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >−</button>
+                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                          {Math.round(curScale * 100)}%
+                        </span>
+                        <button
+                          onClick={() => updateBodyAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale >= MAX_ACCESSORY_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >+</button>
+                      </div>
+                    )}
+                    {img && editAnimPose && (() => {
+                      const bo = resolveBodyAccessoryOffset(activeChar.parts, currentAnimation);
+                      const isDirty = bo.x !== 0 || bo.y !== 0 || bo.rotation !== 0;
+                      return isDirty ? (
+                        <button
+                          onClick={resetBodyAccessoryOffset}
+                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                          title="Reset body accessory offset"
+                        >
+                          Reset body offset
+                        </button>
+                      ) : null;
+                    })()}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="mt-3">
@@ -1461,6 +1581,8 @@ export default function App() {
                 onWeaponOffsetSet={setWeaponOffsetAbsolute}
                 accessoryOffset={accessoryOffset}
                 onAccessoryOffsetSet={setAccessoryOffsetAbsolute}
+                bodyAccessoryOffset={bodyAccessoryOffset}
+                onBodyAccessoryOffsetSet={setBodyAccessoryOffsetAbsolute}
                 onSelectBone={editAnimPose && !poseEditorOpen ? selectBone : undefined}
               />
           </main>
@@ -1543,6 +1665,29 @@ export default function App() {
                         />
                       </label>
                     </div>
+                    {(animHeadUrl || baseHeadUrl) && (() => {
+                      const curScale = activeChar.parts?.animHeadImageScales?.[currentAnimation]
+                                    ?? activeChar.parts?.headImageScale ?? 1;
+                      const set = (v) => updateAnimHeadImageScale(currentAnimation, +v.toFixed(2));
+                      return (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head skin size</span>
+                          <button
+                            onClick={() => set(Math.max(0.3, curScale - 0.1))}
+                            disabled={curScale <= 0.3}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                            {Math.round(curScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => set(Math.min(3, curScale + 0.1))}
+                            disabled={curScale >= 3}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      );
+                    })()}
                     {!hasOverride && (
                       <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
                         Upload a PNG that bakes the expression in (e.g. surprised face for Carry).
@@ -1649,6 +1794,16 @@ export default function App() {
         currentImage={activeChar.parts.accessoryImages?.[activeChar.parts.weapon]}
         onPick={updateAccessoryImage}
         onClose={() => setAccessoryUploadOpen(false)}
+      />
+
+      <AccessoryUploadDialog
+        open={bodyAccessoryUploadOpen}
+        currentImage={activeChar.parts.bodyAccessoryImage}
+        onPick={updateBodyAccessoryImage}
+        onClose={() => setBodyAccessoryUploadOpen(false)}
+        title="Upload Body's Back Accessory PNG"
+        anchorText="attached behind the torso (body)"
+        moveHint="The back accessory moves with the torso, draws behind the body, and persists across weapon changes."
       />
 
       <SpritePreviewDialog

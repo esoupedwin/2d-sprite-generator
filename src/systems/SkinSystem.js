@@ -229,7 +229,7 @@ export function drawSkinImage(ctx, template, worldTransforms, image, scale = 1) 
  * NOT clipped — the full PNG covers the area. Used to replace a skin blob
  * with a custom texture.
  */
-export function drawSkinPinned(ctx, template, worldTransforms, image, scale = 1) {
+export function drawSkinPinned(ctx, template, worldTransforms, image, scale = 1, imageScale = 1) {
   if (!template || template.length === 0) return;
   if (!image || !image.complete || image.naturalWidth === 0) return;
   const boneId = template[0][0];
@@ -255,10 +255,11 @@ export function drawSkinPinned(ctx, template, worldTransforms, image, scale = 1)
   if (minX === Infinity) return;
 
   // Preserve the image's aspect ratio (contain): scale uniformly to fit
-  // inside the bounding box and center any leftover space.
+  // inside the bounding box, then apply the user's imageScale multiplier and
+  // re-center so it grows/shrinks about the head's middle.
   const boxW = maxX - minX;
   const boxH = maxY - minY;
-  const fit  = Math.min(boxW / image.naturalWidth, boxH / image.naturalHeight);
+  const fit  = Math.min(boxW / image.naturalWidth, boxH / image.naturalHeight) * imageScale;
   const drawW = image.naturalWidth  * fit;
   const drawH = image.naturalHeight * fit;
   const drawX = minX + (boxW - drawW) / 2;

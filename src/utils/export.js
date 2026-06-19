@@ -62,13 +62,14 @@ async function loadRenderAssets(character, animationName) {
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
   const parts = character.parts ?? {};
-  const [bodyImage, headImage, weaponImage, accessoryImage] = await Promise.all([
+  const [bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
     loadImage(resolveHeadUrl(parts, animationName)),
     loadImage(parts.weaponImages?.[parts.weapon]),
     loadImage(parts.accessoryImages?.[parts.weapon]),
+    loadImage(parts.bodyAccessoryImage),
   ]);
-  return { skins, parts, bodyImage, headImage, weaponImage, accessoryImage };
+  return { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage };
 }
 
 /**
@@ -103,7 +104,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character, animationName);
   const isMelee = MELEE_WEAPONS.has(parts.weapon) ||
     (character.customWeapons ?? []).some(w => w.key === parts.weapon && MELEE_WEAPONS.has(w.template));
 
@@ -149,6 +150,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       headImage,
       weaponImage,
       accessoryImage,
+      bodyAccessoryImage,
       isMelee,
       partsFilter,
     });
@@ -227,7 +229,7 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character, animationName);
   const isMelee = MELEE_WEAPONS.has(parts.weapon) ||
     (character.customWeapons ?? []).some(w => w.key === parts.weapon && MELEE_WEAPONS.has(w.template));
 
@@ -249,6 +251,7 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
     headImage,
     weaponImage,
     accessoryImage,
+    bodyAccessoryImage,
     isMelee,
   });
 

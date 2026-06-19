@@ -1,5 +1,5 @@
 import { CHARACTER_PARTS } from '../data/characterParts.js';
-import { resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset, resolveAccessoryScale } from '../utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale } from '../utils/weaponSettings.js';
 import {
   drawSkin, drawSkinImage, drawSkinPinned,
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
@@ -19,10 +19,17 @@ function getScale(character, partKey) {
   return character.partScales?.[partKey] ?? 1;
 }
 
+// Extra size multiplier for an uploaded head PNG, on top of the head part
+// scale. Per-animation override falls back to a character-wide value, then 1.
+function headImageScaleFor(character, animation) {
+  return character.animHeadImageScales?.[animation] ?? character.headImageScale ?? 1;
+}
+
 // Longest-dimension target for user-uploaded weapon/accessory PNGs (bone-local units).
 // partScales.weapon multiplies on top of this so the user can tune size.
 const WEAPON_IMAGE_TARGET    = 80;
 const ACCESSORY_IMAGE_TARGET = 80;
+const BODY_ACCESSORY_IMAGE_TARGET = 110;
 
 function drawPart(ctx, partKey, character, worldTransforms, weaponImage, animation) {
   const partDef = CHARACTER_PARTS[partKey];
@@ -80,6 +87,25 @@ function drawAccessory(ctx, character, worldTransforms, accessoryImage, animatio
   ctx.restore();
 }
 
+function drawBodyAccessory(ctx, character, worldTransforms, bodyAccessoryImage, animation) {
+  if (!bodyAccessoryImage) return;
+  const bone = worldTransforms['torso'];
+  if (!bone) return;
+  const ao = resolveBodyAccessoryOffset(character, animation);
+  const s  = resolveBodyAccessoryScale(character);
+  const factor = BODY_ACCESSORY_IMAGE_TARGET / Math.max(bodyAccessoryImage.naturalWidth, bodyAccessoryImage.naturalHeight);
+  const w = bodyAccessoryImage.naturalWidth  * factor;
+  const h = bodyAccessoryImage.naturalHeight * factor;
+  ctx.save();
+  ctx.translate(bone.x, bone.y);
+  ctx.rotate(bone.rotation);
+  if (ao.x || ao.y) ctx.translate(ao.x, ao.y);
+  if (ao.rotation)  ctx.rotate(ao.rotation);
+  if (s !== 1)      ctx.scale(s, s);
+  ctx.drawImage(bodyAccessoryImage, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
 function drawExtras(ctx, partKey, character, worldTransforms) {
   const option = CHARACTER_PARTS[partKey]?.options[character[partKey]];
   if (!option?.drawExtras) return;
@@ -102,6 +128,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     originX = 0, originY = 0, scale = 1,
     showBones = false, highlightBone = null,
     skins = {}, bodyImage = null, headImage = null, weaponImage = null, accessoryImage = null,
+    bodyAccessoryImage = null,
     animation = '',
     // isMelee: pass explicitly when the caller has access to customWeapons
     // so that custom weapons (key='cw_…') whose template='sword' draw behind
@@ -153,6 +180,9 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       // Character's LEFT arm (= bone right_arm) — sits behind the body.
       drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
     }
+    // Body accessory sits on the torso BEHIND the body fill (cape / wings /
+    // backpack), so the body draws over it.
+    drawBodyAccessory(ctx, character, worldTransforms, bodyAccessoryImage, animation);
     {
       const bodyTmpl  = skins.body || BODY_SKIN;
       const bodyScale = getScale(character, 'body');
@@ -167,7 +197,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       const headTmpl  = skins.head || HEAD_SKIN;
       const headScale = getScale(character, 'head');
       if (headImage) {
-        drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale);
+        drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale, headImageScaleFor(character, animation));
       } else {
         drawSkin(ctx, headTmpl, worldTransforms, getColor(character, 'head'), headScale);
         drawExtras(ctx, 'head', character, worldTransforms);
@@ -198,7 +228,7 @@ export function renderPartGroup(ctx, groupId, character, worldTransforms, option
   switch (groupId) {
     case 'head':
       if (headImage) {
-        drawSkinPinned(ctx, skins.head || HEAD_SKIN, worldTransforms, headImage, getScale(character, 'head'));
+        drawSkinPinned(ctx, skins.head || HEAD_SKIN, worldTransforms, headImage, getScale(character, 'head'), headImageScaleFor(character, animation));
       } else {
         drawSkin(ctx, skins.head || HEAD_SKIN, worldTransforms, getColor(character, 'head'), getScale(character, 'head'));
         drawExtras(ctx, 'head', character, worldTransforms);
