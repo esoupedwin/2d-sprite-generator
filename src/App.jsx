@@ -229,6 +229,7 @@ export default function App() {
   const [weaponUploadOpen,    setWeaponUploadOpen]    = useState(false);
   const [accessoryUploadOpen, setAccessoryUploadOpen] = useState(false);
   const [bodyAccessoryUploadOpen, setBodyAccessoryUploadOpen] = useState(false);
+  const [customizeOpen,        setCustomizeOpen]        = useState(false);
 
   // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
   // Captured at open time so changes to active selection don't disturb the open dialog.
@@ -1274,58 +1275,85 @@ export default function App() {
             <div className="flex flex-col gap-3 mt-4">
               <div className="flex flex-col gap-1.5">
               <SectionTitle>Types</SectionTitle>
-              <div className="flex flex-wrap gap-1">
-                {Object.entries(CHARACTER_PARTS.weapon.options).map(([key, opt]) => (
-                  <button
-                    key={key}
-                    onClick={() => updatePart('weapon', key)}
-                    className={cn(
-                      'px-2.5 py-1 rounded text-xs whitespace-nowrap border transition-colors',
-                      activeChar.parts.weapon === key
-                        ? 'bg-primary border-primary text-primary-foreground font-semibold'
-                        : 'bg-secondary border-border text-foreground hover:border-primary',
-                    )}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-                {(activeChar.customWeapons ?? []).map(w => (
-                  <div key={w.key} className="flex items-center gap-0.5">
-                    <button
-                      onClick={() => updatePart('weapon', w.key)}
-                      className={cn(
-                        'px-2.5 py-1 rounded text-xs whitespace-nowrap border transition-colors',
-                        activeChar.parts.weapon === w.key
-                          ? 'bg-primary border-primary text-primary-foreground font-semibold'
-                          : 'bg-secondary border-border text-foreground hover:border-primary',
+              {(() => {
+                const customs = activeChar.customWeapons ?? [];
+                const selectedCustom = customs.find(w => w.key === activeChar.parts.weapon);
+                return (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <select
+                      value={activeChar.parts.weapon}
+                      onChange={e => updatePart('weapon', e.target.value)}
+                      className="h-8 px-2 pr-7 rounded-md border border-border bg-secondary text-foreground text-xs outline-none focus:border-primary flex-1 min-w-[120px] appearance-none bg-no-repeat bg-[right_0.5rem_center] bg-[length:0.7em_0.7em] bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%3E%3Cpolyline%20points%3D%226%2C9%2012%2C15%2018%2C9%22%2F%3E%3C%2Fsvg%3E')]"
+                    >
+                      {Object.entries(CHARACTER_PARTS.weapon.options).map(([key, opt]) => (
+                        <option key={key} value={key}>{opt.label}</option>
+                      ))}
+                      {customs.length > 0 && (
+                        <optgroup label="Custom">
+                          {customs.map(w => (
+                            <option key={w.key} value={w.key}>{w.label}</option>
+                          ))}
+                        </optgroup>
                       )}
-                    >
-                      {w.label}
-                    </button>
+                    </select>
+                    {selectedCustom && (
+                      <>
+                        <button
+                          onClick={() => setWeaponDialog({ mode: 'rename', key: selectedCustom.key, defaultName: selectedCustom.label })}
+                          title="Rename weapon"
+                          className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={() => deleteCustomWeapon(selectedCustom.key)}
+                          title="Delete weapon"
+                          className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
                     <button
-                      onClick={() => setWeaponDialog({ mode: 'rename', key: w.key, defaultName: w.label })}
-                      title="Rename weapon"
-                      className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setWeaponDialog({ mode: 'create', defaultName: '' })}
+                      className="px-2 py-1 rounded text-xs whitespace-nowrap border border-dashed border-border text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
+                      title="Add a custom weapon"
                     >
-                      <Pencil className="h-2.5 w-2.5" />
-                    </button>
-                    <button
-                      onClick={() => deleteCustomWeapon(w.key)}
-                      title="Delete weapon"
-                      className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <X className="h-2.5 w-2.5" />
+                      + Weapon
                     </button>
                   </div>
-                ))}
-                <button
-                  onClick={() => setWeaponDialog({ mode: 'create', defaultName: '' })}
-                  className="px-2.5 py-1 rounded text-xs whitespace-nowrap border border-dashed border-border text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
-                >
-                  + Weapon
-                </button>
+                );
+              })()}
               </div>
-              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCustomizeOpen(true)}
+                className="self-start text-xs"
+              >
+                <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                Customize Weapon &amp; Accessories
+              </Button>
+              {customizeOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setCustomizeOpen(false)} />
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    className="relative w-[420px] max-w-[92vw] rounded-lg border border-border bg-card shadow-2xl flex flex-col"
+                  >
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                      <h2 className="text-sm font-semibold text-foreground">Weapon &amp; Accessories</h2>
+                      <button
+                        type="button"
+                        onClick={() => setCustomizeOpen(false)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="px-4 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
 
               {/* ── Weapon skin + scale ───────────────────────────────────── */}
               {activeChar.parts.weapon !== 'none' && (() => {
@@ -1517,6 +1545,13 @@ export default function App() {
                   </div>
                 );
               })()}
+                    </div>
+                    <div className="flex justify-end px-4 py-3 border-t border-border">
+                      <Button type="button" size="sm" onClick={() => setCustomizeOpen(false)}>Done</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-3">
