@@ -8,6 +8,7 @@ import { ExportMenu } from './components/ExportMenu.jsx';
 import { SpritePreviewDialog } from './components/SpritePreviewDialog.jsx';
 import { SpriteExportDialog } from './components/SpriteExportDialog.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
+import { SettingsDialog, DEFAULT_SETTINGS } from './components/SettingsDialog.jsx';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
 import { AccessoryUploadDialog } from './components/AccessoryUploadDialog.jsx';
@@ -40,6 +41,7 @@ import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
 const CHARS_STORAGE     = '2dsprite:characters';
 const TEMPLATES_STORAGE = '2dsprite:templates';
+const SETTINGS_STORAGE  = '2dsprite:settings';
 
 // Bake keyframe overrides + time-invariant pose offsets into animation tracks.
 // Returns a new animation object with merged tracks; does not mutate inputs.
@@ -210,6 +212,18 @@ export default function App() {
   const [showBones,    setShowBones]    = useState(false);
   const [showFrame,    setShowFrame]    = useState(false);
   const [headerTab,    setHeaderTab]    = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // App-wide settings (persisted to localStorage, independent of characters).
+  const [settings, setSettings] = useState(() => {
+    try {
+      const raw = localStorage.getItem(SETTINGS_STORAGE);
+      if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    } catch { /* ignore */ }
+    return { ...DEFAULT_SETTINGS };
+  });
+  useEffect(() => {
+    try { localStorage.setItem(SETTINGS_STORAGE, JSON.stringify(settings)); } catch { /* ignore */ }
+  }, [settings]);
   const [showVectors,  setShowVectors]  = useState(false);
   const [ragdoll,       setRagdoll]       = useState(false);
   const [editStructure, setEditStructure] = useState(false);
@@ -1171,6 +1185,13 @@ export default function App() {
           className="ml-auto relative flex items-end"
           onPointerDownCapture={() => { headerTabDownRef.current = headerTab; }}
         >
+          <button
+            type="button"
+            onClick={() => { setHeaderTab(''); setSettingsOpen(true); }}
+            className="px-3 py-1.5 text-xs font-medium border-b-2 border-transparent -mb-px text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Settings
+          </button>
           <Tabs value={headerTab} onValueChange={setHeaderTab}>
             <TabsList variant="line">
               <TabsTrigger value="workspace" variant="line"
@@ -1644,6 +1665,9 @@ export default function App() {
                 bodyAccessoryOffset={bodyAccessoryOffset}
                 onBodyAccessoryOffsetSet={setBodyAccessoryOffsetAbsolute}
                 onSelectBone={editAnimPose && !poseEditorOpen ? selectBone : undefined}
+                canvasBg={settings.canvasBg}
+                gridSpacing={settings.gridSpacing}
+                gridThickness={settings.gridThickness}
               />
           </main>
 
@@ -1854,6 +1878,13 @@ export default function App() {
         currentImage={activeChar.parts.accessoryImages?.[activeChar.parts.weapon]}
         onPick={updateAccessoryImage}
         onClose={() => setAccessoryUploadOpen(false)}
+      />
+
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onChange={(patch) => setSettings(s => ({ ...s, ...patch }))}
       />
 
       <AccessoryUploadDialog

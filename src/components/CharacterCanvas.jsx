@@ -84,6 +84,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   bodyAccessoryOffset,
   onBodyAccessoryOffsetSet,
   onSelectBone,
+  canvasBg,
+  gridSpacing,
+  gridThickness,
 }, ref) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -196,6 +199,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.bodyAccessoryOffset = bodyAccessoryOffset ?? { x: 0, y: 0, rotation: 0 };
   stateRef.current.onBodyAccessoryOffsetSet = onBodyAccessoryOffsetSet ?? null;
   stateRef.current.onSelectBone       = onSelectBone ?? null;
+  stateRef.current.canvasBg           = canvasBg || '#FFE699';
+  stateRef.current.gridSpacing        = gridSpacing || 50;
+  stateRef.current.gridThickness      = gridThickness || 1;
 
   // When a keyframe row is clicked, snap to its time and lock there.
   useEffect(() => {
@@ -326,7 +332,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const ctx = canvas.getContext('2d');
     const CANVAS_W = s.canvasW, CANVAS_H = s.canvasH;
 
-    ctx.fillStyle = '#FFE699';
+    ctx.fillStyle = s.canvasBg || '#FFE699';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
     const { zoom, panX, panY } = viewRef.current;
@@ -338,7 +344,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     // they stay anchored to the character as the user pans/zooms. The edge
     // labels (top: x, left: y) read out the underlying coordinates so the
     // user can position skin points / bones precisely.
-    const GRID_STEP = 50;
+    const GRID_STEP = s.gridSpacing || 50;
     const xMin = (0          - originX) / scale;
     const xMax = (CANVAS_W   - originX) / scale;
     const yMin = (0          - originY) / scale;
@@ -350,7 +356,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
     // Batch all grid lines into two paths (one per style) instead of one path per line.
     ctx.strokeStyle = 'rgba(0,0,0,0.07)';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = s.gridThickness || 1;
     ctx.beginPath();
     for (let x = xGridStart; x <= xGridEnd; x += GRID_STEP) {
       const cx = originX + x * scale;
@@ -362,8 +368,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     }
     ctx.stroke();
 
-    // Axis emphasis at x=0 / y=0
+    // Axis emphasis at x=0 / y=0 — a touch bolder than the grid lines.
     ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.lineWidth = (s.gridThickness || 1) + 0.5;
     ctx.beginPath();
     if (originX >= 0 && originX <= CANVAS_W) { ctx.moveTo(originX, 0); ctx.lineTo(originX, CANVAS_H); }
     if (originY >= 0 && originY <= CANVAS_H) { ctx.moveTo(0, originY); ctx.lineTo(CANVAS_W, originY); }
