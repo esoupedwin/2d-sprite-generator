@@ -7,6 +7,7 @@ const WEAPON_TEMPLATES = [
   { key: 'none',             label: 'None' },
   { key: 'sword',            label: 'Melee' },
   { key: 'rifle',            label: 'Rifle' },
+  { key: 'pistol',           label: 'Pistol' },
   { key: 'bow',              label: 'Bow' },
   { key: 'rocket',           label: 'Rocket' },
   { key: 'grenade_launcher', label: 'Grenade Launcher' },
