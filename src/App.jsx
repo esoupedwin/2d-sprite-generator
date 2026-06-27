@@ -9,6 +9,7 @@ import { SpritePreviewDialog } from './components/SpritePreviewDialog.jsx';
 import { SpriteExportDialog } from './components/SpriteExportDialog.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { SettingsDialog, DEFAULT_SETTINGS } from './components/SettingsDialog.jsx';
+import { PosePreviewDialog } from './components/PosePreviewDialog.jsx';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
 import { AccessoryUploadDialog } from './components/AccessoryUploadDialog.jsx';
@@ -213,6 +214,7 @@ export default function App() {
   const [showFrame,    setShowFrame]    = useState(false);
   const [headerTab,    setHeaderTab]    = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [poseExport,   setPoseExport]   = useState(null); // { character, animationName, currentTime } | null
   // App-wide settings (persisted to localStorage, independent of characters).
   const [settings, setSettings] = useState(() => {
     try {
@@ -1216,7 +1218,7 @@ export default function App() {
             onSpriteSheet={() => setSpriteExport({ character: activeChar, animationName: currentAnimation })}
             onSpriteSheetPreview={handlePreviewSpriteSheet}
             onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
-            onPoseSVG={() => exportPoseSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
+            onPoseSVG={() => setPoseExport({ character: activeChar, animationName: currentAnimation, currentTime: charCanvasRef.current?.getCurrentTime() ?? 0 })}
             onPartsSheet={() => exportPartsSheetSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
             open={headerTab === 'export'}
             onClose={() => setHeaderTab('')}
@@ -1885,6 +1887,14 @@ export default function App() {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onChange={(patch) => setSettings(s => ({ ...s, ...patch }))}
+      />
+
+      <PosePreviewDialog
+        open={!!poseExport}
+        character={poseExport?.character}
+        animationName={poseExport?.animationName}
+        currentTime={poseExport?.currentTime ?? 0}
+        onClose={() => setPoseExport(null)}
       />
 
       <AccessoryUploadDialog

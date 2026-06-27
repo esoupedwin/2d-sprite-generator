@@ -240,23 +240,39 @@ function downloadCanvas(canvas, filename) {
   });
 }
 
-const POSE_W = 320;
-const POSE_H = 480;
-const POSE_ORIGIN_X = POSE_W / 2;
-const POSE_ORIGIN_Y = POSE_H - 60;
+// Generous render area, auto-cropped to the character's content afterwards so
+// nothing (ear tips, extended weapons) is clipped for any pose.
+const RENDER_W = 720;
+const RENDER_H = 720;
+const RENDER_ORIGIN_X = RENDER_W / 2;   // centred horizontally
+const RENDER_ORIGIN_Y = RENDER_H * 0.74; // feet sit in the lower portion
 const POSE_SCALE = 2.0;
 const POSE_PIXEL_RATIO = 3;
+const CONTENT_MARGIN = 4; // logical px of breathing room around the content
 
-/**
- * Renders the current pose (one frame at `currentTime`) to a transparent-
- * background canvas, then wraps the PNG in an SVG and triggers download.
- * The SVG preserves the correct aspect ratio so it scales without distortion.
- */
-export async function exportPoseSVG(character, animationName, currentTime = 0) {
-  if (!character) return;
+// Bounding box of non-transparent pixels, in device pixels. Null if empty.
+function contentBoundsDevice(ctx, w, h) {
+  const data = ctx.getImageData(0, 0, w, h).data;
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    let row = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      if (data[row + x * 4 + 3] > 8) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  return maxX < 0 ? null : { minX, minY, maxX, maxY };
+}
 
+// Renders one pose frame into a large transparent canvas, then crops to the
+// character's content (+ margin). Returns { canvas, ratio, wLogical, hLogical }.
+async function renderPoseBase(character, animationName, currentTime) {
   const resolved = resolveAnimWithOffsets(character, animationName);
-  if (!resolved) return;
+  if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
 
   const t = currentTime % anim.duration;
@@ -266,17 +282,17 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
   const isMelee = MELEE_WEAPONS.has(parts.weapon) ||
     (character.customWeapons ?? []).some(w => w.key === parts.weapon && MELEE_WEAPONS.has(w.template));
 
-  const canvas = document.createElement('canvas');
-  canvas.width  = POSE_W * POSE_PIXEL_RATIO;
-  canvas.height = POSE_H * POSE_PIXEL_RATIO;
-  const ctx = canvas.getContext('2d');
+  const big = document.createElement('canvas');
+  big.width  = RENDER_W * POSE_PIXEL_RATIO;
+  big.height = RENDER_H * POSE_PIXEL_RATIO;
+  const ctx = big.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.scale(POSE_PIXEL_RATIO, POSE_PIXEL_RATIO);
 
   renderCharacter(ctx, parts, worldTransforms, {
-    originX: POSE_ORIGIN_X,
-    originY: POSE_ORIGIN_Y,
+    originX: RENDER_ORIGIN_X,
+    originY: RENDER_ORIGIN_Y,
     scale:   POSE_SCALE,
     skins,
     animation: animationName,
@@ -288,18 +304,127 @@ export async function exportPoseSVG(character, animationName, currentTime = 0) {
     isMelee,
   });
 
-  const pngDataUrl = canvas.toDataURL('image/png');
-  const svg = [
+  const b = contentBoundsDevice(ctx, big.width, big.height);
+  if (!b) return { canvas: big, ratio: POSE_PIXEL_RATIO, wLogical: RENDER_W, hLogical: RENDER_H };
+
+  const m  = CONTENT_MARGIN * POSE_PIXEL_RATIO;
+  const x0 = Math.max(0, b.minX - m);
+  const y0 = Math.max(0, b.minY - m);
+  const x1 = Math.min(big.width,  b.maxX + 1 + m);
+  const y1 = Math.min(big.height, b.maxY + 1 + m);
+  const cw = x1 - x0, ch = y1 - y0;
+
+  const cropped = document.createElement('canvas');
+  cropped.width = cw; cropped.height = ch;
+  cropped.getContext('2d').drawImage(big, x0, y0, cw, ch, 0, 0, cw, ch);
+  return { canvas: cropped, ratio: POSE_PIXEL_RATIO, wLogical: cw / POSE_PIXEL_RATIO, hLogical: ch / POSE_PIXEL_RATIO };
+}
+
+// Adds a round, solid outline around the character's non-transparent pixels.
+// Works at ~logical resolution (downscaled) so a disk dilation stays cheap and
+// bounded no matter how thick the outline; the result is upscaled and the crisp
+// character is drawn on top at full resolution. Returns a padded canvas + size.
+function applyOutline(base, color = '#ffffff', widthLogical = 6) {
+  const { canvas, ratio, wLogical, hLogical } = base;
+  const r = Math.round(Math.max(0, widthLogical)); // radius in logical px
+  if (r < 1) return base;
+
+  const pad = r + 4; // logical px of transparent margin around the outline
+  const ww = Math.ceil(canvas.width  / ratio) + pad * 2;
+  const wh = Math.ceil(canvas.height / ratio) + pad * 2;
+
+  // Coloured silhouette of the character, downscaled to logical resolution.
+  const work = document.createElement('canvas');
+  work.width = ww; work.height = wh;
+  const wctx = work.getContext('2d');
+  wctx.drawImage(canvas, pad, pad, canvas.width / ratio, canvas.height / ratio);
+  wctx.globalCompositeOperation = 'source-in';
+  wctx.fillStyle = color;
+  wctx.fillRect(0, 0, ww, wh);
+
+  // Disk dilation: stamp the silhouette across a filled disk of offsets. The
+  // step scales with r so the stamp count stays bounded (~a few hundred max);
+  // gaps are covered because the silhouette features are larger than the step.
+  const dil = document.createElement('canvas');
+  dil.width = ww; dil.height = wh;
+  const dctx = dil.getContext('2d');
+  const step = Math.max(1, Math.ceil(r / 11));
+  const r2 = r * r;
+  for (let dy = -r; dy <= r; dy += step) {
+    for (let dx = -r; dx <= r; dx += step) {
+      if (dx * dx + dy * dy <= r2) dctx.drawImage(work, dx, dy);
+    }
+  }
+
+  // Upscale the outline to device resolution; draw the crisp character on top.
+  const padDev = pad * ratio;
+  const out = document.createElement('canvas');
+  out.width  = canvas.width  + padDev * 2;
+  out.height = canvas.height + padDev * 2;
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(dil, 0, 0, ww, wh, 0, 0, out.width, out.height);
+  octx.drawImage(canvas, padDev, padDev);
+
+  return { canvas: out, ratio, wLogical: wLogical + pad * 2, hLogical: hLogical + pad * 2 };
+}
+
+// Applies the chosen edits to a rendered base and returns the PNG + dims.
+// Synchronous (canvas ops only) so the dialog can re-compose on every edit
+// without re-rendering the character.
+export function composePose(base, options = {}) {
+  if (!base) return null;
+  const composed = options.outline?.enabled
+    ? applyOutline(base, options.outline.color ?? '#ffffff', options.outline.width ?? 6)
+    : base;
+  return {
+    pngDataUrl: composed.canvas.toDataURL('image/png'),
+    width:  composed.wLogical,
+    height: composed.hLogical,
+  };
+}
+
+// Renders the base pose once; held by the dialog so edits re-compose cheaply.
+export async function renderPosePreviewBase(character, animationName, currentTime = 0) {
+  if (!character) return null;
+  return renderPoseBase(character, animationName, currentTime);
+}
+
+/**
+ * Builds a pose preview PNG (data URL) with optional edits applied (one-shot).
+ * options.outline = { enabled, color, width } adds a coloured outline.
+ */
+export async function buildPosePreview(character, animationName, currentTime = 0, options = {}) {
+  const base = await renderPoseBase(character, animationName, currentTime);
+  return composePose(base, options);
+}
+
+// Wraps a PNG data URL in an SVG that preserves aspect ratio.
+export function poseSVGMarkup(pngDataUrl, width, height) {
+  return [
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"`,
-    ` width="${POSE_W}" height="${POSE_H}" viewBox="0 0 ${POSE_W} ${POSE_H}">`,
-    `<image width="${POSE_W}" height="${POSE_H}" xlink:href="${pngDataUrl}"/>`,
+    ` width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
+    `<image width="${width}" height="${height}" xlink:href="${pngDataUrl}"/>`,
     `</svg>`,
   ].join('');
+}
 
-  const blob = new Blob([svg], { type: 'image/svg+xml' });
+export function downloadPoseSVG(character, animationName, svgMarkup) {
+  const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
   const url  = URL.createObjectURL(blob);
   download(url, `${exportFileBase(character, animationName)}_pose.svg`);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Renders the current pose and downloads it as an SVG (no dialog). `options`
+ * is forwarded to buildPosePreview (e.g. { outline: { enabled, color, width } }).
+ */
+export async function exportPoseSVG(character, animationName, currentTime = 0, options = {}) {
+  const preview = await buildPosePreview(character, animationName, currentTime, options);
+  if (!preview) return;
+  downloadPoseSVG(character, animationName, poseSVGMarkup(preview.pngDataUrl, preview.width, preview.height));
 }
 
 /**
