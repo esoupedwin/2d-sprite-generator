@@ -128,7 +128,7 @@ async function loadRenderAssets(character, animationName) {
  *   duration, loop,    // for playback timing in the preview
  * }
  */
-export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = 'all' } = {}) {
+export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = null } = {}) {
   if (!character) return null;
 
   // Resolve animation + persistent offsets; preload PNGs and build skin map.
@@ -205,27 +205,45 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
 }
 
 /**
- * Builds the sprite sheet (no in-frame grid lines) and triggers a PNG
- * download via an object URL. When `opts.split === true`, exports TWO
- * PNGs at identical frame coords: one without legs and one with just the
- * legs — overlay them in your downstream tool to reconstruct the character.
+ * Builds the sprite sheet (no in-frame grid lines) and triggers a PNG download.
+ * With `splitLegs` and/or `splitHead`, exports the character across multiple
+ * PNGs at identical frame coords (overlay to reconstruct):
+ *   - splitLegs        → <base>_body.png (no legs)  + <base>_legs.png
+ *   - splitHead        → <base>_body.png (no head)  + <base>_head.png
+ *   - both             → <base>_body.png (no legs/head) + _legs.png + _head.png
+ * (`split` is accepted as a legacy alias for `splitLegs`.)
  */
 export async function exportSpriteSheet(character, animationName, opts = {}) {
-  const { split = false, ...sheetOpts } = opts;
+  const { splitLegs = false, splitHead = false, split = false, ...sheetOpts } = opts;
+  const legsSplit = splitLegs || split;
   const base = exportFileBase(character, animationName);
 
-  if (!split) {
+  if (!legsSplit && !splitHead) {
     const sheet = await buildSpriteSheet(character, animationName, sheetOpts);
     if (!sheet) return;
     await downloadCanvas(sheet.canvas, `${base}.png`);
     return;
   }
 
-  // Split mode: render the two halves at the same frame coords.
-  const body = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: 'no-legs' });
-  const legs = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: 'legs-only' });
+  // Body = everything except the groups being split out.
+  const body = await buildSpriteSheet(character, animationName, {
+    ...sheetOpts,
+    partsFilter: { others: true, legs: !legsSplit, head: !splitHead },
+  });
   if (body) await downloadCanvas(body.canvas, `${base}_body.png`);
-  if (legs) await downloadCanvas(legs.canvas, `${base}_legs.png`);
+
+  if (legsSplit) {
+    const legs = await buildSpriteSheet(character, animationName, {
+      ...sheetOpts, partsFilter: { others: false, legs: true, head: false },
+    });
+    if (legs) await downloadCanvas(legs.canvas, `${base}_legs.png`);
+  }
+  if (splitHead) {
+    const head = await buildSpriteSheet(character, animationName, {
+      ...sheetOpts, partsFilter: { others: false, legs: false, head: true },
+    });
+    if (head) await downloadCanvas(head.canvas, `${base}_head.png`);
+  }
 }
 
 function downloadCanvas(canvas, filename) {

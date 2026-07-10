@@ -3,6 +3,31 @@ import { Download, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS, FRAME_PX } from '../utils/spriteExportConfig.js';
 
+// A labelled on/off switch row used for the split-export options.
+function SplitToggle({ checked, onToggle, label, desc }) {
+  return (
+    <div className="flex items-start gap-2">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={onToggle}
+        className={`mt-0.5 relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full border transition-colors ${
+          checked ? 'bg-emerald-500/30 border-emerald-500' : 'bg-secondary border-border'
+        }`}
+      >
+        <span className={`inline-block h-[12px] w-[12px] rounded-full bg-foreground transition-transform ${
+          checked ? 'translate-x-[16px]' : 'translate-x-[2px]'
+        }`} />
+      </button>
+      <div className="flex flex-col gap-0.5">
+        <label onClick={onToggle} className="text-xs text-foreground cursor-pointer select-none">{label}</label>
+        <span className="text-[10px] text-muted-foreground/80 leading-snug">{desc}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Lightweight modal that asks the user how many frames the exported sprite
  * sheet should have, then calls `onExport(frameCount)`. The sheet always
@@ -11,13 +36,15 @@ import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS, FRAME_PX } from '..
  */
 export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
   const [frameCount, setFrameCount] = useState(DEFAULT_FRAMES);
-  const [split, setSplit] = useState(true);
+  const [split, setSplit] = useState(true);          // split legs
+  const [splitHead, setSplitHead] = useState(false); // split head
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       setFrameCount(DEFAULT_FRAMES);
       setSplit(true);
+      setSplitHead(false);
       setBusy(false);
     }
   }, [open]);
@@ -35,11 +62,15 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
   const cols = Math.min(fc, SHEET_COLS);
   const rows = Math.ceil(fc / cols);
 
+  // Total PNG count: 1 (whole char) unless any split is on, in which case a
+  // body PNG plus one per split-out group.
+  const pngCount = (split || splitHead) ? 1 + (split ? 1 : 0) + (splitHead ? 1 : 0) : 1;
+
   const handleExport = async () => {
     if (busy) return;
     setBusy(true);
     try {
-      await onExport(fc, { split });
+      await onExport(fc, { splitLegs: split, splitHead });
     } finally {
       setBusy(false);
       onClose();
@@ -107,34 +138,29 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
             — total <span className="font-mono text-foreground">{cols * FRAME_PX} × {rows * FRAME_PX}</span> px.
           </div>
 
-          {/* Split-export toggle */}
-          <div className="flex items-start gap-2 pt-2 border-t border-border/60">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={split}
-              onClick={() => setSplit(s => !s)}
-              className={`mt-0.5 relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full border transition-colors ${
-                split ? 'bg-emerald-500/30 border-emerald-500' : 'bg-secondary border-border'
-              }`}
-            >
-              <span className={`inline-block h-[12px] w-[12px] rounded-full bg-foreground transition-transform ${
-                split ? 'translate-x-[16px]' : 'translate-x-[2px]'
-              }`} />
-            </button>
-            <div className="flex flex-col gap-0.5">
-              <label
-                onClick={() => setSplit(s => !s)}
-                className="text-xs text-foreground cursor-pointer select-none"
-              >
-                Split body and legs into separate PNGs
-              </label>
-              <span className="text-[10px] text-muted-foreground/80 leading-snug">
-                {split
-                  ? 'Two files: <name>_body.png (no legs) and <name>_legs.png. Same frame coords — overlay to reconstruct.'
-                  : 'One file with the full character.'}
-              </span>
-            </div>
+          {/* Split-export toggles */}
+          <div className="flex flex-col gap-3 pt-2 border-t border-border/60">
+            <SplitToggle
+              checked={split}
+              onToggle={() => setSplit(s => !s)}
+              label="Split body and legs into separate PNGs"
+              desc={split
+                ? 'Adds <name>_legs.png; the body PNG omits the legs. Same frame coords — overlay to reconstruct.'
+                : 'Legs stay on the body PNG.'}
+            />
+            <SplitToggle
+              checked={splitHead}
+              onToggle={() => setSplitHead(s => !s)}
+              label="Split body and head into separate PNGs"
+              desc={splitHead
+                ? 'Adds <name>_head.png; the body PNG omits the head. Same frame coords — overlay to reconstruct.'
+                : 'Head stays on the body PNG.'}
+            />
+            <span className="text-[10px] text-muted-foreground/70 leading-snug">
+              {pngCount === 1
+                ? 'Exports one PNG with the full character.'
+                : `Exports ${pngCount} PNGs at identical frame coords: ${['<name>_body', split ? '<name>_legs' : null, splitHead ? '<name>_head' : null].filter(Boolean).join(', ')}.png`}
+            </span>
           </div>
         </div>
 
@@ -142,7 +168,7 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
           <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button onClick={handleExport} disabled={busy}>
             <Download className="h-3.5 w-3.5 mr-1.5" />
-            {busy ? 'Rendering…' : split ? 'Export 2 PNGs' : 'Export PNG'}
+            {busy ? 'Rendering…' : pngCount > 1 ? `Export ${pngCount} PNGs` : 'Export PNG'}
           </Button>
         </div>
       </div>

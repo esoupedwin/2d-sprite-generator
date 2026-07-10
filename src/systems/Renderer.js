@@ -135,33 +135,35 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // the head rather than in front of it.  Falls back to the MELEE_WEAPONS
     // set check when omitted.
     isMelee: isMeleeOpt = null,
-    // partsFilter: 'all' (default) | 'no-legs' | 'legs-only'.
-    // Used by the split-export mode to render the body and legs onto
-    // separate sprite sheets at identical frame coords so they overlay
-    // exactly in a downstream tool.
-    partsFilter = 'all',
+    // partsFilter: null/undefined draws everything. Otherwise an object of
+    // group flags { legs, head, others } — set a group to false to omit it.
+    // Used by split-export to render legs / head / body onto separate sprite
+    // sheets at identical frame coords so they overlay exactly downstream.
+    //   others = back arm, body accessory, body, weapon, front arm, hand accessory
+    //   head   = head skin (+ extras) and the head prop
+    //   legs   = the two legs
+    partsFilter = null,
   } = options;
 
-  const includeLegs   = partsFilter !== 'no-legs';
-  const includeOthers = partsFilter !== 'legs-only';
+  const pf = partsFilter || {};
+  const includeLegs   = pf.legs   !== false;
+  const includeHead   = pf.head   !== false;
+  const includeOthers = pf.others !== false;
 
   ctx.save();
   ctx.translate(originX, originY);
   ctx.scale(scale, scale);
 
-  // Z-order, back → front.
-  // Ranged weapons (rifle, rocket, bow, etc.) sit in front of the head —
-  // the muzzle passes the character's cheek when shouldered.
-  // Melee weapons (sword) sit behind the head — a sword held at the hip
-  // should not occlude the face.
+  // Z-order, back → front. The head is drawn LAST of the body parts so it is
+  // always on top of the body, both arms, the legs and the weapon; only the
+  // head prop (worn on the head) and the right-hand accessory sit above it.
   //
   // From the CHARACTER'S perspective:
-  //   ranged: legs → left arm → body → head → weapon → right arm → head prop
-  //   melee:  legs → left arm → body → weapon → head → right arm → head prop
+  //   legs → left arm → body → weapon → right arm → HEAD → head prop → accessory
   //
   // Bone-name caveat: `right_arm` = character's LEFT (support) arm;
   //                   `left_arm`  = character's RIGHT (dominant) arm.
-  const isMelee   = isMeleeOpt !== null ? isMeleeOpt : MELEE_WEAPONS.has(character.weapon);
+  void isMeleeOpt; // melee/ranged no longer changes head order (head is always on top)
   // With no weapon equipped, the character's left arm sits BEHIND the legs
   // (unarmed silhouettes look more relaxed with the support arm tucked
   // behind). Once any weapon is drawn it goes back to the standard order.
@@ -192,22 +194,30 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
         drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
       }
     }
-    if (isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
-    {
-      const headTmpl  = skins.head || HEAD_SKIN;
-      const headScale = getScale(character, 'head');
-      if (headImage) {
-        drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale, headImageScaleFor(character, animation));
-      } else {
-        drawSkin(ctx, headTmpl, worldTransforms, getColor(character, 'head'), headScale);
-        drawExtras(ctx, 'head', character, worldTransforms);
-      }
-    }
-    if (!isMelee) drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
+    // Weapon: above the body, below the front arm (so the grip stays visible)
+    // and below the head (the head is always on top).
+    drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
     // Character's RIGHT arm (= bone left_arm) — the trigger / dominant hand,
     // always in front of the weapon so the grip is visible.
     drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'),  getScale(character, 'left_arm'));
+  }
+
+  // Head group — drawn last of the body parts, on top of body / arms / legs /
+  // weapon. Separable for the body/head split export.
+  if (includeHead) {
+    const headTmpl  = skins.head || HEAD_SKIN;
+    const headScale = getScale(character, 'head');
+    if (headImage) {
+      drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale, headImageScaleFor(character, animation));
+    } else {
+      drawSkin(ctx, headTmpl, worldTransforms, getColor(character, 'head'), headScale);
+      drawExtras(ctx, 'head', character, worldTransforms);
+    }
     drawPart(ctx, 'head_prop', character, worldTransforms);
+  }
+
+  if (includeOthers) {
+    // Hand accessory sits above everything, including the head.
     drawAccessory(ctx, character, worldTransforms, accessoryImage, animation);
   }
 

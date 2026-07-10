@@ -1917,7 +1917,7 @@ export default function App() {
       <SpriteExportDialog
         open={!!spriteExport}
         animationName={spriteExport?.animationName}
-        onExport={(frameCount, { split = false } = {}) => exportSpriteSheet(spriteExport.character, spriteExport.animationName, { frameCount, split })}
+        onExport={(frameCount, opts = {}) => exportSpriteSheet(spriteExport.character, spriteExport.animationName, { frameCount, ...opts })}
         onClose={() => setSpriteExport(null)}
       />
     </div>
