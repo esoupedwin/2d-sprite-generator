@@ -104,23 +104,35 @@ All rotations in **radians**. Positive = clockwise (canvas coords). Y increases 
 
 ## Z-draw order (Renderer.js)
 
-Universal order, back → front. **No per-weapon or per-animation z flags.**
+`renderCharacter()` draws the body in **layers**, back → front. Each layer is an
+entry in a `layerDraw` map keyed by part; the loop draws them in the resolved
+order. The **head is always on top** of the other body parts (body, arms, legs,
+weapon); the head prop rides with the head, the body accessory draws just behind
+the body, and the **hand accessory always draws last** (on top, not reorderable).
 
-Described from the **character's** perspective:
+Default order, back → front (code keys; `right_arm` = character's LEFT/support
+arm, `left_arm` = RIGHT/dominant arm):
 ```
-legs → LEFT arm → body → head (+ extras) → weapon → RIGHT arm → head_prop → accessory
+armed:   left_leg → right_leg → right_arm → body → weapon → left_arm → head
+unarmed: right_arm → left_leg → right_leg → body → weapon → left_arm → head
 ```
+`defaultLayerOrder(weapon)` returns this (unarmed tucks the support arm behind
+the legs). `ORDERABLE_LAYERS` lists the reorderable layers with labels.
 
-> **Bone-name caveat:** `right_arm` is on the character's LEFT side (support), `left_arm` is on the RIGHT side (dominant/trigger). Code order in `renderCharacter()` is: `left_leg → right_leg → right_arm → body → head → weapon → left_arm → head_prop → accessory`.
+**Per-animation z-order override:** `renderCharacter` accepts a `partZOrder`
+option — a back → front array of layer keys (see `ORDERABLE_LAYERS`). It's stored
+per animation on the character as `animPartZOrder[animId]` and edited via the
+Layer Order panel in Edit Animation. `resolveLayerOrder()` keeps the override's
+ordering but appends any missing layers so nothing disappears. `null`/absent →
+the weapon-based default above. The live canvas and every export path thread
+`partZOrder` through.
 
-**Melee vs ranged z-split:** melee weapons (sword) draw **behind the head**; ranged weapons draw **in front**. `MELEE_WEAPONS` is exported from `Renderer.js`. Always compute `isMelee` as:
-```js
-const isMelee = MELEE_WEAPONS.has(weapon) ||
-  (customWeapons ?? []).some(w => w.key === weapon && MELEE_WEAPONS.has(w.template));
-```
-Then pass `isMelee` explicitly to `renderCharacter` — do not rely on the internal fallback, which cannot resolve custom weapon templates.
+**Melee weapons:** `MELEE_WEAPONS` is still exported from `Renderer.js` (used by
+callers for filenames/logic), but weapon z-order no longer branches on it — the
+head sits on top regardless, so `isMelee` no longer affects the draw order.
 
-Do **not** add `aboveHead`, `rightArmInFront`, or animation-specific z-overrides. The canonical order handles all weapons. If a pose looks wrong, fix the keyframes.
+The split export uses `partsFilter` ({ legs, head, others } group flags); the
+layer loop respects it via `includeFor(key)`, so split + custom z-order compose.
 
 ## Character data model (App.jsx state)
 

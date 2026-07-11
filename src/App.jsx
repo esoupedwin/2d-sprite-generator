@@ -10,6 +10,8 @@ import { SpriteExportDialog } from './components/SpriteExportDialog.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { SettingsDialog, DEFAULT_SETTINGS } from './components/SettingsDialog.jsx';
 import { PosePreviewDialog } from './components/PosePreviewDialog.jsx';
+import { LayerOrderPanel } from './components/LayerOrderPanel.jsx';
+import { defaultLayerOrder } from './systems/Renderer.js';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
 import { AccessoryUploadDialog } from './components/AccessoryUploadDialog.jsx';
@@ -690,6 +692,24 @@ export default function App() {
     }));
   }, [activeCharId]);
 
+  // Per-animation body-part draw order (z-index). Stored back → front on the
+  // character; absent = use the default order for the current weapon.
+  const setAnimPartZOrder = useCallback((order) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      return { ...c, animPartZOrder: { ...(c.animPartZOrder ?? {}), [currentAnimation]: order } };
+    }));
+  }, [activeCharId, currentAnimation]);
+
+  const resetAnimPartZOrder = useCallback(() => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const map = { ...(c.animPartZOrder ?? {}) };
+      delete map[currentAnimation];
+      return { ...c, animPartZOrder: map };
+    }));
+  }, [activeCharId, currentAnimation]);
+
   // Size multiplier for the head PNG shown during this animation.
   const updateAnimHeadImageScale = useCallback((animKey, scale) => {
     setCharacters(prev => prev.map(c => {
@@ -1165,6 +1185,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.bodyAccessoryAnimOffsets, activeChar.parts.bodyAccessoryOffset, currentAnimation],
   );
+  // Per-animation layer z-order override (null = default). `layerOrder` is the
+  // resolved back → front order used by both the render and the editor panel.
+  const partZOrder = (activeChar.animPartZOrder ?? EMPTY_OBJ)[currentAnimation] ?? null;
+  const layerOrder = partZOrder ?? defaultLayerOrder(activeChar.parts.weapon);
   const curveAnimKeyframeOverrides = (activeChar.animKeyframeOverrides ?? EMPTY_OBJ)[currentAnimation] ?? EMPTY_OBJ;
   const curveAnimation = useMemo(
     () => resolveAnimation(
@@ -1670,6 +1694,7 @@ export default function App() {
                 canvasBg={settings.canvasBg}
                 gridSpacing={settings.gridSpacing}
                 gridThickness={settings.gridThickness}
+                partZOrder={partZOrder}
               />
           </main>
 
@@ -1783,6 +1808,16 @@ export default function App() {
                   </div>
                 );
               })()}
+
+              {editAnimPose && !poseEditorOpen && (
+                <LayerOrderPanel
+                  order={layerOrder}
+                  isCustom={!!partZOrder}
+                  animationName={currentAnimation}
+                  onChange={setAnimPartZOrder}
+                  onReset={resetAnimPartZOrder}
+                />
+              )}
 
               {editAnimPose && !poseEditorOpen && (
                 <AnimationCurvePanel

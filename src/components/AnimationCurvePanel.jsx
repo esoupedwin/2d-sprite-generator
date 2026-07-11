@@ -3,7 +3,7 @@ import { SectionTitle } from '@/components/ui/section-title.jsx';
 import { getPoseAtTime, EASE_MODES } from '../systems/AnimationSystem.js';
 import { BONE_IDS } from '../systems/Renderer.js';
 import { AnimationTimeline } from './AnimationTimeline.jsx';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Lock } from 'lucide-react';
 
 // Format a number for compact, readable display
 function fmt(n) {
@@ -67,6 +67,8 @@ function CurveGraph({ boneId, kfs, duration, loop, activeKeyframe, onKeyframeCli
 
   const xAt = (t) => (t / duration) * W;
   const activeKey = activeKeyframe?.boneId === boneId ? activeKeyframe.time.toFixed(2) : null;
+  // The loop-closing keyframe (last, at t=duration) is locked — not selectable.
+  const lockedTime = (loop && kfs.length > 1) ? kfs[kfs.length - 1].time : null;
 
   const lineFor = (p) => {
     let lo = Infinity, hi = -Infinity;
@@ -75,7 +77,9 @@ function CurveGraph({ boneId, kfs, duration, loop, activeKeyframe, onKeyframeCli
     const yAt = (val) => H - PAD - ((val - lo) / span) * (H - 2 * PAD);
     const d = samples.map((s, i) => `${i === 0 ? 'M' : 'L'}${xAt(s.t).toFixed(1)},${yAt(s.v[p]).toFixed(1)}`).join(' ');
     const dots = kfs.filter(k => k[p] !== undefined)
-      .map(k => ({ x: xAt(k.time), y: yAt(k[p]), time: k.time, active: k.time.toFixed(2) === activeKey }));
+      .map(k => ({ x: xAt(k.time), y: yAt(k[p]), time: k.time,
+        active: k.time.toFixed(2) === activeKey,
+        locked: lockedTime != null && Math.abs(k.time - lockedTime) < 1e-4 }));
     return { d, dots };
   };
 
@@ -92,13 +96,17 @@ function CurveGraph({ boneId, kfs, duration, loop, activeKeyframe, onKeyframeCli
                 <g key={i}>
                   <circle cx={dt.x} cy={dt.y} r={dt.active ? 2.8 : 1.6}
                     fill={dt.active ? '#fde047' : PROP_COLORS[p]}
+                    opacity={dt.locked ? 0.45 : 1}
                     stroke={dt.active ? '#000' : 'none'} strokeWidth="0.5" />
                   {/* enlarged invisible hit target ON TOP so a precise click on
-                      the dot selects the keyframe instead of scrubbing */}
-                  <circle
-                    cx={dt.x} cy={dt.y} r="7" fill="transparent" className="cursor-pointer"
-                    onPointerDown={(e) => { e.stopPropagation(); onKeyframeClick?.(boneId, dt.time); }}
-                  />
+                      the dot selects the keyframe instead of scrubbing. The
+                      locked loop frame has none — it can't be selected. */}
+                  {!dt.locked && (
+                    <circle
+                      cx={dt.x} cy={dt.y} r="7" fill="transparent" className="cursor-pointer"
+                      onPointerDown={(e) => { e.stopPropagation(); onKeyframeClick?.(boneId, dt.time); }}
+                    />
+                  )}
                 </g>
               ))}
             </g>
@@ -375,6 +383,24 @@ export const AnimationCurvePanel = memo(function AnimationCurvePanel({
               <div className="flex flex-col gap-px pl-1 text-xs">
                 {kfs.map((kf, i) => {
                   const key = kf.time.toFixed(2);
+                  // The loop-closing frame mirrors t=0 and is locked — it can't
+                  // be selected or edited; it auto-updates with the first frame.
+                  const isLoopFrame = loop && kfs.length > 1 && i === kfs.length - 1
+                    && Math.abs(kf.time - duration) < 1e-4;
+                  if (isLoopFrame) {
+                    return (
+                      <div key={i} className="w-full flex gap-2 items-center px-1 -mx-1 text-muted-foreground/50"
+                        title="Duplicates the first frame so the animation loops smoothly — edit t=0 to change it">
+                        <span className="opacity-70 w-10">t={key}</span>
+                        <span className="flex-1">
+                          {['rotation', 'x', 'y'].filter(p => kf[p] !== undefined)
+                            .map(p => `${p === 'rotation' ? 'rot' : p} ${fmt(kf[p])}`).join('  ') || '—'}
+                        </span>
+                        <span className="text-[9px] uppercase tracking-wider opacity-70">loops</span>
+                        <Lock className="h-3 w-3 opacity-70" />
+                      </div>
+                    );
+                  }
                   const isActive   = activeKeyframe && activeKeyframe.boneId === boneId && activeKeyframe.time.toFixed(2) === key;
                   const overridden = boneOv && boneOv[key];
                   const ease = kf.ease ?? 'auto';

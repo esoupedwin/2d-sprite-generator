@@ -2544,9 +2544,48 @@ export function keyframeTimeKey(time) {
  *
  * overrides shape: { [boneId]: { [timeKey]: { x?, y?, rotation? } } }
  */
+// For a looping animation the frame at t=duration must equal the frame at t=0
+// so the loop is seamless. This forces each track's loop-closing keyframe to
+// mirror its first keyframe (values only), inserting one at t=duration if
+// absent. The last frame is therefore derived, never authored independently.
+// Non-looping animations are returned unchanged. Returns the same object when
+// nothing needs changing (stable reference, cheap to call every frame).
+export function syncLoopFrame(animation) {
+  if (!animation || animation.loop === false) return animation;
+  const duration = animation.duration;
+  if (!duration || duration <= 0) return animation;
+  const EPS = 1e-4;
+  const PROPS = ['x', 'y', 'rotation'];
+  let tracks = null; // cloned lazily, only when a track actually changes
+
+  for (const [boneId, kfs] of Object.entries(animation.tracks)) {
+    if (!kfs || kfs.length === 0) continue;
+    const first = kfs[0];
+    const last  = kfs[kfs.length - 1];
+    const atEnd = Math.abs(last.time - duration) < EPS;
+    // Common case: the loop frame already mirrors the first frame → nothing to
+    // do (and nothing allocated). Also leave stray keyframes past the end alone.
+    if (atEnd && PROPS.every(p => (last[p] ?? undefined) === (first[p] ?? undefined))) continue;
+    if (!atEnd && last.time > duration) continue;
+
+    const loopVals = { time: duration };
+    for (const p of PROPS) if (first[p] !== undefined) loopVals[p] = first[p];
+    if (!tracks) tracks = { ...animation.tracks };
+    if (atEnd) {
+      const arr = kfs.slice();
+      arr[arr.length - 1] = loopVals; // overwrite the end frame
+      tracks[boneId] = arr;
+    } else {
+      tracks[boneId] = [...kfs, loopVals]; // append a loop-closing frame
+    }
+  }
+
+  return tracks ? { ...animation, tracks } : animation;
+}
+
 export function resolveAnimation(animation, overrides) {
-  if (!animation || !overrides) return animation;
-  if (Object.keys(overrides).length === 0) return animation;
+  if (!animation) return animation;
+  if (!overrides || Object.keys(overrides).length === 0) return syncLoopFrame(animation);
   const tracks = {};
 
   // Pass 1 — bones that exist in the source animation
@@ -2581,5 +2620,5 @@ export function resolveAnimation(animation, overrides) {
     if (kfs.length) tracks[boneId] = kfs;
   }
 
-  return { ...animation, tracks };
+  return syncLoopFrame({ ...animation, tracks });
 }

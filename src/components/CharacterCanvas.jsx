@@ -87,6 +87,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   canvasBg,
   gridSpacing,
   gridThickness,
+  partZOrder,
 }, ref) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -202,6 +203,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.canvasBg           = canvasBg || '#FFE699';
   stateRef.current.gridSpacing        = gridSpacing || 50;
   stateRef.current.gridThickness      = gridThickness || 1;
+  stateRef.current.partZOrder         = partZOrder ?? null;
 
   // When a keyframe row is clicked, snap to its time and lock there.
   useEffect(() => {
@@ -480,6 +482,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       accessoryImage:  accessoryImageRef.current,
       bodyAccessoryImage: bodyAccessoryImageRef.current,
       isMelee,
+      partZOrder: s.partZOrder,
     });
 
     if (s.showVectors) {

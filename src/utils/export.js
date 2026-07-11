@@ -186,6 +186,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       bodyAccessoryImage,
       isMelee,
       partsFilter,
+      partZOrder: character.animPartZOrder?.[animationName] ?? null,
     });
     ctx.restore();
   }
@@ -320,6 +321,7 @@ async function renderPoseBase(character, animationName, currentTime) {
     accessoryImage,
     bodyAccessoryImage,
     isMelee,
+    partZOrder: character.animPartZOrder?.[animationName] ?? null,
   });
 
   const b = contentBoundsDevice(ctx, big.width, big.height);

@@ -8,6 +8,39 @@ import {
 
 export const MELEE_WEAPONS = new Set(['sword']);
 
+// Reorderable draw layers for the per-animation z-order editor. Listed here in
+// a neutral order; the actual default depends on whether a weapon is held.
+export const ORDERABLE_LAYERS = [
+  { key: 'head',      label: 'Head' },
+  { key: 'left_arm',  label: 'Front Arm' },
+  { key: 'weapon',    label: 'Weapon' },
+  { key: 'body',      label: 'Body' },
+  { key: 'right_arm', label: 'Back Arm' },
+  { key: 'right_leg', label: 'Right Leg' },
+  { key: 'left_leg',  label: 'Left Leg' },
+];
+const ALL_LAYER_KEYS = ORDERABLE_LAYERS.map(l => l.key);
+// Default draw order, back → front.
+const DEFAULT_ORDER_ARMED   = ['left_leg', 'right_leg', 'right_arm', 'body', 'weapon', 'left_arm', 'head'];
+const DEFAULT_ORDER_UNARMED = ['right_arm', 'left_leg', 'right_leg', 'body', 'weapon', 'left_arm', 'head'];
+
+// Default back → front order for a character (unarmed tucks the support arm
+// behind the legs). Exported so the editor shows the same starting order.
+export function defaultLayerOrder(weapon) {
+  const unarmed = !weapon || weapon === 'none';
+  return (unarmed ? DEFAULT_ORDER_UNARMED : DEFAULT_ORDER_ARMED).slice();
+}
+
+// Keep the override's ordering but guarantee every layer is present.
+function resolveLayerOrder(override, base) {
+  if (!override || !override.length) return base;
+  const valid = override.filter(k => ALL_LAYER_KEYS.includes(k));
+  const seen = new Set(valid);
+  const merged = valid.slice();
+  for (const k of base) if (!seen.has(k)) merged.push(k);
+  return merged;
+}
+
 function getColor(character, partKey) {
   if (character.customColors?.[partKey]) return character.customColors[partKey];
   const option = CHARACTER_PARTS[partKey]?.options[character[partKey]];
@@ -143,6 +176,9 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     //   head   = head skin (+ extras) and the head prop
     //   legs   = the two legs
     partsFilter = null,
+    // partZOrder: optional back → front array of layer keys (see ORDERABLE_LAYERS)
+    // overriding the default draw order — used by the per-animation z-order editor.
+    partZOrder = null,
   } = options;
 
   const pf = partsFilter || {};
@@ -154,72 +190,55 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   ctx.translate(originX, originY);
   ctx.scale(scale, scale);
 
-  // Z-order, back → front. The head is drawn LAST of the body parts so it is
-  // always on top of the body, both arms, the legs and the weapon; only the
-  // head prop (worn on the head) and the right-hand accessory sit above it.
-  //
-  // From the CHARACTER'S perspective:
-  //   legs → left arm → body → weapon → right arm → HEAD → head prop → accessory
+  // Z-order, back → front. Each body part is a "layer" drawn in the order below
+  // (default) or in a per-animation override (partZOrder). Head prop rides with
+  // the head, the body accessory with the body, and the hand accessory always
+  // sits on top of everything (not reorderable).
   //
   // Bone-name caveat: `right_arm` = character's LEFT (support) arm;
   //                   `left_arm`  = character's RIGHT (dominant) arm.
-  void isMeleeOpt; // melee/ranged no longer changes head order (head is always on top)
-  // With no weapon equipped, the character's left arm sits BEHIND the legs
-  // (unarmed silhouettes look more relaxed with the support arm tucked
-  // behind). Once any weapon is drawn it goes back to the standard order.
+  void isMeleeOpt; // melee/ranged no longer changes the order
+  const wt = worldTransforms;
   const armBehindLegs = character.weapon === 'none' || !character.weapon;
 
-  if (includeOthers && armBehindLegs) {
-    // Character's LEFT arm (= bone right_arm) — drawn first, behind legs.
-    drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
-  }
-  if (includeLegs) {
-    drawSkin(ctx, skins.left_leg  || LEFT_LEG_SKIN,  worldTransforms, getColor(character, 'left_leg'),  getScale(character, 'left_leg'));
-    drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, worldTransforms, getColor(character, 'right_leg'), getScale(character, 'right_leg'));
-  }
-  if (includeOthers) {
-    if (!armBehindLegs) {
-      // Character's LEFT arm (= bone right_arm) — sits behind the body.
-      drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, worldTransforms, getColor(character, 'right_arm'), getScale(character, 'right_arm'));
-    }
-    // Body accessory sits on the torso BEHIND the body fill (cape / wings /
-    // backpack), so the body draws over it.
-    drawBodyAccessory(ctx, character, worldTransforms, bodyAccessoryImage, animation);
-    {
+  const layerDraw = {
+    right_arm: () => drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, wt, getColor(character, 'right_arm'), getScale(character, 'right_arm')),
+    left_arm:  () => drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  wt, getColor(character, 'left_arm'),  getScale(character, 'left_arm')),
+    left_leg:  () => drawSkin(ctx, skins.left_leg  || LEFT_LEG_SKIN,  wt, getColor(character, 'left_leg'),  getScale(character, 'left_leg')),
+    right_leg: () => drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, wt, getColor(character, 'right_leg'), getScale(character, 'right_leg')),
+    weapon:    () => drawPart(ctx, 'weapon', character, wt, weaponImage, animation),
+    body: () => {
+      // Body accessory (cape / wings / backpack) sits just behind the body fill.
+      drawBodyAccessory(ctx, character, wt, bodyAccessoryImage, animation);
       const bodyTmpl  = skins.body || BODY_SKIN;
       const bodyScale = getScale(character, 'body');
-      if (bodyImage) {
-        drawSkinImage(ctx, bodyTmpl, worldTransforms, bodyImage, bodyScale);
+      if (bodyImage) drawSkinImage(ctx, bodyTmpl, wt, bodyImage, bodyScale);
+      else           drawSkin(ctx, bodyTmpl, wt, getColor(character, 'body'), bodyScale);
+    },
+    head: () => {
+      const headTmpl  = skins.head || HEAD_SKIN;
+      const headScale = getScale(character, 'head');
+      if (headImage) {
+        drawSkinPinned(ctx, headTmpl, wt, headImage, headScale, headImageScaleFor(character, animation));
       } else {
-        drawSkin(ctx, bodyTmpl, worldTransforms, getColor(character, 'body'), bodyScale);
+        drawSkin(ctx, headTmpl, wt, getColor(character, 'head'), headScale);
+        drawExtras(ctx, 'head', character, wt);
       }
-    }
-    // Weapon: above the body, below the front arm (so the grip stays visible)
-    // and below the head (the head is always on top).
-    drawPart(ctx, 'weapon', character, worldTransforms, weaponImage, animation);
-    // Character's RIGHT arm (= bone left_arm) — the trigger / dominant hand,
-    // always in front of the weapon so the grip is visible.
-    drawSkin(ctx, skins.left_arm  || LEFT_ARM_SKIN,  worldTransforms, getColor(character, 'left_arm'),  getScale(character, 'left_arm'));
+      drawPart(ctx, 'head_prop', character, wt); // head prop rides with the head
+    },
+  };
+  const includeFor = (key) =>
+    (key === 'left_leg' || key === 'right_leg') ? includeLegs
+    : key === 'head' ? includeHead
+    : includeOthers;
+
+  const order = resolveLayerOrder(partZOrder, armBehindLegs ? DEFAULT_ORDER_UNARMED : DEFAULT_ORDER_ARMED);
+  for (const key of order) {
+    if (includeFor(key)) layerDraw[key]();
   }
 
-  // Head group — drawn last of the body parts, on top of body / arms / legs /
-  // weapon. Separable for the body/head split export.
-  if (includeHead) {
-    const headTmpl  = skins.head || HEAD_SKIN;
-    const headScale = getScale(character, 'head');
-    if (headImage) {
-      drawSkinPinned(ctx, headTmpl, worldTransforms, headImage, headScale, headImageScaleFor(character, animation));
-    } else {
-      drawSkin(ctx, headTmpl, worldTransforms, getColor(character, 'head'), headScale);
-      drawExtras(ctx, 'head', character, worldTransforms);
-    }
-    drawPart(ctx, 'head_prop', character, worldTransforms);
-  }
-
-  if (includeOthers) {
-    // Hand accessory sits above everything, including the head.
-    drawAccessory(ctx, character, worldTransforms, accessoryImage, animation);
-  }
+  // Hand accessory always sits on top of everything (not reorderable).
+  if (includeOthers) drawAccessory(ctx, character, wt, accessoryImage, animation);
 
   if (showBones) {
     renderBones(ctx, worldTransforms, highlightBone);
