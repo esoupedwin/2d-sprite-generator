@@ -158,6 +158,7 @@ layer loop respects it via `includeFor(key)`, so split + custom z-order compose.
   animBoneOffsets:       { [animId]: { [boneId]: {x?,y?,rotation?} } }, // per-anim pose offset layer
   animKeyframeOverrides: { [animId]: { [boneId]: { [timeKey]: {x?,y?,rotation?} } } }, // ragdoll edits
   customAnimations:      [{ id, name, duration, loop, tracks }], // per-character animation library
+  hiddenAnimations:      ['punch', ...],   // built-in anim IDs hidden from ACTIONS for this character (delete = hide; restorable)
   customWeapons:         [{ key: 'cw_<id>', label: 'Staff', template: 'none' }], // per-character
   defaultBoneOffsets:    { ... },   // saved checkpoint
   defaultSkinOverrides:  { ... },

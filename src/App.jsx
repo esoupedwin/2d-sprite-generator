@@ -26,7 +26,7 @@ import {
   DEFAULT_WEAPON_ANIM_OFFSETS,
   DEFAULT_WEAPON_SCALES,
 } from './data/defaultBuild.js';
-import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, resolveAnimation, getPoseAtTime } from './systems/AnimationSystem.js';
+import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, WEAPON_ANIMATION_SETS, resolveAnimation, getPoseAtTime } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
@@ -194,6 +194,16 @@ function withTPose(char) {
   };
 }
 
+// Weapon-appropriate default animation for a character (e.g. pistol → pistol_idle).
+// Keeps the initial/selected animation consistent with the equipped weapon so
+// per-anim weapon offsets, head skins, and baked pose edits resolve correctly —
+// generic 'idle' isn't in a weapon's animation set and falls back to base data.
+function defaultAnimationFor(char) {
+  const weapon = char?.parts?.weapon;
+  const template = char?.customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
+  return WEAPON_DEFAULT_ANIMATIONS[template ?? 'none'] ?? 'idle';
+}
+
 function persistCharacters(chars) {
   try { localStorage.setItem(CHARS_STORAGE, JSON.stringify(chars)); } catch {}
   fetch('/api/characters', {
@@ -209,7 +219,7 @@ export default function App() {
   });
   const [activeCharId, setActiveCharId] = useState(() => characters[0]?.id ?? null);
 
-  const [currentAnimation, setCurrentAnimation] = useState('idle');
+  const [currentAnimation, setCurrentAnimation] = useState(() => defaultAnimationFor(characters[0]));
   const [isPlaying,    setIsPlaying]    = useState(true);
   const [editAnimPose, setEditAnimPose] = useState(false);
   const [showBones,    setShowBones]    = useState(false);
@@ -352,6 +362,11 @@ export default function App() {
   // freshly-loaded workspace data — same char IDs after a prior sync, so you'd
   // silently see old joint positions).
   const workspaceLoadedRef = useRef(false);
+  // Bumped when characters.json replaces the localStorage-seeded state. Part of
+  // the canvas key, so the canvas remounts and re-captures boneOffsets /
+  // skinOverrides from the file's data (they're mount-only local state — with an
+  // unchanged char id the canvas would otherwise keep stale localStorage values).
+  const [charsFileRev, setCharsFileRev] = useState(0);
   useEffect(() => {
     fetch('/api/characters')
       .then(r => r.json())
@@ -360,6 +375,10 @@ export default function App() {
         if (Array.isArray(data) && data.length > 0) {
           setCharacters(data);
           setActiveCharId(data[0].id);
+          setCharsFileRev(r => r + 1);
+          // Re-derive the weapon default from the file's data — localStorage may
+          // disagree with characters.json (e.g. after a git pull) about weapon.
+          setCurrentAnimation(defaultAnimationFor(data[0]));
         }
       })
       .catch(() => {});
@@ -394,10 +413,10 @@ export default function App() {
 
   const selectCharacter = useCallback((id) => {
     setActiveCharId(id);
-    setCurrentAnimation('idle');
+    setCurrentAnimation(defaultAnimationFor(characters.find(c => c.id === id)));
     setShowVectors(false);
     setEditAnimPose(false);
-  }, []);
+  }, [characters]);
 
   const duplicateCharacter = useCallback((id) => {
     setCharacters(prev => {
@@ -1051,13 +1070,33 @@ export default function App() {
     setCurrentAnimation(anim.id);
   }, [activeCharId, activePoseFrame, characters, commitCurrentPoseFrame, poseFrames, poseAnimName, poseAnimLoop]);
 
-  const deleteCustomAnimation = useCallback((animId) => {
+  // Delete an action chip. Custom animations are removed outright; built-ins
+  // are hidden per-character via `hiddenAnimations` (reversible — the global
+  // ANIMATIONS entry and any baked custom shadowing it are left intact).
+  const deleteAnimation = useCallback((animId) => {
+    const char = characters.find(c => c.id === activeCharId);
+    const weapon = char?.parts?.weapon;
+    const template = char?.customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
+    const allowed = WEAPON_ANIMATION_SETS[template ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
+    const hidden = new Set([...(char?.hiddenAnimations ?? []), animId]);
+    const fallback = allowed.find(k => !hidden.has(k)) ?? 'idle';
+
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      if (ANIMATIONS[animId]) {
+        const list = c.hiddenAnimations ?? [];
+        return list.includes(animId) ? c : { ...c, hiddenAnimations: [...list, animId] };
+      }
+      return { ...c, customAnimations: (c.customAnimations ?? []).filter(a => a.id !== animId) };
+    }));
+    setCurrentAnimation(cur => cur === animId ? fallback : cur);
+  }, [activeCharId, characters]);
+
+  // Un-hide every built-in action for the active character.
+  const restoreHiddenAnimations = useCallback(() => {
     setCharacters(prev => prev.map(c =>
-      c.id === activeCharId
-        ? { ...c, customAnimations: (c.customAnimations ?? []).filter(a => a.id !== animId) }
-        : c
+      c.id === activeCharId ? { ...c, hiddenAnimations: [] } : c
     ));
-    setCurrentAnimation(cur => cur === animId ? 'idle' : cur);
   }, [activeCharId]);
 
   // Rename an action chip. The chip label is always sourced from
@@ -1610,11 +1649,13 @@ export default function App() {
                 editAnimPose={editAnimPose}
                 customAnimations={activeChar.customAnimations}
                 animationLabels={activeChar.animationLabels}
+                hiddenAnimations={activeChar.hiddenAnimations}
                 poseEditorOpen={poseEditorOpen}
                 onAnimationChange={handleAnimationChange}
                 onNewAnimation={() => setNewAnimDialogOpen(true)}
-                onDeleteAnimation={deleteCustomAnimation}
+                onDeleteAnimation={deleteAnimation}
                 onRenameAnimation={renameAnimation}
+                onRestoreHidden={restoreHiddenAnimations}
               />
             </div>
             </>)}
@@ -1654,7 +1695,7 @@ export default function App() {
               </button>
               <CharacterCanvas
                 ref={charCanvasRef}
-                key={poseEditorOpen ? `pose-${activePoseFrame}` : activeCharId}
+                key={poseEditorOpen ? `pose-${activePoseFrame}` : `${activeCharId}:${charsFileRev}`}
                 character={activeChar.parts}
                 boneOffsets={poseEditorOpen ? (poseFrames[activePoseFrame]?.boneOffsets ?? {}) : activeChar.boneOffsets}
                 skinOverrides={activeChar.skinOverrides}
