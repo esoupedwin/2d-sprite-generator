@@ -53,9 +53,9 @@ function getScale(character, partKey) {
 }
 
 // Extra size multiplier for an uploaded head PNG, on top of the head part
-// scale. Per-animation override falls back to a character-wide value, then 1.
-function headImageScaleFor(character, animation) {
-  return character.animHeadImageScales?.[animation] ?? character.headImageScale ?? 1;
+// scale. Character-wide — the same head skin is used by every animation.
+function headImageScaleFor(character) {
+  return character.headImageScale ?? 1;
 }
 
 // Longest-dimension target for user-uploaded weapon/accessory PNGs (bone-local units).
@@ -219,7 +219,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       const headTmpl  = skins.head || HEAD_SKIN;
       const headScale = getScale(character, 'head');
       if (headImage) {
-        drawSkinPinned(ctx, headTmpl, wt, headImage, headScale, headImageScaleFor(character, animation));
+        drawSkinPinned(ctx, headTmpl, wt, headImage, headScale, headImageScaleFor(character));
       } else {
         drawSkin(ctx, headTmpl, wt, getColor(character, 'head'), headScale);
         drawExtras(ctx, 'head', character, wt);
@@ -257,7 +257,7 @@ export function renderPartGroup(ctx, groupId, character, worldTransforms, option
   switch (groupId) {
     case 'head':
       if (headImage) {
-        drawSkinPinned(ctx, skins.head || HEAD_SKIN, worldTransforms, headImage, getScale(character, 'head'), headImageScaleFor(character, animation));
+        drawSkinPinned(ctx, skins.head || HEAD_SKIN, worldTransforms, headImage, getScale(character, 'head'), headImageScaleFor(character));
       } else {
         drawSkin(ctx, skins.head || HEAD_SKIN, worldTransforms, getColor(character, 'head'), getScale(character, 'head'));
         drawExtras(ctx, 'head', character, worldTransforms);

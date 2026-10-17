@@ -179,6 +179,10 @@ export function EditBodyControls({
                 );
               })}
             </div>
+            <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
+              <span className="font-mono">Ctrl+click</span> add point · <span className="font-mono">Alt+click</span> delete ·{' '}
+              <span className="font-mono">Shift+click</span> toggle 50/50 blend with parent bone (diamond = blended; use on elbows, knees, wrists, ankles so the outline bends instead of pinching).
+            </span>
           </div>
         )}
       </div>

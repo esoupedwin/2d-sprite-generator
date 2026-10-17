@@ -5,9 +5,10 @@ import { renderCharacter, MELEE_WEAPONS } from '../systems/Renderer.js';
 import {
   DEFAULT_SKINS, SKIN_COLORS, getSkin,
   renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
+  toggleSkinPointBlend,
   deleteSkinPoint,
 } from '../systems/VectorEditor.js';
-import { strokeSkinOutline } from '../systems/SkinSystem.js';
+import { strokeSkinOutline, skinPointFrame } from '../systems/SkinSystem.js';
 import { solveIK } from '../systems/IKSystem.js';
 import { mergeOffsets } from '../utils/transforms.js';
 import { worldToLocal } from '../utils/mathUtils.js';
@@ -131,11 +132,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   // Decoded HTMLImageElements for character body/head/weapon PNGs.
   // The hook handles cancellation so rapid weapon swaps don't race.
   const bodyImageRef   = useImageDataUrl(character?.bodyImage);
-  // Per-animation head PNG override falls back to the base headImage. The
-  // hook re-decodes whenever the URL string changes (e.g. when the user
-  // switches between Idle / Carry / etc.).
-  const resolvedHeadUrl = character?.animHeadImages?.[currentAnimation] ?? character?.headImage;
-  const headImageRef   = useImageDataUrl(resolvedHeadUrl);
+  // One head PNG per character, shared by every animation.
+  const headImageRef   = useImageDataUrl(character?.headImage);
   const weaponImageRef    = useImageDataUrl(character?.weaponImages?.[character?.weapon]);
   const accessoryImageRef = useImageDataUrl(character?.accessoryImages?.[character?.weapon]);
   const bodyAccessoryImageRef = useImageDataUrl(character?.bodyAccessoryImage);
@@ -934,6 +932,13 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         e.preventDefault();
         return;
       }
+      if (e.shiftKey && target.type === 'anchor' && s0.lastWorldTransforms) {
+        const wt = s0.lastWorldTransforms;
+        pushHistory();
+        setSkinOverrides(prev => toggleSkinPointBlend(prev, target.skinKey, target.pointIndex, wt));
+        e.preventDefault();
+        return;
+      }
       pushHistory();
       dragRef.current = (target.type === 'weapon-pos' || target.type === 'accessory-pos' || target.type === 'body-accessory-pos')
         ? { ...target, initCharX: charPos.x, initCharY: charPos.y }
@@ -1298,8 +1303,11 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
     const { type, skinKey, pointIndex } = drag;
     const template = getSkin(skinKey, s.skinOverrides);
-    const [boneId, lx, ly] = template[pointIndex];
-    const bone = wt[boneId];
+    const pt = template[pointIndex];
+    const [, lx, ly] = pt;
+    // Blended joint points live in an interpolated parent/child frame — use
+    // it here so dragging moves the point exactly where the renderer draws it.
+    const bone = skinPointFrame(pt, wt);
     if (!bone) return;
 
     if (type === 'anchor' && s.rebindMode) {
@@ -1396,10 +1404,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
     setSkinOverrides(prev => {
       const src    = getSkin(fromSkinKey, prev);
-      const copied = src.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => [
-        boneIdMap[boneId] ?? boneId,
-        lx, ly, hInDx, hInDy, hOutDx, hOutDy,
-      ]);
+      const copied = src.map(([boneId, ...rest]) => [boneIdMap[boneId] ?? boneId, ...rest]);
       return { ...prev, [toSkinKey]: copied };
     });
   }, [pushHistory]);

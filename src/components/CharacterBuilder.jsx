@@ -60,9 +60,9 @@ function HexInput({ value, onCommit }) {
 export const CharacterBuilder = memo(function CharacterBuilder({
   character, characters, activeCharId, currentAnimation,
   onPartChange, onColorChange, onScaleChange,
-  onBodyImageChange, onHeadImageChange,
+  onBodyImageChange, onHeadImageChange, onHeadImageScaleChange,
   onAddCharacter, onDeleteCharacter,
-  onRenameCharacter, onSelectCharacter, onDuplicateCharacter,
+  onRenameCharacter, onSelectCharacter, onDuplicateCharacter, onReorderCharacters,
   onEditBodyToggle, onToggleBones, showBones,
   onToggleRagdoll, ragdoll,
   children,
@@ -100,6 +100,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
         onDelete={onDeleteCharacter}
         onRename={onRenameCharacter}
         onDuplicate={onDuplicateCharacter}
+        onReorder={onReorderCharacters}
       />
       <div className="mt-1 flex gap-2 self-start">
         <BigIconButton
@@ -131,6 +132,13 @@ export const CharacterBuilder = memo(function CharacterBuilder({
       {children}
       {isEdit && (<>
       <Separator className="my-2" />
+      <HeadSkinSection
+        image={character.headImage}
+        scale={character.headImageScale ?? 1}
+        onImageChange={onHeadImageChange}
+        onScaleChange={onHeadImageScaleChange}
+      />
+      <Separator className="my-2" />
       <SectionTitle className="text-[13px] mb-2">Parts</SectionTitle>
       {Object.entries(CHARACTER_PARTS).filter(([k]) => k !== 'weapon' && k !== 'lower_torso').map(([partKey, partDef]) => {
         const customColor  = character.customColors?.[partKey] ?? null;
@@ -146,19 +154,11 @@ export const CharacterBuilder = memo(function CharacterBuilder({
             currentColor={currentColor}
             hasCustomColor={!!customColor}
             currentScale={currentScale}
-            partImage={
-              partKey === 'body' ? character.bodyImage :
-              partKey === 'head' ? character.headImage :
-              null
-            }
+            partImage={partKey === 'body' ? character.bodyImage : null}
             onChange={(val) => onPartChange(partKey, val)}
             onColorChange={(hex) => onColorChange(partKey, hex)}
             onScaleChange={(s) => onScaleChange(partKey, s)}
-            onPartImageChange={
-              partKey === 'body' ? onBodyImageChange :
-              partKey === 'head' ? onHeadImageChange :
-              null
-            }
+            onPartImageChange={partKey === 'body' ? onBodyImageChange : null}
           />
         );
       })}
@@ -170,6 +170,92 @@ export const CharacterBuilder = memo(function CharacterBuilder({
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;
 const SCALE_STEP = 0.1;
+
+// Character-wide head PNG. One image + size multiplier shared by every
+// animation; stored as parts.headImage / parts.headImageScale.
+const HEAD_IMG_MIN = 0.3;
+const HEAD_IMG_MAX = 3.0;
+
+function HeadSkinSection({ image, scale, onImageChange, onScaleChange }) {
+  const inputRef = useRef(null);
+  const isDefault = Math.abs(scale - 1) < 0.001;
+  const setScale = (v) => onScaleChange(+v.toFixed(2));
+
+  const handleFile = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onImageChange(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between">
+        <SectionTitle className="text-[13px]">Head skin</SectionTitle>
+        {image && (
+          <button
+            type="button"
+            onClick={() => onImageChange(null)}
+            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+            title="Remove the head PNG (fall back to the vector head)"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-3">
+        {image ? (
+          <img
+            src={image}
+            alt="Head skin"
+            className="w-12 h-12 object-contain rounded border border-teal-400/40 bg-background/40"
+          />
+        ) : (
+          <div className="w-12 h-12 rounded border border-dashed border-border bg-background/40 flex items-center justify-center text-[9px] text-muted-foreground">
+            none
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
+          title={image ? 'Replace the head PNG' : 'Upload a PNG to skin the head'}
+        >
+          <ImageUp className="h-3.5 w-3.5" />
+          {image ? 'Replace PNG' : 'Upload PNG'}
+        </button>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden"
+          onChange={e => { handleFile(e.target.files?.[0]); e.target.value = ''; }}
+        />
+      </div>
+      {image && (
+        <div className="flex items-center justify-end gap-0.5">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head skin size</span>
+          <button
+            onClick={() => setScale(Math.max(HEAD_IMG_MIN, scale - 0.1))}
+            disabled={scale <= HEAD_IMG_MIN}
+            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+          >−</button>
+          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', isDefault ? 'text-muted-foreground' : 'text-primary')}>
+            {Math.round(scale * 100)}%
+          </span>
+          <button
+            onClick={() => setScale(Math.min(HEAD_IMG_MAX, scale + 0.1))}
+            disabled={scale >= HEAD_IMG_MAX}
+            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+          >+</button>
+        </div>
+      )}
+      <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
+        Applies to every animation for this character.
+      </span>
+    </section>
+  );
+}
 
 function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasCustomColor, onColorChange, currentScale, onScaleChange, partImage, onPartImageChange }) {
   const colorInputRef = useRef(null);

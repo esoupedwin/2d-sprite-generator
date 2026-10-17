@@ -3,10 +3,17 @@
  * specific bones. When a bone rotates, its attached points (and their Bezier
  * handles) rotate with it, bending the continuous outline naturally at joints.
  *
- * Point format: [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]
+ * Point format: [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy, weight?]
  *   lx, ly      — anchor position in bone-local space
  *   hIn/hOut    — incoming/outgoing Bezier handle offsets FROM the anchor,
  *                 also in bone-local space (so they rotate with the bone)
+ *   weight      — optional (default 1). How much of the bone's OWN rotation the
+ *                 point follows vs. its parent's: 1 = rigidly on `boneId`,
+ *                 0.5 = rotates half-way between parent and child, 0 = follows
+ *                 the parent's rotation (but still pivots on this bone's joint).
+ *                 Used on elbow/knee/wrist/ankle points so the outline bends
+ *                 along the joint's bisector instead of pinching or folding
+ *                 over itself when the limb flexes hard. See skinPointFrame().
  *
  * Points are listed clockwise starting from the top of the limb.
  */
@@ -27,15 +34,15 @@ export const LEFT_ARM_SKIN = [
   // ── Outer (left / lateral) edge going DOWN ──────────────────────────────
   ['left_arm',       -8,   0,    3,  -7,   -5,  10],  // shoulder outer
   ['left_arm',      -26,  16,    0, -10,    0,  11],  // upper arm outer (widest)
-  ['left_forearm',  -24,  -5,    0, -10,    0,   9],  // elbow outer
+  ['left_forearm',  -24,  -5,    0, -10,    0,   9, 0.5],  // elbow outer
   ['left_forearm',  -13,  20,   -2,  -8,    1,   7],  // forearm outer
-  ['left_hand',      -8,  -5,   -1,  -6,    2,   6],  // wrist outer
+  ['left_hand',      -8,  -5,   -1,  -6,    2,   6, 0.5],  // wrist outer
   // ── Hand tip ─────────────────────────────────────────────────────────────
   ['left_hand',       0,  16,   -7,   0,    7,   0],  // fingertip
   // ── Inner (right / medial) edge going UP ────────────────────────────────
-  ['left_hand',       6,  -5,   -2,   6,    1,  -6],  // wrist inner
+  ['left_hand',       6,  -5,   -2,   6,    1,  -6, 0.5],  // wrist inner
   ['left_forearm',   11,  20,    1,   7,   -2,  -7],  // forearm inner
-  ['left_forearm',   18,  -5,    0,   9,    0,  -9],  // elbow inner
+  ['left_forearm',   18,  -5,    0,   9,    0,  -9, 0.5],  // elbow inner
   ['left_arm',       18,  16,    0,  11,    0, -10],  // upper arm inner (widest)
   ['left_arm',        7,   0,    4,   8,   -3,  -7],  // shoulder inner
 ];
@@ -44,13 +51,13 @@ export const RIGHT_ARM_SKIN = [
   // ── Outer (right / lateral) edge going DOWN ─────────────────────────────
   ['right_arm',       8,   0,   -3,  -7,    5,  10],
   ['right_arm',      26,  16,    0, -10,    0,  11],
-  ['right_forearm',  24,  -5,    0, -10,    0,   9],
+  ['right_forearm',  24,  -5,    0, -10,    0,   9, 0.5],
   ['right_forearm',  13,  20,    2,  -8,   -1,   7],
-  ['right_hand',      8,  -5,    1,  -6,   -2,   6],
+  ['right_hand',      8,  -5,    1,  -6,   -2,   6, 0.5],
   ['right_hand',      0,  16,    7,   0,   -7,   0],
-  ['right_hand',     -6,  -5,    2,   6,   -1,  -6],
+  ['right_hand',     -6,  -5,    2,   6,   -1,  -6, 0.5],
   ['right_forearm', -11,  20,   -1,   7,    2,  -7],
-  ['right_forearm', -18,  -5,    0,   9,    0,  -9],
+  ['right_forearm', -18,  -5,    0,   9,    0,  -9, 0.5],
   ['right_arm',     -18,  16,    0,  11,    0, -10],
   ['right_arm',      -7,   0,   -4,   8,    3,  -7],
 ];
@@ -71,15 +78,15 @@ export const LEFT_LEG_SKIN = [
   // ── Outer (left) edge going DOWN ────────────────────────────────────────
   ['left_leg',       -8,   0,    3,  -6,   -3,   8],  // hip outer
   ['left_leg',      -15,  10,    0,  -8,    0,   9],  // thigh outer (widest)
-  ['left_shin',     -13,  -5,    0,  -8,    0,   8],  // knee outer
+  ['left_shin',     -13,  -5,    0,  -8,    0,   8, 0.5],  // knee outer
   ['left_shin',      -8,  10,   -2,  -6,    1,   6],  // shin outer
-  ['left_foot',      -6,   5,   -1,  -5,    2,   5],  // ankle outer
+  ['left_foot',      -6,   5,   -1,  -5,    2,   5, 0.5],  // ankle outer
   // ── Foot tip ─────────────────────────────────────────────────────────────
   ['left_foot',       0,  15,   -6,   0,    6,   0],  // foot tip
   // ── Inner (right) edge going UP ─────────────────────────────────────────
-  ['left_foot',       6,   5,   -1,   5,    1,  -5],  // ankle inner
+  ['left_foot',       6,   5,   -1,   5,    1,  -5, 0.5],  // ankle inner
   ['left_shin',       8,  10,    1,   6,   -2,  -6],  // shin inner
-  ['left_shin',      13,  -5,    0,   8,    0,  -8],  // knee inner
+  ['left_shin',      13,  -5,    0,   8,    0,  -8, 0.5],  // knee inner
   ['left_leg',       15,  10,    0,   9,    0,  -8],  // thigh inner (widest)
   ['left_leg',        8,   0,    3,   6,   -3,  -6],  // hip inner
 ];
@@ -87,13 +94,13 @@ export const LEFT_LEG_SKIN = [
 export const RIGHT_LEG_SKIN = [
   ['right_leg',       8,   0,   -3,  -6,    3,   8],
   ['right_leg',      15,  10,    0,  -8,    0,   9],
-  ['right_shin',     13,  -5,    0,  -8,    0,   8],
+  ['right_shin',     13,  -5,    0,  -8,    0,   8, 0.5],
   ['right_shin',      8,  10,    2,  -6,   -1,   6],
-  ['right_foot',      6,   5,    1,  -5,   -2,   5],
+  ['right_foot',      6,   5,    1,  -5,   -2,   5, 0.5],
   ['right_foot',      0,  15,    6,   0,   -6,   0],
-  ['right_foot',     -6,   5,    1,   5,   -1,  -5],
+  ['right_foot',     -6,   5,    1,   5,   -1,  -5, 0.5],
   ['right_shin',     -8,  10,   -1,   6,    2,  -6],
-  ['right_shin',    -13,  -5,    0,   8,    0,  -8],
+  ['right_shin',    -13,  -5,    0,   8,    0,  -8, 0.5],
   ['right_leg',     -15,  10,    0,   9,    0,  -8],
   ['right_leg',      -8,   0,   -3,   6,    3,  -6],
 ];
@@ -131,10 +138,37 @@ export const LOWER_TORSO_SKIN = [];
 // ─── Renderer ────────────────────────────────────────────────────────────────
 
 import { rotateOffset } from '../utils/mathUtils.js';
+import { BONES } from './SkeletonSystem.js';
+
+/** Blend weight of a skin point (8th element), defaulting to 1 = rigid. */
+export function skinPointWeight(pt) {
+  const w = pt[7];
+  return typeof w === 'number' && Number.isFinite(w) ? Math.min(1, Math.max(0, w)) : 1;
+}
+
+/**
+ * The frame a skin point's local coords are expressed in. For weight 1 this is
+ * the bone's own world transform. For weight < 1 the origin stays on the bone's
+ * joint but the rotation is interpolated toward the PARENT bone's rotation, so
+ * a point with weight 0.5 sits on the bisector of the joint angle however far
+ * the child bends. Child rotation = parent rotation + local, so a plain lerp is
+ * exact (no angle wrapping). Root bones ignore weight. Returns null if the
+ * bone isn't in `worldTransforms`.
+ */
+export function skinPointFrame(pt, worldTransforms) {
+  const bone = worldTransforms[pt[0]];
+  if (!bone) return null;
+  const w = skinPointWeight(pt);
+  if (w >= 1) return bone;
+  const parent = worldTransforms[BONES[pt[0]]?.parent];
+  if (!parent) return bone;
+  return { x: bone.x, y: bone.y, rotation: parent.rotation + (bone.rotation - parent.rotation) * w };
+}
 
 function mapSkinPoints(template, worldTransforms, scale) {
-  return template.map(([boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]) => {
-    const bone = worldTransforms[boneId];
+  return template.map((pt) => {
+    const [, lx, ly, hInDx, hInDy, hOutDx, hOutDy] = pt;
+    const bone = skinPointFrame(pt, worldTransforms);
     if (!bone) return null;
     const a  = rotateOffset(lx * scale, ly * scale, bone.rotation);
     const ax = bone.x + a.x, ay = bone.y + a.y;

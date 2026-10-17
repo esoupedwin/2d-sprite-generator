@@ -1,9 +1,12 @@
 /**
  * Vector overlay: anchor points + Bézier handles for every skin template.
  *
- * Each skin point: [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy]
+ * Each skin point: [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy, weight?]
  *   lx, ly       — anchor in bone-local space
  *   hIn / hOut   — handle offsets FROM the anchor, also bone-local
+ *   weight       — optional parent/child rotation blend (see SkinSystem).
+ *                  Every world<->local conversion here goes through
+ *                  skinPointFrame() so blended points edit where they render.
  *
  * The overlay is drawn inside the character transform (translate + scale),
  * so all coordinates are in character-local space (same as worldTransforms).
@@ -11,9 +14,13 @@
 
 import {
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
-  HEAD_SKIN, BODY_SKIN,
+  HEAD_SKIN, BODY_SKIN, skinPointFrame, skinPointWeight,
 } from './SkinSystem.js';
 import { rotateOffset, worldToLocal } from '../utils/mathUtils.js';
+import { BONES } from './SkeletonSystem.js';
+
+// Weight a Shift+clicked anchor toggles to (and back to 1 from).
+export const BLEND_WEIGHT = 0.5;
 
 export const DEFAULT_SKINS = {
   head:        HEAD_SKIN,
@@ -87,9 +94,11 @@ export function renderVectorOverlay(
     const colors   = SKIN_COLORS[skinKey];
 
     for (let pi = 0; pi < template.length; pi++) {
-      const [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy] = template[pi];
-      const bone = worldTransforms[boneId];
+      const pt = template[pi];
+      const [, lx, ly, hInDx, hInDy, hOutDx, hOutDy] = pt;
+      const bone = skinPointFrame(pt, worldTransforms);
       if (!bone) continue;
+      const blended = skinPointWeight(pt) < 1;
 
       const r  = bone.rotation;
       const a  = rotateOffset(lx, ly, r);
@@ -126,13 +135,21 @@ export function renderVectorOverlay(
       ctx.arc(hox, hoy, isHOutActive ? handleR * 1.6 : handleR, 0, Math.PI * 2);
       ctx.fill();
 
-      // Anchor (square with thin border)
+      // Anchor: square = rigid, diamond = blended with the parent bone
       const hs = isAnchorActive ? anchorH * 1.6 : anchorH;
-      ctx.fillStyle = isAnchorActive ? ACTIVE_COLOR : colors.anchor;
-      ctx.fillRect(ax - hs, ay - hs, hs * 2, hs * 2);
+      ctx.fillStyle   = isAnchorActive ? ACTIVE_COLOR : colors.anchor;
       ctx.strokeStyle = 'rgba(0,0,0,0.45)';
       ctx.lineWidth   = 0.4 * visualScale;
-      ctx.strokeRect(ax - hs, ay - hs, hs * 2, hs * 2);
+      if (blended) {
+        const d = hs * 1.35;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay - d); ctx.lineTo(ax + d, ay); ctx.lineTo(ax, ay + d); ctx.lineTo(ax - d, ay);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else {
+        ctx.fillRect(ax - hs, ay - hs, hs * 2, hs * 2);
+        ctx.strokeRect(ax - hs, ay - hs, hs * 2, hs * 2);
+      }
 
       hitTargets.push({ type: 'anchor',    skinKey, pointIndex: pi, x: ax,  y: ay  });
       hitTargets.push({ type: 'handleIn',  skinKey, pointIndex: pi, x: hix, y: hiy });
@@ -160,8 +177,8 @@ export function renderBoneBinds(ctx, worldTransforms, skinOverrides, selectedSki
     if (!colors) continue;
     ctx.strokeStyle = colors.stem;
     for (let pi = 0; pi < template.length; pi++) {
-      const [boneId, lx, ly] = template[pi];
-      const bone = worldTransforms[boneId];
+      const [, lx, ly] = template[pi];
+      const bone = skinPointFrame(template[pi], worldTransforms);
       if (!bone) continue;
       const a  = rotateOffset(lx, ly, bone.rotation);
       const ax = bone.x + a.x, ay = bone.y + a.y;
@@ -176,11 +193,18 @@ export function renderBoneBinds(ctx, worldTransforms, skinOverrides, selectedSki
 
 // ── Mutation ──────────────────────────────────────────────────────────────────
 
-/** World position of a skin anchor given the bone's world transform. */
-function anchorWorld(pt, bone) {
+/** World position of a skin anchor (null if its bone is missing). */
+function anchorWorld(pt, worldTransforms) {
+  const frame = skinPointFrame(pt, worldTransforms);
+  if (!frame) return null;
   const [, lx, ly] = pt;
-  const r = rotateOffset(lx, ly, bone.rotation);
-  return { x: bone.x + r.x, y: bone.y + r.y };
+  const r = rotateOffset(lx, ly, frame.rotation);
+  return { x: frame.x + r.x, y: frame.y + r.y };
+}
+
+/** Appends the weight element only when it's non-default, keeping saved data compact. */
+function withWeight(pt7, weight) {
+  return weight < 1 ? [...pt7, weight] : pt7;
 }
 
 /**
@@ -213,26 +237,20 @@ export function addSkinPoint(skinOverrides, skinKey, worldTransforms, wx, wy) {
   let minSegDist = Infinity;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    const boneA = worldTransforms[src[i][0]];
-    const boneB = worldTransforms[src[j][0]];
-    if (!boneA || !boneB) continue;
-    const A = anchorWorld(src[i], boneA);
-    const B = anchorWorld(src[j], boneB);
+    const A = anchorWorld(src[i], worldTransforms);
+    const B = anchorWorld(src[j], worldTransforms);
+    if (!A || !B) continue;
     const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
     const d = Math.hypot(wx - mx, wy - my);
     if (d < minSegDist) { minSegDist = d; insertIdx = i + 1; }
   }
 
   // Compute handles pointing toward neighbouring anchors at 1/3 distance
-  const prevPt   = src[(insertIdx - 1 + n) % n];
-  const nextPt   = src[insertIdx % n];
-  const prevBone = worldTransforms[prevPt[0]];
-  const nextBone = worldTransforms[nextPt[0]];
+  const prev = anchorWorld(src[(insertIdx - 1 + n) % n], worldTransforms);
+  const next = anchorWorld(src[insertIdx % n], worldTransforms);
 
   let hInDx = 0, hInDy = 0, hOutDx = 0, hOutDy = 0;
-  if (prevBone && nextBone) {
-    const prev = anchorWorld(prevPt, prevBone);
-    const next = anchorWorld(nextPt, nextBone);
+  if (prev && next) {
 
     const toPrevX = prev.x - wx, toPrevY = prev.y - wy;
     const toNextX = next.x - wx, toNextY = next.y - wy;
@@ -288,29 +306,65 @@ export function rebindSkinPoint(skinOverrides, skinKey, pointIndex, worldTransfo
 
   const src      = getSkin(skinKey, skinOverrides);
   const template = src.map(pt => [...pt]);
-  const [oldBoneId, , , hInDx, hInDy, hOutDx, hOutDy] = template[pointIndex];
+  const oldPt    = template[pointIndex];
+  const [, , , hInDx, hInDy, hOutDx, hOutDy] = oldPt;
+  const weight   = skinPointWeight(oldPt);
 
-  const oldBone = worldTransforms[oldBoneId];
-  const newBone = worldTransforms[newBoneId];
-  if (!newBone) return skinOverrides;
+  // Frames before and after, blended the same way, so a 50/50 elbow point
+  // stays 50/50 on its new bone.
+  const oldFrame = skinPointFrame(oldPt, worldTransforms);
+  const newFrame = skinPointFrame([newBoneId, 0, 0, 0, 0, 0, 0, weight], worldTransforms);
+  if (!newFrame) return skinOverrides;
 
-  // Anchor in new bone's local frame so the world position equals (wx, wy).
-  const local  = worldToLocal(wx, wy, newBone);
+  // Anchor in the new frame so the world position equals (wx, wy).
+  const local = worldToLocal(wx, wy, newFrame);
 
-  // Rotate handles from old bone-local space into new bone-local space so
-  // the world-space handle directions stay the same after the rebind.
-  const oldR = oldBone ? oldBone.rotation : 0;
-  const dr   = oldR - newBone.rotation;
-  const cos  = Math.cos(dr), sin = Math.sin(dr);
-  const newHIn  = { x: cos * hInDx  - sin * hInDy,  y: sin * hInDx  + cos * hInDy  };
-  const newHOut = { x: cos * hOutDx - sin * hOutDy, y: sin * hOutDx + cos * hOutDy };
+  // Rotate handles from the old frame into the new one so their world-space
+  // directions stay the same after the rebind.
+  const oldR = oldFrame ? oldFrame.rotation : 0;
+  const dr   = oldR - newFrame.rotation;
+  const hIn  = rotateOffset(hInDx,  hInDy,  dr);
+  const hOut = rotateOffset(hOutDx, hOutDy, dr);
 
-  template[pointIndex] = [
-    newBoneId, local.x, local.y,
-    newHIn.x,  newHIn.y,
-    newHOut.x, newHOut.y,
-  ];
+  template[pointIndex] = withWeight([newBoneId, local.x, local.y, hIn.x, hIn.y, hOut.x, hOut.y], weight);
   return { ...skinOverrides, [skinKey]: template };
+}
+
+/**
+ * Sets a point's parent/child blend weight WITHOUT moving it: the anchor and
+ * handles are re-expressed in the new frame so the outline looks identical in
+ * the current pose and only bends differently once the joint flexes.
+ * Weight 1 drops the element. No-op for root bones (nothing to blend with).
+ */
+export function setSkinPointWeight(skinOverrides, skinKey, pointIndex, worldTransforms, weight) {
+  const src = getSkin(skinKey, skinOverrides);
+  const pt  = src[pointIndex];
+  if (!pt || !BONES[pt[0]]?.parent) return skinOverrides;
+  const w = Math.min(1, Math.max(0, weight));
+  if (w === skinPointWeight(pt)) return skinOverrides;
+
+  const [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy] = pt;
+  const oldFrame = skinPointFrame(pt, worldTransforms);
+  const newFrame = skinPointFrame([boneId, 0, 0, 0, 0, 0, 0, w], worldTransforms);
+  if (!oldFrame || !newFrame) return skinOverrides;
+
+  const a     = rotateOffset(lx, ly, oldFrame.rotation);
+  const local = worldToLocal(oldFrame.x + a.x, oldFrame.y + a.y, newFrame);
+  const dr    = oldFrame.rotation - newFrame.rotation;
+  const hIn   = rotateOffset(hInDx,  hInDy,  dr);
+  const hOut  = rotateOffset(hOutDx, hOutDy, dr);
+
+  const template = src.map(p => [...p]);
+  template[pointIndex] = withWeight([boneId, local.x, local.y, hIn.x, hIn.y, hOut.x, hOut.y], w);
+  return { ...skinOverrides, [skinKey]: template };
+}
+
+/** Shift+click behaviour: rigid <-> 50/50 blend with the parent bone. */
+export function toggleSkinPointBlend(skinOverrides, skinKey, pointIndex, worldTransforms) {
+  const pt = getSkin(skinKey, skinOverrides)[pointIndex];
+  if (!pt) return skinOverrides;
+  const target = skinPointWeight(pt) < 1 ? 1 : BLEND_WEIGHT;
+  return setSkinPointWeight(skinOverrides, skinKey, pointIndex, worldTransforms, target);
 }
 
 /**
@@ -325,9 +379,10 @@ export function updateSkinPoint(skinOverrides, skinKey, pointIndex, update) {
   const src      = getSkin(skinKey, skinOverrides);
   const template = src.map(pt => [...pt]);
   const [boneId, lx, ly, hInDx, hInDy, hOutDx, hOutDy] = template[pointIndex];
+  const weight   = skinPointWeight(template[pointIndex]);
 
   if (update.type === 'anchor') {
-    template[pointIndex] = [boneId, update.lx, update.ly, hInDx, hInDy, hOutDx, hOutDy];
+    template[pointIndex] = withWeight([boneId, update.lx, update.ly, hInDx, hInDy, hOutDx, hOutDy], weight);
   } else if (update.type === 'handleIn') {
     let outDx = hOutDx, outDy = hOutDy;
     if (update.mirror) {
@@ -338,7 +393,7 @@ export function updateSkinPoint(skinOverrides, skinKey, pointIndex, update) {
         outDy = -update.dy / inLen * outLen;
       }
     }
-    template[pointIndex] = [boneId, lx, ly, update.dx, update.dy, outDx, outDy];
+    template[pointIndex] = withWeight([boneId, lx, ly, update.dx, update.dy, outDx, outDy], weight);
   } else if (update.type === 'handleOut') {
     let inDx = hInDx, inDy = hInDy;
     if (update.mirror) {
@@ -349,7 +404,7 @@ export function updateSkinPoint(skinOverrides, skinKey, pointIndex, update) {
         inDy = -update.dy / outLen * inLen;
       }
     }
-    template[pointIndex] = [boneId, lx, ly, inDx, inDy, update.dx, update.dy];
+    template[pointIndex] = withWeight([boneId, lx, ly, inDx, inDy, update.dx, update.dy], weight);
   }
 
   return { ...skinOverrides, [skinKey]: template };

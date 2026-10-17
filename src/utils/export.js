@@ -56,8 +56,8 @@ function exportFileBase(character, animationName) {
   return `${w}_${action}`;
 }
 
-function resolveHeadUrl(parts, animationName) {
-  return parts?.animHeadImages?.[animationName] ?? parts?.headImage ?? null;
+function resolveHeadUrl(parts) {
+  return parts?.headImage ?? null;
 }
 
 // Decode a data-URL/asset URL into an HTMLImageElement. Returns null on
@@ -97,7 +97,7 @@ async function loadRenderAssets(character, animationName) {
   const parts = character.parts ?? {};
   const [bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
-    loadImage(resolveHeadUrl(parts, animationName)),
+    loadImage(resolveHeadUrl(parts)),
     loadImage(parts.weaponImages?.[parts.weapon]),
     loadImage(parts.accessoryImages?.[parts.weapon]),
     loadImage(parts.bodyAccessoryImage),

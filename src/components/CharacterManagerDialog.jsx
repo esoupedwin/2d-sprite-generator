@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy, Pencil, Plus, X } from 'lucide-react';
+import { Copy, GripVertical, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Input } from '@/components/ui/input.jsx';
 import { cn } from '@/lib/utils.js';
@@ -7,10 +7,13 @@ import { cn } from '@/lib/utils.js';
 export function CharacterManagerDialog({
   open, onClose,
   characters, activeCharId,
-  onSelect, onAdd, onDelete, onRename, onDuplicate,
+  onSelect, onAdd, onDelete, onRename, onDuplicate, onReorder,
 }) {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName]   = useState('');
+  // Drag-to-reorder: id being dragged + insertion index (0..length) of the drop line.
+  const [dragId, setDragId]       = useState(null);
+  const [dropIndex, setDropIndex] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -20,7 +23,7 @@ export function CharacterManagerDialog({
   }, [open, onClose]);
 
   useEffect(() => {
-    if (!open) setEditingId(null);
+    if (!open) { setEditingId(null); setDragId(null); setDropIndex(null); }
   }, [open]);
 
   if (!open) return null;
@@ -35,6 +38,37 @@ export function CharacterManagerDialog({
     const trimmed = editName.trim();
     if (trimmed) onRename(id, trimmed);
     setEditingId(null);
+  };
+
+  const endDrag = () => { setDragId(null); setDropIndex(null); };
+
+  // Drop line goes above or below the hovered row depending on pointer half.
+  const handleDragOver = (e, index) => {
+    if (!dragId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const idx = e.clientY < rect.top + rect.height / 2 ? index : index + 1;
+    if (idx !== dropIndex) setDropIndex(idx);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // row drop must not bubble into the list's drop handler
+    if (dragId && dropIndex != null) onReorder?.(dragId, dropIndex);
+    endDrag();
+  };
+
+  // Keyboard reorder on the grip: Alt+↑ / Alt+↓.
+  const handleGripKey = (e, index) => {
+    if (!e.altKey) return;
+    if (e.key === 'ArrowUp' && index > 0) {
+      e.preventDefault();
+      onReorder?.(characters[index].id, index - 1);
+    } else if (e.key === 'ArrowDown' && index < characters.length - 1) {
+      e.preventDefault();
+      onReorder?.(characters[index].id, index + 2);
+    }
   };
 
   const handleSelect = (id) => {
@@ -65,19 +99,55 @@ export function CharacterManagerDialog({
           </button>
         </div>
 
-        <div className="p-4 flex flex-col gap-1 max-h-[60vh] overflow-y-auto">
-          {characters.map(char => {
+        <div
+          className="p-4 flex flex-col gap-1 max-h-[60vh] overflow-y-auto"
+          onDragOver={e => { if (dragId) e.preventDefault(); }}
+          onDrop={handleDrop}
+        >
+          {characters.map((char, index) => {
             const isActive = char.id === activeCharId;
             const isEditing = editingId === char.id;
+            const canReorder = !!onReorder && characters.length > 1 && !isEditing;
             return (
               <div
                 key={char.id}
+                draggable={canReorder}
+                onDragStart={e => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', char.id);
+                  setDragId(char.id);
+                }}
+                onDragOver={e => handleDragOver(e, index)}
+                onDrop={handleDrop}
+                onDragEnd={endDrag}
                 onClick={() => !isEditing && handleSelect(char.id)}
                 className={cn(
-                  'group flex items-center gap-1 px-2.5 py-2 rounded border cursor-pointer min-h-[36px] bg-secondary transition-colors',
+                  'group relative flex items-center gap-1 pl-1 pr-2.5 py-2 rounded border cursor-pointer min-h-[36px] bg-secondary transition-colors',
                   isActive ? 'border-primary bg-primary/15' : 'border-transparent hover:border-border',
+                  dragId === char.id && 'opacity-40',
                 )}
               >
+                {dropIndex === index && dragId && (
+                  <div className="pointer-events-none absolute -top-[3px] left-0 right-0 h-0.5 rounded bg-primary" />
+                )}
+                {dropIndex === index + 1 && index === characters.length - 1 && dragId && (
+                  <div className="pointer-events-none absolute -bottom-[3px] left-0 right-0 h-0.5 rounded bg-primary" />
+                )}
+                {canReorder ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    title="Drag to reorder (Alt+↑/↓)"
+                    aria-label={`Reorder ${char.name}`}
+                    onClick={e => e.stopPropagation()}
+                    onKeyDown={e => handleGripKey(e, index)}
+                    className="cursor-grab active:cursor-grabbing text-muted-foreground/50 group-hover:text-muted-foreground hover:text-foreground rounded p-0.5 focus-visible:outline focus-visible:outline-1 focus-visible:outline-ring"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </span>
+                ) : (
+                  <span className="w-[18px] shrink-0" />
+                )}
                 {isEditing ? (
                   <Input
                     autoFocus

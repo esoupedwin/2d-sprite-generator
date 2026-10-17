@@ -37,6 +37,7 @@ import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
+import { ConfirmDialog } from './components/ConfirmDialog.jsx';
 import { genId } from './utils/genId.js';
 import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
 import { NewWeaponDialog } from './components/NewWeaponDialog.jsx';
@@ -162,7 +163,8 @@ function loadCharactersFromStorage() {
 }
 
 // Spreads the character's arms into a horizontal T-pose so joints are easy
-// to grab in Edit Body mode. Weapon is cleared (no grip pose to maintain).
+// to grab in Edit Body mode. The weapon is only hidden on the canvas while
+// editing (see `canvasParts`) — the character's selected type is kept.
 function withTPose(char) {
   const off = char.boneOffsets ?? {};
   const lfx = 0  + (off.left_forearm?.x  ?? 0);
@@ -181,7 +183,6 @@ function withTPose(char) {
   const rightFArmWorld =          -Math.atan2(rhy, rhx);
   return {
     ...char,
-    parts: { ...char.parts, weapon: 'none' },
     boneOffsets: {
       ...off,
       left_arm:      { ...(off.left_arm      ?? {}), rotation: leftArmWorld  },
@@ -192,6 +193,17 @@ function withTPose(char) {
       right_hand:    { ...(off.right_hand    ?? {}), rotation: 0 },
     },
   };
+}
+
+// Weapon types offered to a character: built-ins it hasn't hidden, then its
+// custom weapons. The type it's currently wearing always counts.
+function visibleWeaponKeys(char) {
+  const hidden = new Set(char?.hiddenWeapons ?? []);
+  const current = char?.parts?.weapon;
+  return [
+    ...Object.keys(CHARACTER_PARTS.weapon.options).filter(k => !hidden.has(k) || k === current),
+    ...(char?.customWeapons ?? []).map(w => w.key),
+  ];
 }
 
 // Weapon-appropriate default animation for a character (e.g. pistol → pistol_idle).
@@ -286,6 +298,7 @@ export default function App() {
   const [saveTemplateDialog,   setSaveTemplateDialog]   = useState(null); // { defaultName, resolved } | null
 
   const [weaponDialog, setWeaponDialog] = useState(null); // { mode:'create'|'rename', key?, defaultName? }
+  const [weaponDeleteTarget, setWeaponDeleteTarget] = useState(null); // { key, label, builtIn }
 
   // ── Pose editor ───────────────────────────────────────────────────────────────
   const [poseEditorOpen,  setPoseEditorOpen]  = useState(false);
@@ -328,6 +341,12 @@ export default function App() {
   }, []);
 
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
+  // Edit Structure draws the body weaponless (T-pose, no grip to hold)
+  // without touching the character's selected weapon type.
+  const canvasParts = useMemo(
+    () => (currentAnimation === 'edit' ? { ...activeChar.parts, weapon: 'none' } : activeChar.parts),
+    [activeChar.parts, currentAnimation],
+  );
 
   const handlePreviewSpriteSheet = useCallback(() => {
     setSpritePreview({ character: activeChar, animationName: currentAnimation });
@@ -409,6 +428,20 @@ export default function App() {
 
   const renameCharacter = useCallback((id, name) => {
     setCharacters(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+  }, []);
+
+  // Move character `id` so it lands at `toIndex` (index in the list before removal).
+  const reorderCharacters = useCallback((id, toIndex) => {
+    setCharacters(prev => {
+      const from = prev.findIndex(c => c.id === id);
+      if (from < 0) return prev;
+      const target = from < toIndex ? toIndex - 1 : toIndex;
+      if (target === from) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(target, 0, moved);
+      return next;
+    });
   }, []);
 
   const selectCharacter = useCallback((id) => {
@@ -521,6 +554,15 @@ export default function App() {
       if (dataUrl) parts.headImage = dataUrl;
       else         delete parts.headImage;
       return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  // Size multiplier for the uploaded head PNG — character-wide, so it applies
+  // to every animation.
+  const updateHeadImageScale = useCallback((scale) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      return { ...c, parts: { ...c.parts, headImageScale: scale } };
     }));
   }, [activeCharId]);
 
@@ -695,22 +737,6 @@ export default function App() {
     charCanvasRef.current?.resetAnimBoneOffsets(animKey);
   }, [activeCharId]);
 
-  // Per-animation head PNG override. dataUrl=null clears the override and
-  // falls back to the character's base headImage. Stored alongside the other
-  // image fields under `parts` so it's threaded into CharacterCanvas with
-  // the rest of the character prop.
-  const updateAnimHeadImage = useCallback((animKey, dataUrl) => {
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== activeCharId) return c;
-      const parts    = { ...c.parts };
-      const animImgs = { ...(parts.animHeadImages ?? {}) };
-      if (dataUrl) animImgs[animKey] = dataUrl;
-      else         delete animImgs[animKey];
-      parts.animHeadImages = animImgs;
-      return { ...c, parts };
-    }));
-  }, [activeCharId]);
-
   // Per-animation body-part draw order (z-index). Stored back → front on the
   // character; absent = use the default order for the current weapon.
   const setAnimPartZOrder = useCallback((order) => {
@@ -728,18 +754,6 @@ export default function App() {
       return { ...c, animPartZOrder: map };
     }));
   }, [activeCharId, currentAnimation]);
-
-  // Size multiplier for the head PNG shown during this animation.
-  const updateAnimHeadImageScale = useCallback((animKey, scale) => {
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== activeCharId) return c;
-      const parts  = { ...c.parts };
-      const scales = { ...(parts.animHeadImageScales ?? {}) };
-      scales[animKey] = scale;
-      parts.animHeadImageScales = scales;
-      return { ...c, parts };
-    }));
-  }, [activeCharId]);
 
   // Per-keyframe override: replace a specific (anim, bone, time) keyframe's
   // values. Values: { rotation?, x?, y? } merged into the existing override.
@@ -1148,17 +1162,38 @@ export default function App() {
     setWeaponDialog(null);
   }, [activeCharId]);
 
-  const deleteCustomWeapon = useCallback((key) => {
+  // Remove a weapon type from the active character. Custom types are deleted
+  // outright; built-ins (including 'none') are hidden via `hiddenWeapons`
+  // (reversible — their offsets/images stay on the character). The last
+  // remaining type can't be removed. A character wearing the removed type
+  // switches to the first type still available.
+  const removeWeaponType = useCallback((key) => {
+    const visible = visibleWeaponKeys(activeChar);
+    if (visible.length <= 1 || !visible.includes(key)) return;
+    const fallback = visible.find(k => k !== key);
+    const isCustom = (activeChar.customWeapons ?? []).some(w => w.key === key);
+
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
-      return {
-        ...c,
-        customWeapons: (c.customWeapons ?? []).filter(w => w.key !== key),
-        parts: c.parts.weapon === key ? { ...c.parts, weapon: 'none' } : c.parts,
-      };
+      const parts = c.parts.weapon === key ? { ...c.parts, weapon: fallback } : c.parts;
+      if (isCustom) {
+        return { ...c, parts, customWeapons: (c.customWeapons ?? []).filter(w => w.key !== key) };
+      }
+      const list = c.hiddenWeapons ?? [];
+      return { ...c, parts, hiddenWeapons: list.includes(key) ? list : [...list, key] };
     }));
-    setCurrentAnimation(cur => (activeChar.parts.weapon === key ? 'idle' : cur));
-  }, [activeChar]);
+    if (activeChar.parts.weapon === key) {
+      const template = (activeChar.customWeapons ?? []).find(w => w.key === fallback)?.template ?? fallback;
+      setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[template] ?? 'idle');
+      setIsPlaying(true);
+    }
+  }, [activeCharId, activeChar]);
+
+  const restoreHiddenWeapons = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, hiddenWeapons: [] } : c
+    ));
+  }, [activeCharId]);
 
   // ── Workspace save/load ───────────────────────────────────────────────────────
   const loadWorkspace = useCallback(({ characters: newChars, activeCharId: newActive, uiState }) => {
@@ -1302,12 +1337,14 @@ export default function App() {
             onScaleChange={updatePartScale}
             onBodyImageChange={updateBodyImage}
             onHeadImageChange={updateHeadImage}
+            onHeadImageScaleChange={updateHeadImageScale}
             onAddCharacter={addCharacter}
             onDeleteCharacter={deleteCharacter}
             onRenameCharacter={renameCharacter}
             onSelectCharacter={selectCharacter}
             onDuplicateCharacter={duplicateCharacter}
-            onEditBodyToggle={() => handleAnimationChange(currentAnimation === 'edit' ? 'idle' : 'edit')}
+            onReorderCharacters={reorderCharacters}
+            onEditBodyToggle={() => handleAnimationChange(currentAnimation === 'edit' ? defaultAnimationFor(activeChar) : 'edit')}
             onToggleBones={() => setShowBones(p => !p)}
             showBones={showBones}
             onToggleRagdoll={toggleRagdoll}
@@ -1364,6 +1401,10 @@ export default function App() {
               {(() => {
                 const customs = activeChar.customWeapons ?? [];
                 const selectedCustom = customs.find(w => w.key === activeChar.parts.weapon);
+                const hiddenWeapons = new Set(activeChar.hiddenWeapons ?? []);
+                const selectedLabel = selectedCustom?.label
+                  ?? CHARACTER_PARTS.weapon.options[activeChar.parts.weapon]?.label;
+                const canRemove = visibleWeaponKeys(activeChar).length > 1;
                 return (
                   <div className="flex items-center gap-1 flex-wrap">
                     <select
@@ -1371,7 +1412,9 @@ export default function App() {
                       onChange={e => updatePart('weapon', e.target.value)}
                       className="h-8 px-2 pr-7 rounded-md border border-border bg-secondary text-foreground text-xs outline-none focus:border-primary flex-1 min-w-[120px] appearance-none bg-no-repeat bg-[right_0.5rem_center] bg-[length:0.7em_0.7em] bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%3E%3Cpolyline%20points%3D%226%2C9%2012%2C15%2018%2C9%22%2F%3E%3C%2Fsvg%3E')]"
                     >
-                      {Object.entries(CHARACTER_PARTS.weapon.options).map(([key, opt]) => (
+                      {Object.entries(CHARACTER_PARTS.weapon.options)
+                        .filter(([key]) => !hiddenWeapons.has(key) || key === activeChar.parts.weapon)
+                        .map(([key, opt]) => (
                         <option key={key} value={key}>{opt.label}</option>
                       ))}
                       {customs.length > 0 && (
@@ -1383,22 +1426,22 @@ export default function App() {
                       )}
                     </select>
                     {selectedCustom && (
-                      <>
-                        <button
-                          onClick={() => setWeaponDialog({ mode: 'rename', key: selectedCustom.key, defaultName: selectedCustom.label })}
-                          title="Rename weapon"
-                          className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => deleteCustomWeapon(selectedCustom.key)}
-                          title="Delete weapon"
-                          className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </>
+                      <button
+                        onClick={() => setWeaponDialog({ mode: 'rename', key: selectedCustom.key, defaultName: selectedCustom.label })}
+                        title="Rename weapon"
+                        className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    )}
+                    {canRemove && (
+                      <button
+                        onClick={() => setWeaponDeleteTarget({ key: activeChar.parts.weapon, label: selectedLabel, builtIn: !selectedCustom })}
+                        title={selectedCustom ? 'Delete weapon' : 'Remove type'}
+                        className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
                     )}
                     <button
                       onClick={() => setWeaponDialog({ mode: 'create', defaultName: '' })}
@@ -1407,9 +1450,31 @@ export default function App() {
                     >
                       + Weapon
                     </button>
+                    {hiddenWeapons.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={restoreHiddenWeapons}
+                        className="basis-full text-left text-[10px] text-muted-foreground/60 hover:text-foreground underline underline-offset-2 transition-colors"
+                      >
+                        {hiddenWeapons.size} hidden type{hiddenWeapons.size > 1 ? 's' : ''} — restore
+                      </button>
+                    )}
                   </div>
                 );
               })()}
+              <ConfirmDialog
+                open={!!weaponDeleteTarget}
+                title={weaponDeleteTarget?.builtIn ? 'Remove type' : 'Delete weapon'}
+                message={weaponDeleteTarget && (weaponDeleteTarget.builtIn
+                  ? <>Remove <strong className="text-foreground">{weaponDeleteTarget.label}</strong> from this character&apos;s types? You can restore hidden types later.</>
+                  : <>Delete the custom weapon <strong className="text-foreground">{weaponDeleteTarget.label}</strong>? This cannot be undone.</>)}
+                confirmLabel="Delete"
+                onCancel={() => setWeaponDeleteTarget(null)}
+                onConfirm={() => {
+                  removeWeaponType(weaponDeleteTarget.key);
+                  setWeaponDeleteTarget(null);
+                }}
+              />
               </div>
 
               <Button
@@ -1696,7 +1761,7 @@ export default function App() {
               <CharacterCanvas
                 ref={charCanvasRef}
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : `${activeCharId}:${charsFileRev}`}
-                character={activeChar.parts}
+                character={canvasParts}
                 boneOffsets={poseEditorOpen ? (poseFrames[activePoseFrame]?.boneOffsets ?? {}) : activeChar.boneOffsets}
                 skinOverrides={activeChar.skinOverrides}
                 defaultBoneOffsets={activeChar.defaultBoneOffsets}
@@ -1762,94 +1827,6 @@ export default function App() {
                   onNeckLengthChange={updateNeckLength}
                 />
               )}
-              {editAnimPose && !poseEditorOpen && (() => {
-                const animHeadUrl = activeChar.parts?.animHeadImages?.[currentAnimation];
-                const baseHeadUrl = activeChar.parts?.headImage;
-                const hasOverride = !!animHeadUrl;
-                const onPickHeadPng = (file) => {
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = () => updateAnimHeadImage(currentAnimation, reader.result);
-                  reader.readAsDataURL(file);
-                };
-                return (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-baseline justify-between">
-                      <SectionTitle>Head skin for this animation</SectionTitle>
-                      {hasOverride && (
-                        <button
-                          type="button"
-                          onClick={() => updateAnimHeadImage(currentAnimation, null)}
-                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
-                          title="Clear override (fall back to the base head skin)"
-                        >
-                          Reset
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {animHeadUrl ? (
-                        <img
-                          src={animHeadUrl}
-                          alt="Animation head skin"
-                          className="w-12 h-12 object-contain rounded border border-teal-400/40 bg-background/40"
-                        />
-                      ) : baseHeadUrl ? (
-                        <img
-                          src={baseHeadUrl}
-                          alt="Base head skin"
-                          className="w-12 h-12 object-contain rounded border border-border/60 bg-background/40 opacity-60"
-                          title="Currently using the base head skin"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded border border-dashed border-border bg-background/40 flex items-center justify-center text-[9px] text-muted-foreground">
-                          none
-                        </div>
-                      )}
-                      <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors cursor-pointer">
-                        <ImageUp className="h-3.5 w-3.5" />
-                        {hasOverride ? 'Replace PNG' : 'Upload PNG'}
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg"
-                          className="hidden"
-                          onChange={(e) => { onPickHeadPng(e.target.files?.[0]); e.target.value = ''; }}
-                        />
-                      </label>
-                    </div>
-                    {(animHeadUrl || baseHeadUrl) && (() => {
-                      const curScale = activeChar.parts?.animHeadImageScales?.[currentAnimation]
-                                    ?? activeChar.parts?.headImageScale ?? 1;
-                      const set = (v) => updateAnimHeadImageScale(currentAnimation, +v.toFixed(2));
-                      return (
-                        <div className="flex items-center justify-end gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head skin size</span>
-                          <button
-                            onClick={() => set(Math.max(0.3, curScale - 0.1))}
-                            disabled={curScale <= 0.3}
-                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                          >−</button>
-                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                            {Math.round(curScale * 100)}%
-                          </span>
-                          <button
-                            onClick={() => set(Math.min(3, curScale + 0.1))}
-                            disabled={curScale >= 3}
-                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                          >+</button>
-                        </div>
-                      );
-                    })()}
-                    {!hasOverride && (
-                      <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
-                        Upload a PNG that bakes the expression in (e.g. surprised face for Carry).
-                        Applies only to <span className="font-mono">{currentAnimation}</span>.
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
-
               {editAnimPose && !poseEditorOpen && (
                 <LayerOrderPanel
                   order={layerOrder}
