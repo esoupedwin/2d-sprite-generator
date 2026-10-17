@@ -23,6 +23,40 @@ function BigIconButton({ icon: Icon, label, active, activeClass, inactiveClass, 
   );
 }
 
+function normalizeHex(text) {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text.trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? m[1].split('').map(c => c + c).join('') : m[1];
+  return `#${h.toLowerCase()}`;
+}
+
+// Editable HEX field: commits on Enter/blur when valid, reverts otherwise.
+function HexInput({ value, onCommit }) {
+  const [draft, setDraft] = useState(null);
+  const commit = () => {
+    const hex = draft === null ? null : normalizeHex(draft);
+    if (hex && hex !== value.toLowerCase()) onCommit(hex);
+    setDraft(null);
+  };
+  return (
+    <input
+      type="text"
+      value={draft ?? value.toUpperCase()}
+      onChange={e => setDraft(e.target.value)}
+      onFocus={e => e.target.select()}
+      onBlur={commit}
+      onKeyDown={e => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
+      }}
+      spellCheck={false}
+      maxLength={7}
+      title="Edit HEX color"
+      className="font-mono text-xs tracking-wide w-[72px] bg-transparent border-0 border-b border-transparent hover:border-border focus:border-primary focus:outline-none p-0"
+    />
+  );
+}
+
 export const CharacterBuilder = memo(function CharacterBuilder({
   character, characters, activeCharId, currentAnimation,
   onPartChange, onColorChange, onScaleChange,
@@ -225,7 +259,7 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
       ) : (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/30" style={{ background: currentColor }} />
-          <span className="font-mono text-xs tracking-wide">{currentColor.toUpperCase()}</span>
+          <HexInput value={currentColor} onCommit={onColorChange} />
           {hasCustomColor && (
             <button
               onClick={() => onColorChange(null)}
