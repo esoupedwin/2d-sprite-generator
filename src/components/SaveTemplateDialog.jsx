@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 
-export function SaveTemplateDialog({ open, defaultName, title = 'Save as Template', inputLabel = 'Template name', onClose, onSave }) {
+export function SaveTemplateDialog({ open, defaultName, onClose, onSave }) {
+  const title = 'Save as Template', inputLabel = 'Template name';
   const [name, setName] = useState('');
   const inputRef = useRef(null);
 

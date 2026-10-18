@@ -59,9 +59,11 @@ export function LayerOrderPanel({
             )}
           >
             <span className="text-[9px] uppercase tracking-wider text-muted-foreground/50 w-4 tabular-nums">{i + 1}</span>
-            <span className={cn('flex-1 text-xs', isHiddenWeapon ? 'text-muted-foreground line-through' : 'text-foreground')}>
-              {LABELS[key] ?? key}
-              {isHiddenWeapon && <span className="ml-1.5 no-underline text-[9px] uppercase tracking-wider text-muted-foreground/70">hidden</span>}
+            {/* text-decoration propagates to descendants, so the strike lives on
+                its own span rather than the row label wrapper. */}
+            <span className={cn('flex-1 text-xs', isHiddenWeapon ? 'text-muted-foreground' : 'text-foreground')}>
+              <span className={cn(isHiddenWeapon && 'line-through')}>{LABELS[key] ?? key}</span>
+              {isHiddenWeapon && <span className="ml-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/70">hidden</span>}
             </span>
             <div className="flex items-center gap-0.5">
               {key === 'weapon' && hasWeapon && onToggleWeapon && (

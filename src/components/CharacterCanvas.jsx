@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
 import { ANIMATIONS, getPoseAtTime, resolveAnimation, keyframeTimeKey } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
-import { renderCharacter, MELEE_WEAPONS } from '../systems/Renderer.js';
+import { renderCharacter } from '../systems/Renderer.js';
 import {
   DEFAULT_SKINS, SKIN_COLORS, getSkin,
   renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
@@ -23,6 +23,7 @@ import { useImageDataUrl } from '../hooks/useImageDataUrl.js';
 // our chars) lands near the canvas vertical center. Tuned for the default
 // character proportions; works reasonably across the range.
 const ORIGIN_Y_OFFSET = 170;
+const EMPTY_RENDER_OPTS = Object.freeze({});
 const BASE_SCALE = 2.5;
 
 const VECTOR_HIT_PX = 10;
@@ -88,8 +89,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   canvasBg,
   gridSpacing,
   gridThickness,
-  partZOrder,
-  weaponHidden,
+  renderOpts,
 }, ref) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -202,8 +202,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.canvasBg           = canvasBg || '#FFE699';
   stateRef.current.gridSpacing        = gridSpacing || 50;
   stateRef.current.gridThickness      = gridThickness || 1;
-  stateRef.current.partZOrder         = partZOrder ?? null;
-  stateRef.current.weaponHidden       = !!weaponHidden;
+  // { animation, isMelee, partZOrder, hideWeapon } from resolveRenderOptions —
+  // spread into every renderCharacter call below.
+  stateRef.current.renderOpts         = renderOpts ?? EMPTY_RENDER_OPTS;
 
   // When a keyframe row is clicked, snap to its time and lock there.
   useEffect(() => {
@@ -242,9 +243,6 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   useEffect(() => {
     if (!ragdoll) setRagdollOverlay(o => Object.keys(o).length === 0 ? o : {});
   }, [ragdoll]);
-
-  // Toggling Edit Animation must not move the view: zoom/pan are left exactly
-  // as the user set them. (The Frame button re-centres on demand.)
 
   // (Body/head/weapon image decoding lives in useImageDataUrl above.)
 
@@ -420,10 +418,6 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const skins = s.cachedSkins;
 
     const drag = dragRef.current;
-    const weapon = s.character?.weapon;
-    const isMelee = MELEE_WEAPONS.has(weapon) ||
-      (s.customWeapons ?? []).some(w => w.key === weapon && MELEE_WEAPONS.has(w.template));
-
     // Onion skin: faint ghosts of the pose just before/after the playhead so
     // the user can judge spacing while paused in Edit Animation. Drawn behind
     // the live character; skipped during playback (would just smear).
@@ -439,10 +433,11 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         ctx.save();
         ctx.globalAlpha = 0.22;
         renderCharacter(ctx, s.character, gp, {
-          originX, originY, scale, skins, animation: s.currentAnimation,
+          originX, originY, scale, skins,
           bodyImage: bodyImageRef.current, headImage: headImageRef.current,
           weaponImage: weaponImageRef.current, accessoryImage: accessoryImageRef.current,
-          isMelee,
+          bodyAccessoryImage: bodyAccessoryImageRef.current,
+          ...s.renderOpts,
         });
         ctx.restore();
       };
@@ -459,15 +454,12 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       highlightBone: drag?.type === 'bone' ? drag.boneId
                    : (s.editAnimPose ? (s.activeKeyframe?.boneId ?? null) : null),
       skins,
-      animation:       s.currentAnimation,
       bodyImage:       bodyImageRef.current,
       headImage:       headImageRef.current,
       weaponImage:     weaponImageRef.current,
       accessoryImage:  accessoryImageRef.current,
       bodyAccessoryImage: bodyAccessoryImageRef.current,
-      isMelee,
-      partZOrder: s.partZOrder,
-      hideWeapon: s.weaponHidden,
+      ...s.renderOpts,
     });
 
     if (s.showVectors) {
@@ -534,7 +526,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
     // Weapon anchor + rotation handles (editAnimPose, weapon equipped and not
     // hidden for this animation)
-    if (s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none' && !s.weaponHidden) {
+    if (s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none' && !s.renderOpts.hideWeapon) {
       const hand = worldTransforms['right_hand'];
       if (hand) {
         const wo   = s.weaponOffset;

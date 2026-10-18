@@ -13,7 +13,7 @@ import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { SettingsDialog, DEFAULT_SETTINGS } from './components/SettingsDialog.jsx';
 import { PosePreviewDialog } from './components/PosePreviewDialog.jsx';
 import { LayerOrderPanel } from './components/LayerOrderPanel.jsx';
-import { defaultLayerOrder } from './systems/Renderer.js';
+import { defaultLayerOrder, resolveRenderOptions } from './systems/Renderer.js';
 import { AnimationCurvePanel } from './components/AnimationCurvePanel.jsx';
 import { WeaponUploadDialog } from './components/WeaponUploadDialog.jsx';
 import { AccessoryUploadDialog } from './components/AccessoryUploadDialog.jsx';
@@ -28,11 +28,11 @@ import {
   DEFAULT_WEAPON_ANIM_OFFSETS,
   DEFAULT_WEAPON_SCALES,
 } from './data/defaultBuild.js';
-import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, WEAPON_ANIMATION_SETS, resolveAnimation, getPoseAtTime } from './systems/AnimationSystem.js';
+import { ANIMATIONS, resolveAnimation, getPoseAtTime, defaultAnimationFor, visibleActions, hiddenActionCount, animTemplateFields } from './systems/AnimationSystem.js';
 import { exportSpriteSheet, exportAllActionSheets, exportCharactersSheets, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -42,32 +42,12 @@ import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
 import { genId } from './utils/genId.js';
 import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
 import { DEFAULT_ANIM_TEMPLATES } from './data/defaultAnimTemplates.js';
+import { withOptional, mergeFolders, uniqueFolderName, normalizeCharacters } from './utils/characters.js';
 import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
 const CHARS_STORAGE     = '2dsprite:characters';
 const FOLDERS_STORAGE   = '2dsprite:folders';
 
-// Character folders (one level). Membership is `character.folder` (a name);
-// this list carries the folder ORDER and lets empty folders exist. Any folder
-// named on a character but missing from the list is appended, so nothing is
-// ever orphaned.
-function mergeFolders(list, chars) {
-  const out = Array.isArray(list) ? list.filter(n => typeof n === 'string' && n.trim()) : [];
-  const seen = new Set(out);
-  for (const c of chars ?? []) {
-    const f = c?.folder;
-    if (typeof f === 'string' && f.trim() && !seen.has(f)) { seen.add(f); out.push(f); }
-  }
-  return out;
-}
-
-function uniqueFolderName(base, existing, skip = null) {
-  const taken = new Set(existing.filter(n => n !== skip));
-  if (!taken.has(base)) return base;
-  let i = 2;
-  while (taken.has(`${base} ${i}`)) i++;
-  return `${base} ${i}`;
-}
 const TEMPLATES_STORAGE = '2dsprite:templates';
 const SETTINGS_STORAGE  = '2dsprite:settings';
 
@@ -166,7 +146,7 @@ function newCharacter(name) {
 function loadCharactersFromStorage() {
   try {
     const arr = JSON.parse(localStorage.getItem(CHARS_STORAGE));
-    if (Array.isArray(arr) && arr.length > 0) return arr;
+    if (Array.isArray(arr) && arr.length > 0) return normalizeCharacters(arr);
   } catch {}
 
   // Migrate from old single-character format
@@ -219,16 +199,6 @@ function withTPose(char) {
   };
 }
 
-// Weapon-appropriate default animation for a character (e.g. pistol → pistol_idle).
-// Keeps the initial/selected animation consistent with the equipped weapon so
-// per-anim weapon offsets, head skins, and baked pose edits resolve correctly —
-// generic 'idle' isn't in a weapon's animation set and falls back to base data.
-function defaultAnimationFor(char) {
-  const weapon = char?.parts?.weapon;
-  const template = char?.customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
-  return WEAPON_DEFAULT_ANIMATIONS[template ?? 'none'] ?? 'idle';
-}
-
 function persistCharacters(chars) {
   try { localStorage.setItem(CHARS_STORAGE, JSON.stringify(chars)); } catch {}
   fetch('/api/characters', {
@@ -239,18 +209,20 @@ function persistCharacters(chars) {
 }
 
 export default function App() {
+  const [characters, setCharacters] = useState(() => {
+    return loadCharactersFromStorage() ?? [newCharacter('Character 1')];
+  });
+
+  // Folder ORDER (+ empty folders). `folderList` below adds any folder named on
+  // a character but missing here, so readers never see an orphaned name.
   const [folders, setFolders] = useState(() => {
-    let stored = [];
-    try { stored = JSON.parse(localStorage.getItem(FOLDERS_STORAGE) ?? '[]'); } catch {}
-    return mergeFolders(stored, loadCharactersFromStorage() ?? []);
+    try { return mergeFolders(JSON.parse(localStorage.getItem(FOLDERS_STORAGE) ?? '[]'), characters); }
+    catch { return mergeFolders([], characters); }
   });
   useEffect(() => {
     try { localStorage.setItem(FOLDERS_STORAGE, JSON.stringify(folders)); } catch {}
   }, [folders]);
-
-  const [characters, setCharacters] = useState(() => {
-    return loadCharactersFromStorage() ?? [newCharacter('Character 1')];
-  });
+  const folderList = useMemo(() => mergeFolders(folders, characters), [folders, characters]);
   const [activeCharId, setActiveCharId] = useState(() => characters[0]?.id ?? null);
 
   const [currentAnimation, setCurrentAnimation] = useState(() => defaultAnimationFor(characters[0]));
@@ -396,13 +368,6 @@ export default function App() {
     return () => clearTimeout(saveTimer.current);
   }, [characters]);
 
-  useEffect(() => {
-    setFolders(prev => {
-      const merged = mergeFolders(prev, characters);
-      return merged.length === prev.length ? prev : merged;
-    });
-  }, [characters]);
-
   // On mount: load from file — file wins over localStorage. If the user loads
   // a workspace JSON before this fetch resolves, the in-flight response is
   // dropped (otherwise the server's stale characters.json would clobber the
@@ -420,7 +385,7 @@ export default function App() {
       .then(data => {
         if (workspaceLoadedRef.current) return;
         if (Array.isArray(data) && data.length > 0) {
-          setCharacters(data);
+          setCharacters(normalizeCharacters(data));
           setActiveCharId(data[0].id);
           setCharsFileRev(r => r + 1);
           // Re-derive the weapon default from the file's data — localStorage may
@@ -461,54 +426,35 @@ export default function App() {
   // The character's own name (in-game / display), separate from the workspace
   // label `name`. Empty clears the field.
   const setCharacterDisplayName = useCallback((id, displayName) => {
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== id) return c;
-      const next = { ...c };
-      if (displayName) next.displayName = displayName;
-      else             delete next.displayName;
-      return next;
-    }));
+    setCharacters(prev => prev.map(c => (c.id === id ? withOptional(c, 'displayName', displayName.trim()) : c)));
   }, []);
 
   // ── Folders (one level) ──────────────────────────────────────────────────────
   // Returns the new folder's name so the manager can open it for renaming.
   const addFolder = useCallback(() => {
-    const name = uniqueFolderName('New Folder', folders);
-    setFolders(prev => prev.includes(name) ? prev : [...prev, name]);
+    const name = uniqueFolderName('New Folder', folderList);
+    setFolders(prev => [...prev, name]);
     return name;
-  }, [folders]);
+  }, [folderList]);
 
   const renameFolder = useCallback((oldName, newName) => {
     const trimmed = (newName ?? '').trim();
     if (!trimmed || trimmed === oldName) return;
-    let finalName = trimmed;
-    setFolders(prev => {
-      finalName = uniqueFolderName(trimmed, prev, oldName);
-      return prev.map(n => n === oldName ? finalName : n);
-    });
+    // Resolve the final (de-duplicated) name once, up front, so the folder
+    // list and the characters are guaranteed to agree on it.
+    const finalName = uniqueFolderName(trimmed, folderList, oldName);
+    setFolders(prev => (prev.includes(oldName) ? prev.map(n => n === oldName ? finalName : n) : [...prev, finalName]));
     setCharacters(prev => prev.map(c => c.folder === oldName ? { ...c, folder: finalName } : c));
-  }, []);
+  }, [folderList]);
 
   // Removing a folder only ungroups its characters.
   const deleteFolder = useCallback((name) => {
     setFolders(prev => prev.filter(n => n !== name));
-    setCharacters(prev => prev.map(c => {
-      if (c.folder !== name) return c;
-      const next = { ...c };
-      delete next.folder;
-      return next;
-    }));
+    setCharacters(prev => prev.map(c => withOptional(c, 'folder', c.folder === name ? null : c.folder)));
   }, []);
 
   const setCharacterFolder = useCallback((id, name) => {
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== id) return c;
-      if ((c.folder ?? null) === (name ?? null)) return c;
-      const next = { ...c };
-      if (name) next.folder = name;
-      else      delete next.folder;
-      return next;
-    }));
+    setCharacters(prev => prev.map(c => (c.id === id ? withOptional(c, 'folder', name) : c)));
   }, []);
 
   // Move character `id` so it lands at `toIndex` (index in the list before removal).
@@ -834,13 +780,9 @@ export default function App() {
   // Per-animation weapon visibility. Only `true` entries are stored
   // (animWeaponHidden[animId]); absent = weapon drawn as usual.
   const setAnimWeaponHidden = useCallback((hidden) => {
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== activeCharId) return c;
-      const map = { ...(c.animWeaponHidden ?? {}) };
-      if (hidden) map[currentAnimation] = true;
-      else        delete map[currentAnimation];
-      return { ...c, animWeaponHidden: map };
-    }));
+    setCharacters(prev => prev.map(c => (c.id === activeCharId
+      ? { ...c, animWeaponHidden: withOptional(c.animWeaponHidden ?? {}, currentAnimation, hidden) }
+      : c)));
   }, [activeCharId, currentAnimation]);
 
   // Per-keyframe override: replace a specific (anim, bone, time) keyframe's
@@ -1028,10 +970,7 @@ export default function App() {
   const confirmSaveTemplate = useCallback((name) => {
     if (!saveTemplateDialog) return;
     const { resolved } = saveTemplateDialog;
-    setAnimTemplates(prev => [...prev, {
-      id: genId(), name, duration: resolved.duration,
-      loop: resolved.loop, tracks: resolved.tracks,
-    }]);
+    setAnimTemplates(prev => [...prev, { id: genId(), ...animTemplateFields({ ...resolved, name }) }]);
     setSaveTemplateDialog(null);
   }, [saveTemplateDialog]);
 
@@ -1045,14 +984,11 @@ export default function App() {
     [animTemplates],
   );
 
-  // A template contributes bone motion only (duration, loop, tracks). The new
+  // A template contributes bone motion only (animTemplateFields). The new
   // action takes the template's name as-is and inherits nothing else — the
   // character keeps its own skins, images, layer order and weapon settings.
   const createAnimFromTemplate = useCallback((template) => {
-    const newAnim = {
-      id: genId(), name: template.name, custom: true,
-      duration: template.duration, loop: template.loop, tracks: template.tracks,
-    };
+    const newAnim = { id: genId(), custom: true, ...animTemplateFields(template) };
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, customAnimations: [...(c.customAnimations ?? []), newAnim] } : c
     ));
@@ -1189,11 +1125,7 @@ export default function App() {
   // ANIMATIONS entry and any baked custom shadowing it are left intact).
   const deleteAnimation = useCallback((animId) => {
     const char = characters.find(c => c.id === activeCharId);
-    const weapon = char?.parts?.weapon;
-    const template = char?.customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
-    const allowed = WEAPON_ANIMATION_SETS[template ?? 'none'] ?? WEAPON_ANIMATION_SETS.none;
-    const hidden = new Set([...(char?.hiddenAnimations ?? []), animId]);
-    const fallback = allowed.find(k => !hidden.has(k)) ?? 'idle';
+    const fallback = visibleActions(char).find(a => a.id !== animId)?.id ?? 'idle';
 
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
@@ -1240,7 +1172,7 @@ export default function App() {
   const loadWorkspace = useCallback(({ characters: newChars, activeCharId: newActive, uiState, folders: newFolders, animTemplates: newTemplates, settings: newSettings }) => {
     if (!Array.isArray(newChars) || newChars.length === 0) return;
     workspaceLoadedRef.current = true;
-    setCharacters(newChars);
+    setCharacters(normalizeCharacters(newChars));
     setFolders(mergeFolders(newFolders, newChars));
     // Templates/settings are only replaced when the file carries them (v2+);
     // settings merge over defaults so a partial object can't drop keys.
@@ -1307,9 +1239,12 @@ export default function App() {
   );
   // Per-animation layer z-order override (null = default). `layerOrder` is the
   // resolved back → front order used by both the render and the editor panel.
-  const partZOrder = (activeChar.animPartZOrder ?? EMPTY_OBJ)[currentAnimation] ?? null;
+  const renderOpts = useMemo(() => resolveRenderOptions(activeChar, currentAnimation), [activeChar, currentAnimation]);
+  const { partZOrder, hideWeapon: weaponHidden } = renderOpts;
   const layerOrder = partZOrder ?? defaultLayerOrder(activeChar.parts.weapon);
-  const weaponHidden = !!(activeChar.animWeaponHidden ?? EMPTY_OBJ)[currentAnimation];
+  // ACTIONS panel data — the same selector the sheet exporter uses.
+  const actions     = useMemo(() => visibleActions(activeChar), [activeChar]);
+  const hiddenCount = useMemo(() => hiddenActionCount(activeChar), [activeChar]);
   const curveAnimKeyframeOverrides = (activeChar.animKeyframeOverrides ?? EMPTY_OBJ)[currentAnimation] ?? EMPTY_OBJ;
   const curveAnimation = useMemo(
     () => resolveAnimation(
@@ -1353,7 +1288,7 @@ export default function App() {
           </Tabs>
           <WorkspaceMenu
             characters={characters}
-            folders={folders}
+            folders={folderList}
             animTemplates={animTemplates}
             settings={settings}
             activeCharId={activeCharId}
@@ -1394,7 +1329,7 @@ export default function App() {
             onDeleteCharacter={deleteCharacter}
             onRenameCharacter={renameCharacter}
             onDisplayNameChange={setCharacterDisplayName}
-            folders={folders}
+            folders={folderList}
             onAddFolder={addFolder}
             onRenameFolder={renameFolder}
             onDeleteFolder={deleteFolder}
@@ -1685,13 +1620,10 @@ export default function App() {
             <div className="mt-3">
               <AnimationControls
                 currentAnimation={currentAnimation}
-                weapon={activeChar.parts.weapon}
-                customWeapons={activeChar.customWeapons}
+                actions={actions}
+                hiddenCount={hiddenCount}
                 characterName={activeChar.name}
                 editAnimPose={editAnimPose}
-                customAnimations={activeChar.customAnimations}
-                animationLabels={activeChar.animationLabels}
-                hiddenAnimations={activeChar.hiddenAnimations}
                 poseEditorOpen={poseEditorOpen}
                 onAnimationChange={handleAnimationChange}
                 onNewAnimation={() => setNewAnimDialogOpen(true)}
@@ -1777,8 +1709,7 @@ export default function App() {
                 canvasBg={settings.canvasBg}
                 gridSpacing={settings.gridSpacing}
                 gridThickness={settings.gridThickness}
-                partZOrder={partZOrder}
-                weaponHidden={weaponHidden}
+                renderOpts={renderOpts}
               />
           </main>
 
@@ -1812,7 +1743,7 @@ export default function App() {
                   animationName={currentAnimation}
                   onChange={setAnimPartZOrder}
                   onReset={resetAnimPartZOrder}
-                  hasWeapon={activeChar.parts.weapon !== 'none'}
+                  hasWeapon={hasWeapon(activeChar)}
                   weaponHidden={weaponHidden}
                   onToggleWeapon={() => setAnimWeaponHidden(!weaponHidden)}
                 />
@@ -1950,7 +1881,7 @@ export default function App() {
       <FolderExportDialog
         open={folderExportOpen}
         characters={characters}
-        folders={folders}
+        folders={folderList}
         defaultFolder={activeChar.folder ?? null}
         onExport={({ characters: chars, ...opts }) => exportCharactersSheets(chars, opts)}
         onClose={() => setFolderExportOpen(false)}

@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Copy, Folder, FolderPlus, GripVertical, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Input } from '@/components/ui/input.jsx';
+import { RenameInput } from '@/components/ui/rename-input.jsx';
+import { useEscapeToClose } from '@/lib/useEscapeToClose.js';
 import { cn } from '@/lib/utils.js';
+import { folderOf } from '../utils/characters.js';
 import { ConfirmDialog } from './ConfirmDialog.jsx';
+
+const ROW_INPUT = 'h-7 text-sm px-2 w-full rounded-md';
 
 /**
  * Character manager with ONE level of folders.
@@ -21,11 +25,8 @@ export function CharacterManagerDialog({
   onSelect, onAdd, onDelete, onRename, onDuplicate, onReorder,
   folders = [], onAddFolder, onRenameFolder, onDeleteFolder, onSetCharacterFolder,
 }) {
-  const [editingId, setEditingId] = useState(null);
-  const [editName, setEditName]   = useState('');
-  // Folder being renamed (by name) + its draft.
-  const [editingFolder, setEditingFolder] = useState(null);
-  const [folderDraft, setFolderDraft]     = useState('');
+  const [editingId, setEditingId]         = useState(null); // character being renamed
+  const [editingFolder, setEditingFolder] = useState(null); // folder (by name) being renamed
   const [collapsed, setCollapsed]         = useState(() => new Set());
   // Drag state: the character id being dragged and where it would land.
   //   { type:'row', index, before }  — global index + above/below the hovered row
@@ -36,13 +37,8 @@ export function CharacterManagerDialog({
   // Pending delete awaiting confirmation: { id, name } | null.
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  useEffect(() => {
-    if (!open) return;
-    // While the delete confirmation is up, Escape belongs to it, not to us.
-    const onKey = (e) => { if (e.key === 'Escape' && !deleteTarget) onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose, deleteTarget]);
+  // While the delete confirmation is up, Escape belongs to it, not to us.
+  useEscapeToClose(open, onClose, !!deleteTarget);
 
   useEffect(() => {
     if (!open) {
@@ -52,38 +48,22 @@ export function CharacterManagerDialog({
 
   if (!open) return null;
 
-  const hasFolders = folders.length > 0;
-  const folderNames = new Set(folders);
-  // Characters whose folder no longer exists are shown at root.
-  const folderOf = (c) => (c.folder && folderNames.has(c.folder)) ? c.folder : null;
-  const indexOf  = (id) => characters.findIndex(c => c.id === id);
+  const indexOf = (id) => characters.findIndex(c => c.id === id);
+  const groupOf = (c) => folderOf(c, folders);
 
-  // ── Character rename ──
-  const startEdit = (char, e) => {
-    e.stopPropagation();
-    setEditingId(char.id);
-    setEditName(char.name);
-  };
-  const commitEdit = (id) => {
-    const trimmed = editName.trim();
+  const commitName = (id, value) => {
+    const trimmed = value.trim();
     if (trimmed) onRename(id, trimmed);
     setEditingId(null);
   };
-
-  // ── Folder rename / create / delete ──
-  const startFolderEdit = (name, e) => {
-    e?.stopPropagation();
-    setEditingFolder(name);
-    setFolderDraft(name);
-  };
-  const commitFolderEdit = () => {
-    const trimmed = folderDraft.trim();
-    if (editingFolder != null && trimmed && trimmed !== editingFolder) onRenameFolder?.(editingFolder, trimmed);
+  const commitFolderName = (name, value) => {
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== name) onRenameFolder?.(name, trimmed);
     setEditingFolder(null);
   };
   const addFolder = () => {
     const name = onAddFolder?.();
-    if (name) startFolderEdit(name);
+    if (name) setEditingFolder(name);
   };
   const toggleCollapsed = (name) => setCollapsed(prev => {
     const next = new Set(prev);
@@ -93,31 +73,18 @@ export function CharacterManagerDialog({
 
   // ── Drag & drop ──
   const endDrag = () => { setDragId(null); setDropTarget(null); };
-
+  const sameTarget = (a, b) => a?.type === b.type && a?.index === b.index && a?.before === b.before && a?.name === b.name;
+  /** dragover handler for any drop target: accept the drop and remember where it would land. */
+  const over = (e, target) => {
+    if (!dragId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (!sameTarget(dropTarget, target)) setDropTarget(target);
+  };
   const overRow = (e, index) => {
-    if (!dragId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
     const rect = e.currentTarget.getBoundingClientRect();
-    const before = e.clientY < rect.top + rect.height / 2;
-    if (dropTarget?.type !== 'row' || dropTarget.index !== index || dropTarget.before !== before) {
-      setDropTarget({ type: 'row', index, before });
-    }
-  };
-  const overFolder = (e, name) => {
-    if (!dragId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    if (dropTarget?.type !== 'folder' || dropTarget.name !== name) setDropTarget({ type: 'folder', name });
-  };
-  const overRoot = (e) => {
-    if (!dragId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    if (dropTarget?.type !== 'root') setDropTarget({ type: 'root' });
+    over(e, { type: 'row', index, before: e.clientY < rect.top + rect.height / 2 });
   };
 
   const handleDrop = (e) => {
@@ -125,15 +92,14 @@ export function CharacterManagerDialog({
     e.stopPropagation();
     if (dragId && dropTarget) {
       if (dropTarget.type === 'row') {
-        const target = characters[dropTarget.index];
         onReorder?.(dragId, dropTarget.before ? dropTarget.index : dropTarget.index + 1);
-        onSetCharacterFolder?.(dragId, target ? folderOf(target) : null);
+        onSetCharacterFolder?.(dragId, groupOf(characters[dropTarget.index]));
       } else if (dropTarget.type === 'folder') {
         // Park it after the folder's last member so it reads as "appended".
-        const members = characters.filter(c => folderOf(c) === dropTarget.name && c.id !== dragId);
+        const members = characters.filter(c => groupOf(c) === dropTarget.name && c.id !== dragId);
         if (members.length) onReorder?.(dragId, indexOf(members[members.length - 1].id) + 1);
         onSetCharacterFolder?.(dragId, dropTarget.name);
-      } else if (dropTarget.type === 'root') {
+      } else {
         onSetCharacterFolder?.(dragId, null);
       }
     }
@@ -203,21 +169,15 @@ export function CharacterManagerDialog({
           <span className="w-[18px] shrink-0" />
         )}
         {isEditing ? (
-          <Input
-            autoFocus
-            value={editName}
-            onChange={e => setEditName(e.target.value)}
-            onBlur={() => commitEdit(char.id)}
-            onKeyDown={e => {
-              if (e.key === 'Enter')  commitEdit(char.id);
-              if (e.key === 'Escape') setEditingId(null);
-            }}
-            onClick={e => e.stopPropagation()}
-            className="h-7 text-sm px-2"
+          <RenameInput
+            initialValue={char.name}
+            onCommit={v => commitName(char.id, v)}
+            onCancel={() => setEditingId(null)}
+            className={ROW_INPUT}
           />
         ) : (
           <span
-            onDoubleClick={e => startEdit(char, e)}
+            onDoubleClick={e => { e.stopPropagation(); setEditingId(char.id); }}
             title="Double-click to rename"
             className={cn('flex-1 text-sm truncate select-none', isActive && 'font-semibold text-foreground')}
           >
@@ -229,7 +189,7 @@ export function CharacterManagerDialog({
         )}
         <div className="flex gap-0.5">
           <button
-            onClick={e => { e.stopPropagation(); startEdit(char, e); }}
+            onClick={e => { e.stopPropagation(); setEditingId(char.id); }}
             title="Rename"
             className="text-muted-foreground hover:text-foreground hover:bg-white/10 rounded p-1 transition-colors"
           >
@@ -257,14 +217,14 @@ export function CharacterManagerDialog({
   };
 
   const renderFolder = (name) => {
-    const members    = characters.filter(c => folderOf(c) === name);
+    const members    = characters.filter(c => groupOf(c) === name);
     const isOpen     = !collapsed.has(name);
     const isEditing  = editingFolder === name;
     const isDropHere = dragId && dropTarget?.type === 'folder' && dropTarget.name === name;
     return (
       <div key={`folder:${name}`} className="flex flex-col gap-1">
         <div
-          onDragOver={e => overFolder(e, name)}
+          onDragOver={e => over(e, { type: 'folder', name })}
           onDrop={handleDrop}
           onClick={() => !isEditing && toggleCollapsed(name)}
           className={cn(
@@ -277,21 +237,15 @@ export function CharacterManagerDialog({
             : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
           <Folder className="h-3.5 w-3.5 text-amber-400/80 shrink-0" />
           {isEditing ? (
-            <Input
-              autoFocus
-              value={folderDraft}
-              onChange={e => setFolderDraft(e.target.value)}
-              onBlur={commitFolderEdit}
-              onKeyDown={e => {
-                if (e.key === 'Enter')  commitFolderEdit();
-                if (e.key === 'Escape') setEditingFolder(null);
-              }}
-              onClick={e => e.stopPropagation()}
-              className="h-7 text-sm px-2"
+            <RenameInput
+              initialValue={name}
+              onCommit={v => commitFolderName(name, v)}
+              onCancel={() => setEditingFolder(null)}
+              className={ROW_INPUT}
             />
           ) : (
             <span
-              onDoubleClick={e => startFolderEdit(name, e)}
+              onDoubleClick={e => { e.stopPropagation(); setEditingFolder(name); }}
               title="Double-click to rename folder"
               className="flex-1 text-sm font-medium text-foreground truncate"
             >
@@ -301,7 +255,7 @@ export function CharacterManagerDialog({
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground tabular-nums">{members.length}</span>
           <div className="flex gap-0.5 ml-1">
             <button
-              onClick={e => startFolderEdit(name, e)}
+              onClick={e => { e.stopPropagation(); setEditingFolder(name); }}
               title="Rename folder"
               className="text-muted-foreground hover:text-foreground hover:bg-white/10 rounded p-1 transition-colors"
             >
@@ -319,7 +273,7 @@ export function CharacterManagerDialog({
         {isOpen && members.map(c => renderCharacterRow(c, { indent: true }))}
         {isOpen && members.length === 0 && (
           <div
-            onDragOver={e => overFolder(e, name)}
+            onDragOver={e => over(e, { type: 'folder', name })}
             onDrop={handleDrop}
             className={cn(
               'ml-5 px-3 py-2 rounded border border-dashed text-[11px] text-muted-foreground/60',
@@ -333,7 +287,7 @@ export function CharacterManagerDialog({
     );
   };
 
-  const rootChars  = characters.filter(c => folderOf(c) === null);
+  const rootChars  = characters.filter(c => groupOf(c) === null);
   const isDropRoot = dragId && dropTarget?.type === 'root';
 
   return (
@@ -366,9 +320,9 @@ export function CharacterManagerDialog({
         >
           {folders.map(renderFolder)}
 
-          {hasFolders && (
+          {folders.length > 0 && (
             <div
-              onDragOver={overRoot}
+              onDragOver={e => over(e, { type: 'root' })}
               onDrop={handleDrop}
               className={cn(
                 'mt-1 px-2 py-1 rounded border text-[10px] uppercase tracking-wider select-none transition-colors',
@@ -380,7 +334,7 @@ export function CharacterManagerDialog({
             </div>
           )}
           {rootChars.map(c => renderCharacterRow(c, { indent: false }))}
-          {hasFolders && rootChars.length === 0 && (
+          {folders.length > 0 && rootChars.length === 0 && (
             <div className="px-3 py-1 text-[11px] text-muted-foreground/50">All characters are in folders.</div>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { useState, useRef, memo } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { CharacterManagerDialog } from './CharacterManagerDialog.jsx';
 import { Separator } from '@/components/ui/separator';
@@ -73,6 +73,15 @@ export const CharacterBuilder = memo(function CharacterBuilder({
   const [managerOpen, setManagerOpen] = useState(false);
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
 
+  // Display name is edited in a local draft and committed on blur/Enter: every
+  // characters-state change re-persists the whole (image-laden) character set,
+  // so per-keystroke writes would hitch the canvas.
+  const [nameDraft, setNameDraft] = useState(activeChar?.displayName ?? '');
+  useEffect(() => { setNameDraft(activeChar?.displayName ?? ''); }, [activeCharId, activeChar?.displayName]);
+  const commitDisplayName = () => {
+    if (activeChar && nameDraft !== (activeChar.displayName ?? '')) onDisplayNameChange?.(activeChar.id, nameDraft);
+  };
+
   return (
     <aside className="w-72 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-1">
       <div className="flex flex-col gap-1.5 pb-1">
@@ -99,8 +108,10 @@ export const CharacterBuilder = memo(function CharacterBuilder({
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">Name</span>
           <input
             type="text"
-            value={activeChar?.displayName ?? ''}
-            onChange={e => activeChar && onDisplayNameChange?.(activeChar.id, e.target.value)}
+            value={nameDraft}
+            onChange={e => setNameDraft(e.target.value)}
+            onBlur={commitDisplayName}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
             placeholder="Character name"
             maxLength={60}
             spellCheck={false}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS, FRAME_PX } from '../utils/spriteExportConfig.js';
+import { MIN_FRAMES, MAX_FRAMES, DEFAULT_FRAMES, SHEET_COLS, FRAME_PX, clampFrames } from '../utils/spriteExportConfig.js';
 
 // A labelled on/off switch row used for the split-export options.
 function SplitToggle({ checked, onToggle, label, desc }) {
@@ -58,7 +58,7 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
 
   if (!open) return null;
 
-  const fc   = Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, frameCount));
+  const fc   = clampFrames(frameCount);
   const cols = Math.min(fc, SHEET_COLS);
   const rows = Math.ceil(fc / cols);
 
@@ -118,9 +118,7 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
               value={frameCount}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                if (Number.isFinite(v)) {
-                  setFrameCount(Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, v)));
-                }
+                if (Number.isFinite(v)) setFrameCount(clampFrames(v));
               }}
               className="w-[64px] h-[26px] rounded-sm border border-border bg-secondary text-foreground text-xs text-center font-mono focus:outline-none focus:border-emerald-500"
             />

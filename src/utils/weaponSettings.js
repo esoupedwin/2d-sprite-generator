@@ -70,3 +70,26 @@ export function resolveBodyAccessoryOffset(parts, animation) {
       ?? parts.bodyAccessoryOffset
       ?? ZERO_OFFSET;
 }
+
+// ── Weapon TYPE ───────────────────────────────────────────────────────────────
+// `parts.weapon` is either a built-in key ('sword', 'rifle', …, 'none') or a
+// legacy custom key ('cw_…') whose behaviour comes from its `template`. Every
+// caller resolves the type through these — never inline the `customWeapons`
+// lookup again.
+
+export const MELEE_WEAPONS = new Set(['sword']);
+
+/** The built-in weapon key that drives this character's animation set and melee rules. */
+export function resolveWeaponTemplate(character) {
+  const weapon = character?.parts?.weapon ?? 'none';
+  return character?.customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
+}
+
+export function isMeleeWeapon(character) {
+  return MELEE_WEAPONS.has(resolveWeaponTemplate(character));
+}
+
+export function hasWeapon(character) {
+  const w = character?.parts?.weapon;
+  return !!w && w !== 'none';
+}

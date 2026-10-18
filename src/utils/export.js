@@ -1,4 +1,4 @@
-import { WEAPON_ANIMATION_SETS, ANIMATIONS, getPoseAtTime, resolveAnimation } from '../systems/AnimationSystem.js';
+import { ANIMATIONS, getPoseAtTime, resolveAnimation, animationLabel, visibleActions } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import {
   computeSkinBounds,
@@ -7,7 +7,9 @@ import {
   LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
 } from '../systems/SkinSystem.js';
 import { DEFAULT_SKINS, getSkin } from '../systems/VectorEditor.js';
-import { renderCharacter, renderPartGroup, MELEE_WEAPONS } from '../systems/Renderer.js';
+import { renderCharacter, renderPartGroup, resolveRenderOptions } from '../systems/Renderer.js';
+import { uniqueName } from './names.js';
+import { characterLabel } from './characters.js';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
 import {
@@ -25,13 +27,9 @@ const EXPORT_PIXEL_RATIO = FRAME_PX / FRAME_W;
 // Per-animation head PNG override falls back to the character-wide head
 // PNG. Mirrors the live-canvas resolution in CharacterCanvas.jsx.
 // Resolve the human-readable label for an animation: per-character override
-// (animationLabels) → custom animation name → built-in name → raw id.
-// Used for export file names so that renamed chips produce matching files.
-function resolveAnimLabel(character, animationName) {
-  return character?.animationLabels?.[animationName]
-      ?? character?.customAnimations?.find(a => a.id === animationName)?.name
-      ?? ANIMATIONS[animationName]?.name
-      ?? animationName;
+/** Strips trailing slashes/backslashes from a directory path. */
+export function trimTrailingSlashes(dir) {
+  return String(dir).replace(/[\\/]+$/, '');
 }
 
 function sanitizeFileName(s) {
@@ -46,7 +44,7 @@ function sanitizeFileName(s) {
 // If the sanitized action label already starts with the weapon name, the
 // weapon prefix is omitted to avoid duplication like `sniper_sniper_walk`.
 function exportFileBase(character, animationName) {
-  const action = sanitizeFileName(resolveAnimLabel(character, animationName));
+  const action = sanitizeFileName(animationLabel(character, animationName));
   const weaponKey = character?.parts?.weapon ?? 'none';
   const customW   = character?.customWeapons?.find(w => w.key === weaponKey);
   const weaponName = customW?.label ?? customW?.template ?? weaponKey;
@@ -90,7 +88,8 @@ function resolveAnimWithOffsets(character, animationName) {
 // Preloads body/head/weapon PNGs and builds the skin-template map.
 // Returns synchronously-usable HTMLImageElements (or null on load failure)
 // plus the resolved `parts` and `skins` objects.
-async function loadRenderAssets(character, animationName) {
+// Decodes the character's PNGs once; the result is independent of the animation.
+async function loadRenderAssets(character) {
   const skinOverrides = character.skinOverrides ?? {};
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
@@ -128,18 +127,20 @@ async function loadRenderAssets(character, animationName) {
  *   duration, loop,    // for playback timing in the preview
  * }
  */
-export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = null } = {}) {
+export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = null, assets = null } = {}) {
   if (!character) return null;
 
   // Resolve animation + persistent offsets; preload PNGs and build skin map.
   // Per-keyframe overrides are folded in via resolveAnimation so exported
   // frames match the live preview. Ragdoll overlay is ephemeral and excluded.
+  // `assets` lets a caller rendering several sheets of the same action reuse
+  // one loadRenderAssets() result instead of decoding every PNG again.
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character, animationName);
-  const isMelee = MELEE_WEAPONS.has(parts.weapon) ||
-    (character.customWeapons ?? []).some(w => w.key === parts.weapon && MELEE_WEAPONS.has(w.template));
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } =
+    assets ?? await loadRenderAssets(character);
+  const renderOpts = resolveRenderOptions(character, animationName);
 
   const cols = Math.min(frameCount, SHEET_COLS);
   const rows = Math.ceil(frameCount / cols);
@@ -178,16 +179,13 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       originY:   FRAME_ORIGIN_Y,
       scale:     FRAME_SCALE,
       skins,
-      animation: animationName,
       bodyImage,
       headImage,
       weaponImage,
       accessoryImage,
       bodyAccessoryImage,
-      isMelee,
       partsFilter,
-      partZOrder: character.animPartZOrder?.[animationName] ?? null,
-      hideWeapon: !!character.animWeaponHidden?.[animationName],
+      ...renderOpts,
     });
     ctx.restore();
   }
@@ -298,9 +296,7 @@ async function renderPoseBase(character, animationName, currentTime) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character, animationName);
-  const isMelee = MELEE_WEAPONS.has(parts.weapon) ||
-    (character.customWeapons ?? []).some(w => w.key === parts.weapon && MELEE_WEAPONS.has(w.template));
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character);
 
   const big = document.createElement('canvas');
   big.width  = RENDER_W * POSE_PIXEL_RATIO;
@@ -315,15 +311,12 @@ async function renderPoseBase(character, animationName, currentTime) {
     originY: RENDER_ORIGIN_Y,
     scale:   POSE_SCALE,
     skins,
-    animation: animationName,
     bodyImage,
     headImage,
     weaponImage,
     accessoryImage,
     bodyAccessoryImage,
-    isMelee,
-    partZOrder: character.animPartZOrder?.[animationName] ?? null,
-    hideWeapon: !!character.animWeaponHidden?.[animationName],
+    ...resolveRenderOptions(character, animationName),
   });
 
   const b = contentBoundsDevice(ctx, big.width, big.height);
@@ -532,12 +525,13 @@ export async function exportPartsSheetSVG(character, animationName, currentTime 
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character, animationName);
-  const imgOpts = { skins, bodyImage, headImage, weaponImage, accessoryImage, animation: animationName };
+  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character);
+  const renderOpts = resolveRenderOptions(character, animationName);
+  const imgOpts = { skins, bodyImage, headImage, weaponImage, accessoryImage, ...renderOpts };
 
   // Build label for weapon from part definition
   const groups = SHEET_GROUPS
-    .filter(g => g.id !== 'weapon' || (parts.weapon !== 'none' && !character.animWeaponHidden?.[animationName]))
+    .filter(g => g.id !== 'weapon' || (parts.weapon !== 'none' && !renderOpts.hideWeapon))
     .map(g => ({
       ...g,
       label: g.label ?? CHARACTER_PARTS.weapon?.options[parts.weapon]?.label ?? 'Weapon',
@@ -621,47 +615,62 @@ function download(href, filename) {
 // Body = head + torso/arms/weapon/accessories (everything but the legs), so the
 // two sheets overlay at identical frame coords in-game.
 
-/** The actions a character shows in its ACTIONS panel: its weapon set minus hidden, then its own. */
+const SHEET_GROUPS_PER_ACTION = [
+  { name: 'body', partsFilter: { others: true,  legs: false, head: true  } },
+  { name: 'legs', partsFilter: { others: false, legs: true,  head: false } },
+];
+export const SHEETS_PER_ACTION = SHEET_GROUPS_PER_ACTION.length;
+
+/**
+ * The character's visible actions (same list as the ACTIONS panel) with the
+ * file name each exports to. Two actions can share a label (e.g. "Carry" added
+ * twice from the same template); the later one gets a numbered file so neither
+ * is lost.
+ */
 export function listExportableActions(character) {
-  const weapon   = character?.parts?.weapon ?? 'none';
-  const template = character?.customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
-  const allowed  = WEAPON_ANIMATION_SETS[template] ?? WEAPON_ANIMATION_SETS.none;
-  const hidden   = new Set(character?.hiddenAnimations ?? []);
-  const out = [];
-  const seen = new Set();
-  const push = (id, label) => {
-    const file = sanitizeFileName(resolveAnimLabel(character, id) ?? label);
-    const key = file; // one file per label — a renamed duplicate would overwrite
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({ id, label: resolveAnimLabel(character, id) ?? label, file });
-  };
-  for (const id of allowed) if (ANIMATIONS[id] && !hidden.has(id)) push(id, ANIMATIONS[id].name);
-  for (const a of character?.customAnimations ?? []) if (!ANIMATIONS[a.id]) push(a.id, a.name);
-  return out;
+  const taken = new Set();
+  return visibleActions(character).map(a => {
+    const file = uniqueName(sanitizeFileName(a.label), taken);
+    taken.add(file);
+    return { ...a, file };
+  });
+}
+
+export function countActionSheets(character) {
+  return visibleActions(character).length * SHEETS_PER_ACTION;
 }
 
 /** `<character folder>/<character>` (folder level omitted when the character isn't in one). */
 export function batchExportRelativeDir(character) {
-  const who = sanitizeFileName(character?.displayName || character?.name || 'character');
+  const who = sanitizeFileName(characterLabel(character));
   const folder = character?.folder ? sanitizeFileName(character.folder) : null;
   return folder ? `${folder}/${who}` : who;
 }
 
-export async function fetchDefaultExportDir() {
-  try {
-    const r = await fetch('/api/export-sprites');
-    if (!r.ok) return '';
-    return (await r.json())?.defaultDir ?? '';
-  } catch { return ''; }
+// The Downloads path never changes within a session — one request, shared by
+// both export dialogs.
+let defaultExportDirPromise = null;
+export function fetchDefaultExportDir() {
+  return (defaultExportDirPromise ??= fetch('/api/export-sprites')
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => j?.defaultDir ?? '')
+    .catch(() => ''));
 }
 
+const canvasToPngBlob = (canvas) => new Promise((resolve, reject) =>
+  canvas.toBlob(b => (b ? resolve(b) : reject(new Error('PNG encode failed'))), 'image/png'));
+
+/** Uploads one sheet as raw PNG bytes; root/relPath travel in headers (no base64, no JSON copy). */
 async function postSheet(root, relPath, canvas) {
-  const dataUrl = canvas.toDataURL('image/png');
+  const blob = await canvasToPngBlob(canvas);
   const r = await fetch('/api/export-sprites', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ root, relPath, dataUrl }),
+    headers: {
+      'Content-Type': 'image/png',
+      'X-Export-Root': encodeURIComponent(root),
+      'X-Export-Path': encodeURIComponent(relPath),
+    },
+    body: blob,
   });
   const body = await r.json().catch(() => ({}));
   if (!r.ok || !body.ok) throw new Error(body.error ?? `server responded ${r.status}`);
@@ -671,30 +680,35 @@ async function postSheet(root, relPath, canvas) {
 /**
  * Exports every visible action as body + legs sheets into `root`.
  * onProgress({ done, total, label }) is called before each file is written.
+ * `relDir` overrides the character's own `<folder>/<name>` directory (used by
+ * the multi-character export to keep same-named characters apart).
+ * Uploads overlap with the next render: a sheet is posted while the following
+ * one is being drawn, and the previous upload is awaited before the next is
+ * sent so failures still surface in order.
  * Resolves { written, root } or throws on the first failure.
  */
-export async function exportAllActionSheets(character, { frameCount = DEFAULT_FRAMES, root, onProgress } = {}) {
+export async function exportAllActionSheets(character, { frameCount = DEFAULT_FRAMES, root, onProgress, relDir = null } = {}) {
   if (!character) throw new Error('no character');
   if (!root) throw new Error('no output folder');
   const actions = listExportableActions(character);
-  const dir     = batchExportRelativeDir(character);
-  const groups  = [
-    { name: 'body', partsFilter: { others: true,  legs: false, head: true  } },
-    { name: 'legs', partsFilter: { others: false, legs: true,  head: false } },
-  ];
-  const total = actions.length * groups.length;
-  let done = 0, written = 0;
+  const dir     = relDir ?? batchExportRelativeDir(character);
+  const total   = actions.length * SHEETS_PER_ACTION;
+  // The character's PNGs are the same for every action — decode them once.
+  const assets  = await loadRenderAssets(character);
+  let done = 0, written = 0, pending = null;
   for (const action of actions) {
-    for (const g of groups) {
+    for (const g of SHEET_GROUPS_PER_ACTION) {
       const relPath = `${dir}/${g.name}/${action.file}.png`;
       onProgress?.({ done, total, label: relPath });
-      const sheet = await buildSpriteSheet(character, action.id, { frameCount, partsFilter: g.partsFilter });
-      if (sheet?.canvas) { await postSheet(root, relPath, sheet.canvas); written++; }
+      const sheet = await buildSpriteSheet(character, action.id, { frameCount, partsFilter: g.partsFilter, assets });
+      if (pending) { await pending; written++; }
+      pending = sheet?.canvas ? postSheet(root, relPath, sheet.canvas) : null;
       done++;
     }
   }
+  if (pending) { await pending; written++; }
   onProgress?.({ done, total, label: 'done' });
-  return { written, root: `${root.replace(/[\\/]+$/, '')}/${dir}` };
+  return { written, root: `${trimTrailingSlashes(root)}/${dir}` };
 }
 
 /**
@@ -706,18 +720,21 @@ export async function exportCharactersSheets(characters, { frameCount = DEFAULT_
   const list = (characters ?? []).filter(Boolean);
   if (!list.length) throw new Error('no characters to export');
   if (!root) throw new Error('no output folder');
-  const perChar = list.map(c => listExportableActions(c).length * 2);
+  const perChar = list.map(countActionSheets);
   const total   = perChar.reduce((a, b) => a + b, 0);
+  // Same display name in the same folder (e.g. a Duplicate) would otherwise
+  // write into the same directory and silently overwrite the first export.
+  const takenDirs = new Set();
   let before = 0, written = 0;
   for (let i = 0; i < list.length; i++) {
-    const c = list[i];
-    const res = await exportAllActionSheets(c, {
-      frameCount, root,
+    const relDir = uniqueName(batchExportRelativeDir(list[i]), takenDirs);
+    takenDirs.add(relDir);
+    const res = await exportAllActionSheets(list[i], {
+      frameCount, root, relDir,
       onProgress: (p) => onProgress?.({ done: before + p.done, total, label: p.label }),
     });
     written += res.written;
     before  += perChar[i];
   }
-  onProgress?.({ done: total, total, label: 'done' });
-  return { written, characters: list.length, root: root.replace(/[\\/]+$/, '') };
+  return { written, characters: list.length, root: trimTrailingSlashes(root) };
 }

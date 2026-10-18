@@ -16,3 +16,7 @@ export const SHEET_COLS = 6;
 export const MIN_FRAMES     = 2;
 export const MAX_FRAMES     = 48;
 export const DEFAULT_FRAMES = 32;
+
+/** Clamp a (possibly blank / fractional) frame count into [MIN_FRAMES, MAX_FRAMES]. */
+export const clampFrames = (n) =>
+  Math.max(MIN_FRAMES, Math.min(MAX_FRAMES, Math.round(Number(n)) || DEFAULT_FRAMES));

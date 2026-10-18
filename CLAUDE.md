@@ -144,10 +144,9 @@ layer loop respects it via `includeFor(key)`, so split + custom z-order compose.
 **Per-animation weapon visibility:** `renderCharacter` also takes `hideWeapon`
 (skips the `weapon` layer). Stored on the character as `animWeaponHidden[animId]
 = true`, toggled with the eye button on the Weapon row of the Layer Order panel
-(Edit Animation), threaded exactly like `partZOrder`: live canvas
-(`weaponHidden` prop → `stateRef`), both `renderCharacter` export paths, and the
-split-sheet group list (the weapon sheet is omitted). The weapon anchor/rotation
-handles are not drawn while hidden.
+(Edit Animation). It reaches every renderer through `resolveRenderOptions` (see
+the helper list above); the parts-sheet export omits the weapon sheet, and the
+weapon anchor/rotation handles are not drawn while hidden.
 
 ## Character data model (App.jsx state)
 
@@ -191,6 +190,19 @@ Always read weapon/accessory offsets and scales through the helpers in `weaponSe
 - `resolveAccessoryOffset(parts, animId)` / `resolveAccessoryScale(parts)`
 
 Never access `parts.weaponAnimOffsets` or `parts.accessoryAnimOffsets` directly.
+
+**Weapon type** is resolved through `weaponSettings.js` too — never inline the `customWeapons.find(...)?.template` lookup:
+- `resolveWeaponTemplate(character)` → the built-in key driving the animation set / melee rules (handles legacy `cw_…` keys)
+- `isMeleeWeapon(character)`, `hasWeapon(character)`, `MELEE_WEAPONS`
+
+**Per-character animation selectors** (`AnimationSystem.js`) are the one source of truth for the ACTIONS panel, the delete fallback and the sheet exporter:
+- `visibleActions(character)` → `[{ id, label, loop, builtIn }]` in panel order (weapon set minus `hiddenAnimations`, then custom)
+- `weaponAnimationSet(character)`, `defaultAnimationFor(character)`, `animationLabel(character, id)`, `hiddenActionCount(character)`
+- `animTemplateFields(anim)` → the only fields a template carries (`name, duration, loop, tracks`)
+
+**Render options** — `resolveRenderOptions(character, animId)` in `Renderer.js` returns `{ animation, isMelee, partZOrder, hideWeapon }`. Every `renderCharacter` caller spreads it (live canvas via the `renderOpts` prop, ghosts, sheet/pose/parts exports). Add a new per-animation flag THERE, not at each call site.
+
+**Character object helpers** (`utils/characters.js`): `withOptional(obj, key, value)` (set-or-delete an optional field), `characterLabel(c)`, folder helpers `mergeFolders` / `uniqueFolderName` / `folderOf`, and `normalizeCharacters` which every ingress (localStorage, `characters.json`, workspace file) runs to strip legacy keys and default the arrays. `utils/names.js` has `uniqueName(base, taken, sep)`.
 
 ## Right-arm accessory system
 
@@ -244,7 +256,7 @@ The key still drives everything internally, so the data model is unchanged: `wea
 ```
 - `template` determines which animation set is shown in ACTIONS (`WEAPON_ANIMATION_SETS[template] ?? WEAPON_ANIMATION_SETS.none`) and the default animation (`WEAPON_DEFAULT_ANIMATIONS[template] ?? 'idle'`).
 - The visual is the uploaded PNG in `parts.weaponImages[key]` ("Customize Weapon & Accessories").
-- `hiddenWeapons` may still exist on saved characters; it is ignored.
+- `hiddenWeapons` (and the old per-animation head images) are stripped by `normalizeCharacters` on load.
 
 ## Weapon animation sets
 
@@ -327,7 +339,7 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 
 `loadRenderAssets` preloads `weaponImage` from `parts.weaponImages[parts.weapon]` and `accessoryImage` from `parts.accessoryImages[parts.weapon]`. Both are passed into `renderCharacter`. `isMelee` is also resolved (with template fallback) and passed explicitly.
 
-**All Actions → Folder** (`exportAllActionSheets` in `export.js`, `BatchExportDialog.jsx`): for every action in `listExportableActions(character)` (weapon set minus `hiddenAnimations`, plus the character's own custom animations) it builds a **body** sheet (`partsFilter {others, head}`) and a **legs** sheet and POSTs each PNG to the Vite endpoint `/api/export-sprites` (`vite.config.js`), which writes `<root>/<folder>/<character>/{body,legs}/<action>.png`. `<folder>` = `character.folder` (omitted if none), `<character>` = `displayName || name`, `<action>` = the chip label — all via `sanitizeFileName`. GET on the endpoint returns the default output folder (`~/Downloads`). Only works under `npm run dev` (needs the server); the "Single Sprite Sheet" item is the old per-action browser download.
+**All Actions → Folder** (`exportAllActionSheets` in `export.js`, `BatchExportDialog.jsx`): for every action in `listExportableActions(character)` (weapon set minus `hiddenAnimations`, plus the character's own custom animations) it builds a **body** sheet (`partsFilter {others, head}`) and a **legs** sheet and POSTs each PNG to the Vite endpoint `/api/export-sprites` (`vite.config.js`), which writes `<root>/<folder>/<character>/{body,legs}/<action>.png`. `<folder>` = `character.folder` (omitted if none), `<character>` = `displayName || name`, `<action>` = the chip label — all via `sanitizeFileName`. Each sheet is POSTed as a raw `image/png` body with `X-Export-Root` / `X-Export-Path` headers (URI-encoded); uploads overlap with the next render. GET on the endpoint returns the default output folder (`~/Downloads`). Only works under `npm run dev` (needs the server); the "Single Sprite Sheet" item is the old per-action browser download.
 
 **Export Folder** (`exportCharactersSheets` in `export.js`, `FolderExportDialog.jsx`): same thing for every character in one manager folder (or the un-foldered ones via the "No folder" option), with one aggregated progress counter. Defaults to the active character's folder.
 
@@ -344,20 +356,13 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 - Rotation handle: lighter purple `#C084FC` circle offset 22 units from position handle
 - Drag `accessory-pos` → calls `onAccessoryOffsetSet({ x, y, rotation })` via stateRef
 
-## Reusable dialog shell (SaveTemplateDialog.jsx)
+## Shared UI pieces
 
-Generic name-input dialog used for both animation template naming and custom weapon create/rename:
-```js
-<SaveTemplateDialog
-  open={bool}
-  defaultName="..."
-  title="New Weapon Mode"      // defaults to 'Save as Template'
-  inputLabel="Weapon name"     // defaults to 'Template name'
-  onClose={fn}
-  onSave={fn}
-/>
-```
-Auto-selects text on open. Enter key confirms. Save disabled when input is empty.
+- `SaveTemplateDialog.jsx` — the "Save as template" name prompt (`open`, `defaultName`, `onClose`, `onSave`). Auto-selects text on open; Enter confirms; Save disabled when empty.
+- `ConfirmDialog.jsx` — generic confirm (used for action, character and folder deletes).
+- `components/ui/rename-input.jsx` — `RenameInput` inline editor (focus+select on mount, Enter/blur commit, Esc cancel). Used by the ACTIONS chips and the character manager rows.
+- `lib/useEscapeToClose.js` — `useEscapeToClose(open, onClose, blocked)`; pass `blocked` while a nested confirm or an export owns Escape.
+- `SheetExportParts.jsx` — `useSheetExport` + the shell/fields/progress/result/footer shared by the two folder-export dialogs.
 
 ## Persistence
 
@@ -368,7 +373,7 @@ Auto-selects text on open. Enter key confirms. Save disabled when input is empty
 | Animation templates | `localStorage` (`2dsprite:templates`) — global, shared across characters |
 | Editor settings | `localStorage` (`2dsprite:settings`) — canvas bg, grid |
 | **Workspace file** (Save/Load Workspace) | v2 JSON: `{ version, savedAt, activeCharId, uiState, settings, folders, animTemplates, characters }` — the complete state. Loading a v1 file (no templates/settings) keeps the browser's current templates/settings. |
-| Character folders | `localStorage` (`2dsprite:folders`) — ordered list of folder names (empty folders included); membership is `character.folder`. Included in the Workspace JSON (`folders`). `mergeFolders()` appends any name found on a character but missing from the list. |
+| Character folders | `localStorage` (`2dsprite:folders`) — ordered list of folder names (empty folders included); membership is `character.folder`. Included in the Workspace JSON (`folders`). Readers use `folderList` (App.jsx) = `mergeFolders(folders, characters)`, a memo that appends any name found on a character but missing from the list — there is no sync effect. |
 
 > **`customWeapons` is no longer in global storage** — it moved into each character object so different characters can have different weapon types.
 
@@ -380,6 +385,6 @@ Auto-selects text on open. Enter key confirms. Save disabled when input is empty
 - **worldToLocal** in `VectorEditor.js` is inverse rotation only — assumes input is already character-local.
 - Skin point handles are bone-local offsets FROM the anchor, not from the bone origin.
 - `DRAW_ORDER` in `characterParts.js` is legacy/unused — `Renderer.js` controls draw order directly.
-- **isMelee for custom weapons**: `MELEE_WEAPONS.has(weapon)` alone is wrong for `cw_…` keys. Always check `w.template` too: `MELEE_WEAPONS.has(w.template)`. Pass the resolved `isMelee` to `renderCharacter` — never rely on the internal fallback.
+- **Weapon type / melee**: use `resolveWeaponTemplate` / `isMeleeWeapon` from `weaponSettings.js` (they handle legacy `cw_…` keys); render flags come from `resolveRenderOptions`. Never recompute either inline.
 - **Accessory vs weapon keying**: both are keyed by `parts.weapon` (the weapon type key, e.g. `'sword'` or `'cw_abc'`), not by animation ID. Switching the weapon type changes both sets.
 - Weapon/accessory offset + scale: always read through `resolveWeaponOffset/Scale` and `resolveAccessoryOffset/Scale` in `weaponSettings.js`.

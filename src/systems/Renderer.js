@@ -1,12 +1,29 @@
 import { CHARACTER_PARTS } from '../data/characterParts.js';
-import { resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale } from '../utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, isMeleeWeapon, MELEE_WEAPONS } from '../utils/weaponSettings.js';
 import {
   drawSkin, drawSkinImage, drawSkinPinned,
   LEFT_ARM_SKIN, RIGHT_ARM_SKIN, LEFT_LEG_SKIN, RIGHT_LEG_SKIN,
   HEAD_SKIN, BODY_SKIN,
 } from './SkinSystem.js';
 
-export const MELEE_WEAPONS = new Set(['sword']);
+export { MELEE_WEAPONS };
+
+/**
+ * The per-(character, animation) render options that aren't images:
+ * { animation, isMelee, partZOrder, hideWeapon }. EVERY renderCharacter caller
+ * (live canvas, onion-skin ghosts, sheet export, pose export, parts sheet)
+ * spreads this, so a new per-animation flag is added here once and can't be
+ * missed by one of them. `character` is the full character (flags live on
+ * the root, not on `parts`).
+ */
+export function resolveRenderOptions(character, animation) {
+  return {
+    animation,
+    isMelee:    isMeleeWeapon(character),
+    partZOrder: character?.animPartZOrder?.[animation] ?? null,
+    hideWeapon: !!character?.animWeaponHidden?.[animation],
+  };
+}
 
 // Reorderable draw layers for the per-animation z-order editor. Listed here in
 // a neutral order; the actual default depends on whether a weapon is held.

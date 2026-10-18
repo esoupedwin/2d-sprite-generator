@@ -1,3 +1,5 @@
+import { resolveWeaponTemplate } from '../utils/weaponSettings.js';
+
 /**
  * Keyframe animation system.
  * Each animation is a collection of per-bone tracks.
@@ -2621,4 +2623,65 @@ export function resolveAnimation(animation, overrides) {
   }
 
   return syncLoopFrame({ ...animation, tracks });
+}
+
+// ─── Per-character selectors ────────────────────────────────────────────────
+// The ACTIONS panel, the delete fallback and the sheet exporter all read the
+// character's actions through these, so they can't disagree on the set, the
+// order or the labels.
+
+/** The built-in animation ids available to this character's weapon type. */
+export function weaponAnimationSet(character) {
+  return WEAPON_ANIMATION_SETS[resolveWeaponTemplate(character)] ?? WEAPON_ANIMATION_SETS.none;
+}
+
+/** The animation to select when a character is loaded or its weapon changes. */
+export function defaultAnimationFor(character) {
+  return WEAPON_DEFAULT_ANIMATIONS[resolveWeaponTemplate(character)] ?? 'idle';
+}
+
+/** Chip label: per-character rename → custom animation name → built-in name → id. */
+export function animationLabel(character, id) {
+  return character?.animationLabels?.[id]
+      ?? character?.customAnimations?.find(a => a.id === id)?.name
+      ?? ANIMATIONS[id]?.name
+      ?? id;
+}
+
+/**
+ * The actions the character shows, in panel order: built-ins from its weapon
+ * set (ANIMATIONS order, minus `hiddenAnimations`) then its own custom
+ * animations. Each is { id, label, loop, builtIn }. `loop` is read from the
+ * animation that actually plays (a baked custom shadowing a built-in wins).
+ */
+export function visibleActions(character) {
+  const hidden  = new Set(character?.hiddenAnimations ?? []);
+  const allowed = new Set(weaponAnimationSet(character));
+  const customs = character?.customAnimations ?? [];
+  const out = [];
+  for (const [id, anim] of Object.entries(ANIMATIONS)) {
+    if (!allowed.has(id) || hidden.has(id)) continue;
+    const playing = customs.find(a => a.id === id) ?? anim;
+    out.push({ id, label: animationLabel(character, id), loop: playing.loop !== false, builtIn: true });
+  }
+  for (const a of customs) {
+    if (ANIMATIONS[a.id]) continue;
+    out.push({ id: a.id, label: animationLabel(character, a.id), loop: a.loop !== false, builtIn: false });
+  }
+  return out;
+}
+
+/** How many of the character's weapon-set built-ins are currently hidden. */
+export function hiddenActionCount(character) {
+  const hidden = new Set(character?.hiddenAnimations ?? []);
+  return weaponAnimationSet(character).filter(id => hidden.has(id)).length;
+}
+
+/**
+ * A template is bone motion only. This is the ONE list of fields a template
+ * carries — used both when saving one and when creating an action from one —
+ * so skins, images, layer order and weapon settings can never leak through.
+ */
+export function animTemplateFields({ name, duration, loop, tracks }) {
+  return { name, duration, loop, tracks };
 }
