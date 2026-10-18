@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Pencil } from 'lucide-react';
 import { ConfirmDialog } from './ConfirmDialog.jsx';
 
 function AnimChip({ active, disabled, onClick, onDoubleClick, children }) {
@@ -40,6 +40,20 @@ function DeleteX({ onClick, title }) {
       type="button"
     >
       <X className="h-3 w-3" />
+    </button>
+  );
+}
+
+/** Small pencil shown beside each chip in rename mode. */
+function RenamePencil({ onClick, title }) {
+  return (
+    <button
+      className="text-muted-foreground hover:text-primary hover:bg-primary/10 rounded p-1 transition-colors"
+      onClick={onClick}
+      title={title}
+      type="button"
+    >
+      <Pencil className="h-3 w-3" />
     </button>
   );
 }
@@ -88,6 +102,10 @@ export const AnimationControls = memo(function AnimationControls({
 
   const [editingId, setEditingId] = useState(null);
   const [showDelete, setShowDelete] = useState(false);
+  const [showRename, setShowRename] = useState(false);
+  // The two edit modes are mutually exclusive so a chip never shows both icons.
+  const toggleDelete = () => { setShowDelete(p => !p); setShowRename(false); };
+  const toggleRename = () => { setShowRename(p => !p); setShowDelete(false); };
   const [confirmTarget, setConfirmTarget] = useState(null); // { id, label, builtIn }
 
   const labelFor = (id, fallback) => animationLabels?.[id] ?? fallback;
@@ -122,21 +140,38 @@ export const AnimationControls = memo(function AnimationControls({
     <div className="flex flex-col gap-3 w-full">
       <div className="flex items-center justify-between">
         <SectionTitle>Actions</SectionTitle>
-        {onDeleteAnimation && (
-          <button
-            type="button"
-            onClick={() => setShowDelete(p => !p)}
-            title={showDelete ? 'Hide delete buttons' : 'Show delete buttons'}
-            className={cn(
-              'rounded p-1 transition-colors',
-              showDelete
-                ? 'text-destructive bg-destructive/10'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <div className="flex items-center gap-0.5">
+          {onRenameAnimation && (
+            <button
+              type="button"
+              onClick={toggleRename}
+              title={showRename ? 'Done renaming' : 'Rename actions'}
+              className={cn(
+                'rounded p-1 transition-colors',
+                showRename
+                  ? 'text-primary bg-primary/10'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onDeleteAnimation && (
+            <button
+              type="button"
+              onClick={toggleDelete}
+              title={showDelete ? 'Hide delete buttons' : 'Show delete buttons'}
+              className={cn(
+                'rounded p-1 transition-colors',
+                showDelete
+                  ? 'text-destructive bg-destructive/10'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap gap-1.5 border border-border rounded-md p-2">
         {Object.entries(ANIMATIONS)
@@ -144,6 +179,9 @@ export const AnimationControls = memo(function AnimationControls({
           .map(([key, anim]) => (
             <div key={key} className="flex items-center gap-1">
               {renderChip(key, anim.name, anim.loop)}
+              {showRename && onRenameAnimation && editingId !== key && (
+                <RenamePencil onClick={() => setEditingId(key)} title="Rename action" />
+              )}
               {showDelete && onDeleteAnimation && editingId !== key && (
                 <DeleteX
                   onClick={() => requestDelete(key, labelFor(key, anim.name))}
@@ -167,6 +205,9 @@ export const AnimationControls = memo(function AnimationControls({
         {ownAnimations.map(anim => (
           <div key={anim.id} className="flex items-center gap-1">
             {renderChip(anim.id, anim.name, anim.loop)}
+            {showRename && onRenameAnimation && editingId !== anim.id && (
+              <RenamePencil onClick={() => setEditingId(anim.id)} title="Rename action" />
+            )}
             {showDelete && editingId !== anim.id && (
               <DeleteX
                 onClick={() => requestDelete(anim.id, labelFor(anim.id, anim.name))}
@@ -194,7 +235,9 @@ export const AnimationControls = memo(function AnimationControls({
         <span className="text-[10px] text-teal-400/70 font-mono">drag bones to adjust</span>
       )}
       {onRenameAnimation && (
-        <span className="text-[10px] text-muted-foreground/60">double-click a chip to rename</span>
+        <span className="text-[10px] text-muted-foreground/60">
+          {showRename ? 'click a pencil to rename · Enter saves, Esc cancels' : 'double-click a chip to rename'}
+        </span>
       )}
       {hiddenInSetCount > 0 && onRestoreHidden && (
         <button

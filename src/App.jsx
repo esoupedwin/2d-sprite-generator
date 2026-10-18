@@ -7,6 +7,8 @@ import { PoseEditor } from './components/PoseEditor.jsx';
 import { ExportMenu } from './components/ExportMenu.jsx';
 import { SpritePreviewDialog } from './components/SpritePreviewDialog.jsx';
 import { SpriteExportDialog } from './components/SpriteExportDialog.jsx';
+import { BatchExportDialog } from './components/BatchExportDialog.jsx';
+import { FolderExportDialog } from './components/FolderExportDialog.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { SettingsDialog, DEFAULT_SETTINGS } from './components/SettingsDialog.jsx';
 import { PosePreviewDialog } from './components/PosePreviewDialog.jsx';
@@ -27,7 +29,7 @@ import {
   DEFAULT_WEAPON_SCALES,
 } from './data/defaultBuild.js';
 import { ANIMATIONS, WEAPON_DEFAULT_ANIMATIONS, WEAPON_ANIMATION_SETS, resolveAnimation, getPoseAtTime } from './systems/AnimationSystem.js';
-import { exportSpriteSheet, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
+import { exportSpriteSheet, exportAllActionSheets, exportCharactersSheets, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
 import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale } from './utils/weaponSettings.js';
@@ -37,13 +39,35 @@ import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
-import { ConfirmDialog } from './components/ConfirmDialog.jsx';
 import { genId } from './utils/genId.js';
 import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
-import { NewWeaponDialog } from './components/NewWeaponDialog.jsx';
+import { DEFAULT_ANIM_TEMPLATES } from './data/defaultAnimTemplates.js';
 import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
 const CHARS_STORAGE     = '2dsprite:characters';
+const FOLDERS_STORAGE   = '2dsprite:folders';
+
+// Character folders (one level). Membership is `character.folder` (a name);
+// this list carries the folder ORDER and lets empty folders exist. Any folder
+// named on a character but missing from the list is appended, so nothing is
+// ever orphaned.
+function mergeFolders(list, chars) {
+  const out = Array.isArray(list) ? list.filter(n => typeof n === 'string' && n.trim()) : [];
+  const seen = new Set(out);
+  for (const c of chars ?? []) {
+    const f = c?.folder;
+    if (typeof f === 'string' && f.trim() && !seen.has(f)) { seen.add(f); out.push(f); }
+  }
+  return out;
+}
+
+function uniqueFolderName(base, existing, skip = null) {
+  const taken = new Set(existing.filter(n => n !== skip));
+  if (!taken.has(base)) return base;
+  let i = 2;
+  while (taken.has(`${base} ${i}`)) i++;
+  return `${base} ${i}`;
+}
 const TEMPLATES_STORAGE = '2dsprite:templates';
 const SETTINGS_STORAGE  = '2dsprite:settings';
 
@@ -195,17 +219,6 @@ function withTPose(char) {
   };
 }
 
-// Weapon types offered to a character: built-ins it hasn't hidden, then its
-// custom weapons. The type it's currently wearing always counts.
-function visibleWeaponKeys(char) {
-  const hidden = new Set(char?.hiddenWeapons ?? []);
-  const current = char?.parts?.weapon;
-  return [
-    ...Object.keys(CHARACTER_PARTS.weapon.options).filter(k => !hidden.has(k) || k === current),
-    ...(char?.customWeapons ?? []).map(w => w.key),
-  ];
-}
-
 // Weapon-appropriate default animation for a character (e.g. pistol → pistol_idle).
 // Keeps the initial/selected animation consistent with the equipped weapon so
 // per-anim weapon offsets, head skins, and baked pose edits resolve correctly —
@@ -226,6 +239,15 @@ function persistCharacters(chars) {
 }
 
 export default function App() {
+  const [folders, setFolders] = useState(() => {
+    let stored = [];
+    try { stored = JSON.parse(localStorage.getItem(FOLDERS_STORAGE) ?? '[]'); } catch {}
+    return mergeFolders(stored, loadCharactersFromStorage() ?? []);
+  });
+  useEffect(() => {
+    try { localStorage.setItem(FOLDERS_STORAGE, JSON.stringify(folders)); } catch {}
+  }, [folders]);
+
   const [characters, setCharacters] = useState(() => {
     return loadCharactersFromStorage() ?? [newCharacter('Character 1')];
   });
@@ -277,6 +299,8 @@ export default function App() {
 
   // Sprite sheet export dialog. Same capture-at-open shape.
   const [spriteExport,  setSpriteExport]  = useState(null);
+  const [batchExportOpen, setBatchExportOpen] = useState(false);
+  const [folderExportOpen, setFolderExportOpen] = useState(false);
 
   // ── Animation keyframe editing ───────────────────────────────────────────────
   // When set, the canvas pauses + seeks to this time. Drags on the named bone
@@ -296,9 +320,6 @@ export default function App() {
   }, [animTemplates]);
   const [newAnimDialogOpen,    setNewAnimDialogOpen]    = useState(false);
   const [saveTemplateDialog,   setSaveTemplateDialog]   = useState(null); // { defaultName, resolved } | null
-
-  const [weaponDialog, setWeaponDialog] = useState(null); // { mode:'create'|'rename', key?, defaultName? }
-  const [weaponDeleteTarget, setWeaponDeleteTarget] = useState(null); // { key, label, builtIn }
 
   // ── Pose editor ───────────────────────────────────────────────────────────────
   const [poseEditorOpen,  setPoseEditorOpen]  = useState(false);
@@ -341,7 +362,7 @@ export default function App() {
   }, []);
 
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
-  // Edit Structure draws the body weaponless (T-pose, no grip to hold)
+  // Edit Body draws the body weaponless (T-pose, no grip to hold)
   // without touching the character's selected weapon type.
   const canvasParts = useMemo(
     () => (currentAnimation === 'edit' ? { ...activeChar.parts, weapon: 'none' } : activeChar.parts),
@@ -373,6 +394,13 @@ export default function App() {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => persistCharacters(characters), 600);
     return () => clearTimeout(saveTimer.current);
+  }, [characters]);
+
+  useEffect(() => {
+    setFolders(prev => {
+      const merged = mergeFolders(prev, characters);
+      return merged.length === prev.length ? prev : merged;
+    });
   }, [characters]);
 
   // On mount: load from file — file wins over localStorage. If the user loads
@@ -428,6 +456,59 @@ export default function App() {
 
   const renameCharacter = useCallback((id, name) => {
     setCharacters(prev => prev.map(c => c.id === id ? { ...c, name } : c));
+  }, []);
+
+  // The character's own name (in-game / display), separate from the workspace
+  // label `name`. Empty clears the field.
+  const setCharacterDisplayName = useCallback((id, displayName) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      const next = { ...c };
+      if (displayName) next.displayName = displayName;
+      else             delete next.displayName;
+      return next;
+    }));
+  }, []);
+
+  // ── Folders (one level) ──────────────────────────────────────────────────────
+  // Returns the new folder's name so the manager can open it for renaming.
+  const addFolder = useCallback(() => {
+    const name = uniqueFolderName('New Folder', folders);
+    setFolders(prev => prev.includes(name) ? prev : [...prev, name]);
+    return name;
+  }, [folders]);
+
+  const renameFolder = useCallback((oldName, newName) => {
+    const trimmed = (newName ?? '').trim();
+    if (!trimmed || trimmed === oldName) return;
+    let finalName = trimmed;
+    setFolders(prev => {
+      finalName = uniqueFolderName(trimmed, prev, oldName);
+      return prev.map(n => n === oldName ? finalName : n);
+    });
+    setCharacters(prev => prev.map(c => c.folder === oldName ? { ...c, folder: finalName } : c));
+  }, []);
+
+  // Removing a folder only ungroups its characters.
+  const deleteFolder = useCallback((name) => {
+    setFolders(prev => prev.filter(n => n !== name));
+    setCharacters(prev => prev.map(c => {
+      if (c.folder !== name) return c;
+      const next = { ...c };
+      delete next.folder;
+      return next;
+    }));
+  }, []);
+
+  const setCharacterFolder = useCallback((id, name) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      if ((c.folder ?? null) === (name ?? null)) return c;
+      const next = { ...c };
+      if (name) next.folder = name;
+      else      delete next.folder;
+      return next;
+    }));
   }, []);
 
   // Move character `id` so it lands at `toIndex` (index in the list before removal).
@@ -500,12 +581,7 @@ export default function App() {
       delete customColors[partKey];
       return { ...c, parts: { ...c.parts, [partKey]: optionKey, customColors } };
     }));
-    if (partKey === 'weapon') {
-      const animTemplate = (activeChar.customWeapons ?? []).find(w => w.key === optionKey)?.template ?? optionKey;
-      setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[animTemplate] ?? 'idle');
-      setIsPlaying(true);
-    }
-  }, [activeCharId, activeChar.customWeapons]);
+  }, [activeCharId]);
 
   const updateColor = useCallback((partKey, hexColor) => {
     setCharacters(prev => prev.map(c => {
@@ -755,6 +831,18 @@ export default function App() {
     }));
   }, [activeCharId, currentAnimation]);
 
+  // Per-animation weapon visibility. Only `true` entries are stored
+  // (animWeaponHidden[animId]); absent = weapon drawn as usual.
+  const setAnimWeaponHidden = useCallback((hidden) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const map = { ...(c.animWeaponHidden ?? {}) };
+      if (hidden) map[currentAnimation] = true;
+      else        delete map[currentAnimation];
+      return { ...c, animWeaponHidden: map };
+    }));
+  }, [activeCharId, currentAnimation]);
+
   // Per-keyframe override: replace a specific (anim, bone, time) keyframe's
   // values. Values: { rotation?, x?, y? } merged into the existing override.
   const updateAnimKeyframeOverride = useCallback((animId, boneId, time, values) => {
@@ -951,8 +1039,20 @@ export default function App() {
     setAnimTemplates(prev => prev.filter(t => t.id !== id));
   }, []);
 
+  // Code-level defaults (always available) + the user's saved templates.
+  const allAnimTemplates = useMemo(
+    () => [...DEFAULT_ANIM_TEMPLATES, ...animTemplates],
+    [animTemplates],
+  );
+
+  // A template contributes bone motion only (duration, loop, tracks). The new
+  // action takes the template's name as-is and inherits nothing else — the
+  // character keeps its own skins, images, layer order and weapon settings.
   const createAnimFromTemplate = useCallback((template) => {
-    const newAnim = { ...template, id: genId(), name: `Copy of ${template.name}`, custom: true };
+    const newAnim = {
+      id: genId(), name: template.name, custom: true,
+      duration: template.duration, loop: template.loop, tracks: template.tracks,
+    };
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? { ...c, customAnimations: [...(c.customAnimations ?? []), newAnim] } : c
     ));
@@ -1136,70 +1236,16 @@ export default function App() {
     }));
   }, [activeCharId]);
 
-  // ── Custom weapon callbacks ──────────────────────────────────────────────────
-  const addCustomWeapon = useCallback((label, template = 'none') => {
-    const key = 'cw_' + genId();
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== activeCharId) return c;
-      return {
-        ...c,
-        parts: { ...c.parts, weapon: key },
-        customWeapons: [...(c.customWeapons ?? []), { key, label, template }],
-      };
-    }));
-    setWeaponDialog(null);
-    setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[template] ?? 'idle');
-    setIsPlaying(true);
-  }, [activeCharId]);
-
-  const renameCustomWeapon = useCallback((key, label) => {
-    setCharacters(prev => prev.map(c =>
-      c.id !== activeCharId ? c : {
-        ...c,
-        customWeapons: (c.customWeapons ?? []).map(w => w.key === key ? { ...w, label } : w),
-      }
-    ));
-    setWeaponDialog(null);
-  }, [activeCharId]);
-
-  // Remove a weapon type from the active character. Custom types are deleted
-  // outright; built-ins (including 'none') are hidden via `hiddenWeapons`
-  // (reversible — their offsets/images stay on the character). The last
-  // remaining type can't be removed. A character wearing the removed type
-  // switches to the first type still available.
-  const removeWeaponType = useCallback((key) => {
-    const visible = visibleWeaponKeys(activeChar);
-    if (visible.length <= 1 || !visible.includes(key)) return;
-    const fallback = visible.find(k => k !== key);
-    const isCustom = (activeChar.customWeapons ?? []).some(w => w.key === key);
-
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== activeCharId) return c;
-      const parts = c.parts.weapon === key ? { ...c.parts, weapon: fallback } : c.parts;
-      if (isCustom) {
-        return { ...c, parts, customWeapons: (c.customWeapons ?? []).filter(w => w.key !== key) };
-      }
-      const list = c.hiddenWeapons ?? [];
-      return { ...c, parts, hiddenWeapons: list.includes(key) ? list : [...list, key] };
-    }));
-    if (activeChar.parts.weapon === key) {
-      const template = (activeChar.customWeapons ?? []).find(w => w.key === fallback)?.template ?? fallback;
-      setCurrentAnimation(WEAPON_DEFAULT_ANIMATIONS[template] ?? 'idle');
-      setIsPlaying(true);
-    }
-  }, [activeCharId, activeChar]);
-
-  const restoreHiddenWeapons = useCallback(() => {
-    setCharacters(prev => prev.map(c =>
-      c.id === activeCharId ? { ...c, hiddenWeapons: [] } : c
-    ));
-  }, [activeCharId]);
-
   // ── Workspace save/load ───────────────────────────────────────────────────────
-  const loadWorkspace = useCallback(({ characters: newChars, activeCharId: newActive, uiState }) => {
+  const loadWorkspace = useCallback(({ characters: newChars, activeCharId: newActive, uiState, folders: newFolders, animTemplates: newTemplates, settings: newSettings }) => {
     if (!Array.isArray(newChars) || newChars.length === 0) return;
     workspaceLoadedRef.current = true;
     setCharacters(newChars);
+    setFolders(mergeFolders(newFolders, newChars));
+    // Templates/settings are only replaced when the file carries them (v2+);
+    // settings merge over defaults so a partial object can't drop keys.
+    if (Array.isArray(newTemplates)) setAnimTemplates(newTemplates);
+    if (newSettings) setSettings({ ...DEFAULT_SETTINGS, ...newSettings });
     setActiveCharId(newActive ?? newChars[0].id);
     if (uiState && typeof uiState === 'object') {
       if (typeof uiState.currentAnimation === 'string') setCurrentAnimation(uiState.currentAnimation);
@@ -1263,6 +1309,7 @@ export default function App() {
   // resolved back → front order used by both the render and the editor panel.
   const partZOrder = (activeChar.animPartZOrder ?? EMPTY_OBJ)[currentAnimation] ?? null;
   const layerOrder = partZOrder ?? defaultLayerOrder(activeChar.parts.weapon);
+  const weaponHidden = !!(activeChar.animWeaponHidden ?? EMPTY_OBJ)[currentAnimation];
   const curveAnimKeyframeOverrides = (activeChar.animKeyframeOverrides ?? EMPTY_OBJ)[currentAnimation] ?? EMPTY_OBJ;
   const curveAnimation = useMemo(
     () => resolveAnimation(
@@ -1306,6 +1353,9 @@ export default function App() {
           </Tabs>
           <WorkspaceMenu
             characters={characters}
+            folders={folders}
+            animTemplates={animTemplates}
+            settings={settings}
             activeCharId={activeCharId}
             uiState={{ currentAnimation, isPlaying, showBones }}
             onLoad={loadWorkspace}
@@ -1314,6 +1364,8 @@ export default function App() {
           />
           <ExportMenu
             onSpriteSheet={() => setSpriteExport({ character: activeChar, animationName: currentAnimation })}
+            onBatchExport={() => setBatchExportOpen(true)}
+            onFolderExport={() => setFolderExportOpen(true)}
             onSpriteSheetPreview={handlePreviewSpriteSheet}
             onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
             onPoseSVG={() => setPoseExport({ character: activeChar, animationName: currentAnimation, currentTime: charCanvasRef.current?.getCurrentTime() ?? 0 })}
@@ -1341,6 +1393,12 @@ export default function App() {
             onAddCharacter={addCharacter}
             onDeleteCharacter={deleteCharacter}
             onRenameCharacter={renameCharacter}
+            onDisplayNameChange={setCharacterDisplayName}
+            folders={folders}
+            onAddFolder={addFolder}
+            onRenameFolder={renameFolder}
+            onDeleteFolder={deleteFolder}
+            onSetCharacterFolder={setCharacterFolder}
             onSelectCharacter={selectCharacter}
             onDuplicateCharacter={duplicateCharacter}
             onReorderCharacters={reorderCharacters}
@@ -1396,87 +1454,6 @@ export default function App() {
               )}
             </div>
             <div className="flex flex-col gap-3 mt-4">
-              <div className="flex flex-col gap-1.5">
-              <SectionTitle>Types</SectionTitle>
-              {(() => {
-                const customs = activeChar.customWeapons ?? [];
-                const selectedCustom = customs.find(w => w.key === activeChar.parts.weapon);
-                const hiddenWeapons = new Set(activeChar.hiddenWeapons ?? []);
-                const selectedLabel = selectedCustom?.label
-                  ?? CHARACTER_PARTS.weapon.options[activeChar.parts.weapon]?.label;
-                const canRemove = visibleWeaponKeys(activeChar).length > 1;
-                return (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <select
-                      value={activeChar.parts.weapon}
-                      onChange={e => updatePart('weapon', e.target.value)}
-                      className="h-8 px-2 pr-7 rounded-md border border-border bg-secondary text-foreground text-xs outline-none focus:border-primary flex-1 min-w-[120px] appearance-none bg-no-repeat bg-[right_0.5rem_center] bg-[length:0.7em_0.7em] bg-[url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%3E%3Cpolyline%20points%3D%226%2C9%2012%2C15%2018%2C9%22%2F%3E%3C%2Fsvg%3E')]"
-                    >
-                      {Object.entries(CHARACTER_PARTS.weapon.options)
-                        .filter(([key]) => !hiddenWeapons.has(key) || key === activeChar.parts.weapon)
-                        .map(([key, opt]) => (
-                        <option key={key} value={key}>{opt.label}</option>
-                      ))}
-                      {customs.length > 0 && (
-                        <optgroup label="Custom">
-                          {customs.map(w => (
-                            <option key={w.key} value={w.key}>{w.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                    {selectedCustom && (
-                      <button
-                        onClick={() => setWeaponDialog({ mode: 'rename', key: selectedCustom.key, defaultName: selectedCustom.label })}
-                        title="Rename weapon"
-                        className="p-1 rounded text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <Pencil className="h-3 w-3" />
-                      </button>
-                    )}
-                    {canRemove && (
-                      <button
-                        onClick={() => setWeaponDeleteTarget({ key: activeChar.parts.weapon, label: selectedLabel, builtIn: !selectedCustom })}
-                        title={selectedCustom ? 'Delete weapon' : 'Remove type'}
-                        className="p-1 rounded text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setWeaponDialog({ mode: 'create', defaultName: '' })}
-                      className="px-2 py-1 rounded text-xs whitespace-nowrap border border-dashed border-border text-muted-foreground hover:border-primary hover:text-foreground transition-colors"
-                      title="Add a custom weapon"
-                    >
-                      + Weapon
-                    </button>
-                    {hiddenWeapons.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={restoreHiddenWeapons}
-                        className="basis-full text-left text-[10px] text-muted-foreground/60 hover:text-foreground underline underline-offset-2 transition-colors"
-                      >
-                        {hiddenWeapons.size} hidden type{hiddenWeapons.size > 1 ? 's' : ''} — restore
-                      </button>
-                    )}
-                  </div>
-                );
-              })()}
-              <ConfirmDialog
-                open={!!weaponDeleteTarget}
-                title={weaponDeleteTarget?.builtIn ? 'Remove type' : 'Delete weapon'}
-                message={weaponDeleteTarget && (weaponDeleteTarget.builtIn
-                  ? <>Remove <strong className="text-foreground">{weaponDeleteTarget.label}</strong> from this character&apos;s types? You can restore hidden types later.</>
-                  : <>Delete the custom weapon <strong className="text-foreground">{weaponDeleteTarget.label}</strong>? This cannot be undone.</>)}
-                confirmLabel="Delete"
-                onCancel={() => setWeaponDeleteTarget(null)}
-                onConfirm={() => {
-                  removeWeaponType(weaponDeleteTarget.key);
-                  setWeaponDeleteTarget(null);
-                }}
-              />
-              </div>
-
               <Button
                 variant="outline"
                 size="sm"
@@ -1801,6 +1778,7 @@ export default function App() {
                 gridSpacing={settings.gridSpacing}
                 gridThickness={settings.gridThickness}
                 partZOrder={partZOrder}
+                weaponHidden={weaponHidden}
               />
           </main>
 
@@ -1834,6 +1812,9 @@ export default function App() {
                   animationName={currentAnimation}
                   onChange={setAnimPartZOrder}
                   onReset={resetAnimPartZOrder}
+                  hasWeapon={activeChar.parts.weapon !== 'none'}
+                  weaponHidden={weaponHidden}
+                  onToggleWeapon={() => setAnimWeaponHidden(!weaponHidden)}
                 />
               )}
 
@@ -1895,25 +1876,10 @@ export default function App() {
         onSave={confirmSaveTemplate}
       />
 
-      <NewWeaponDialog
-        open={weaponDialog?.mode === 'create'}
-        onClose={() => setWeaponDialog(null)}
-        onSave={(name, template) => addCustomWeapon(name, template)}
-      />
-
-      <SaveTemplateDialog
-        open={weaponDialog?.mode === 'rename'}
-        defaultName={weaponDialog?.defaultName}
-        title="Rename Weapon Mode"
-        inputLabel="Weapon name"
-        onClose={() => setWeaponDialog(null)}
-        onSave={name => renameCustomWeapon(weaponDialog.key, name)}
-      />
-
       <NewAnimationDialog
         open={newAnimDialogOpen}
         onClose={() => setNewAnimDialogOpen(false)}
-        templates={animTemplates}
+        templates={allAnimTemplates}
         onDeleteTemplate={deleteAnimTemplate}
         onBlank={openPoseEditor}
         onFromTemplate={createAnimFromTemplate}
@@ -1972,6 +1938,22 @@ export default function App() {
         animationName={spriteExport?.animationName}
         onExport={(frameCount, opts = {}) => exportSpriteSheet(spriteExport.character, spriteExport.animationName, { frameCount, ...opts })}
         onClose={() => setSpriteExport(null)}
+      />
+
+      <BatchExportDialog
+        open={batchExportOpen}
+        character={activeChar}
+        onExport={(opts) => exportAllActionSheets(activeChar, opts)}
+        onClose={() => setBatchExportOpen(false)}
+      />
+
+      <FolderExportDialog
+        open={folderExportOpen}
+        characters={characters}
+        folders={folders}
+        defaultFolder={activeChar.folder ?? null}
+        onExport={({ characters: chars, ...opts }) => exportCharactersSheets(chars, opts)}
+        onClose={() => setFolderExportOpen(false)}
       />
     </div>
   );

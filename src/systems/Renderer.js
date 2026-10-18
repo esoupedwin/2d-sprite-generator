@@ -179,6 +179,9 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // partZOrder: optional back → front array of layer keys (see ORDERABLE_LAYERS)
     // overriding the default draw order — used by the per-animation z-order editor.
     partZOrder = null,
+    // hideWeapon: skip the weapon layer entirely (per-animation toggle, e.g. a
+    // Carry cycle where the character has put the weapon away).
+    hideWeapon = false,
   } = options;
 
   const pf = partsFilter || {};
@@ -192,8 +195,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
 
   // Z-order, back → front. Each body part is a "layer" drawn in the order below
   // (default) or in a per-animation override (partZOrder). Head prop rides with
-  // the head, the body accessory with the body, and the hand accessory always
-  // sits on top of everything (not reorderable).
+  // the head. The body (back) accessory always sits behind every body part and
+  // the hand accessory always sits on top of everything (neither reorderable).
   //
   // Bone-name caveat: `right_arm` = character's LEFT (support) arm;
   //                   `left_arm`  = character's RIGHT (dominant) arm.
@@ -208,8 +211,6 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     right_leg: () => drawSkin(ctx, skins.right_leg || RIGHT_LEG_SKIN, wt, getColor(character, 'right_leg'), getScale(character, 'right_leg')),
     weapon:    () => drawPart(ctx, 'weapon', character, wt, weaponImage, animation),
     body: () => {
-      // Body accessory (cape / wings / backpack) sits just behind the body fill.
-      drawBodyAccessory(ctx, character, wt, bodyAccessoryImage, animation);
       const bodyTmpl  = skins.body || BODY_SKIN;
       const bodyScale = getScale(character, 'body');
       if (bodyImage) drawSkinImage(ctx, bodyTmpl, wt, bodyImage, bodyScale);
@@ -232,8 +233,13 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     : key === 'head' ? includeHead
     : includeOthers;
 
+  // Body accessory (cape / wings / backpack) is the back-most layer — behind
+  // legs, arms, body and weapon regardless of the layer order.
+  if (includeOthers) drawBodyAccessory(ctx, character, wt, bodyAccessoryImage, animation);
+
   const order = resolveLayerOrder(partZOrder, armBehindLegs ? DEFAULT_ORDER_UNARMED : DEFAULT_ORDER_ARMED);
   for (const key of order) {
+    if (key === 'weapon' && hideWeapon) continue;
     if (includeFor(key)) layerDraw[key]();
   }
 

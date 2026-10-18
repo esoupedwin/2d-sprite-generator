@@ -40,6 +40,9 @@ export function NewAnimationDialog({ open, onClose, templates, onDeleteTemplate,
         </div>
 
         <div className="px-4 py-3">
+          <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">
+            A template adds the bone motion only — this character keeps its own skin, images and settings.
+          </p>
           {templates.length === 0 ? (
             <p className="text-xs text-muted-foreground leading-relaxed">
               No templates saved yet. In <span className="text-teal-400">Edit Animation</span> mode,
@@ -58,23 +61,32 @@ export function NewAnimationDialog({ open, onClose, templates, onDeleteTemplate,
                   }`}
                 >
                   <div className="flex flex-col gap-px">
-                    <span className="text-sm text-foreground">{t.name}</span>
+                    <span className="text-sm text-foreground">
+                      {t.name}
+                      {t.builtIn && (
+                        <span className="ml-2 text-[9px] uppercase tracking-wider text-muted-foreground border border-border rounded px-1 py-px align-middle">
+                          built-in
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[11px] text-muted-foreground font-mono">
                       {t.duration?.toFixed(2)}s · {t.loop ? 'loop' : 'once'}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onDeleteTemplate(t.id);
-                      if (selected === t.id) setSelected(null);
-                    }}
-                    className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded ml-2 shrink-0"
-                    title="Delete template"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  {!t.builtIn && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onDeleteTemplate(t.id);
+                        if (selected === t.id) setSelected(null);
+                      }}
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded ml-2 shrink-0"
+                      title="Delete template"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

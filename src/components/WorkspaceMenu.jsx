@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/utils.js';
 
-const WORKSPACE_FILE_VERSION = 1;
+const WORKSPACE_FILE_VERSION = 2; // v2: + folders, animTemplates, settings
 
 /**
  * "Workspace" dropdown — Save / Load the whole editor state to one JSON file.
  * Image data URLs are embedded so the file is self-contained: loading on
  * another instance restores the exact state without needing the original PNGs.
  */
-export function WorkspaceMenu({ characters, activeCharId, uiState, onLoad, open: openProp, onClose }) {
+export function WorkspaceMenu({ characters, folders, animTemplates, settings, activeCharId, uiState, onLoad, open: openProp, onClose }) {
   const [openInternal, setOpenInternal] = useState(false);
   const open    = openProp !== undefined ? openProp : openInternal;
   const wrapRef     = useRef(null);
@@ -35,8 +35,11 @@ export function WorkspaceMenu({ characters, activeCharId, uiState, onLoad, open:
       version:    WORKSPACE_FILE_VERSION,
       savedAt:    new Date().toISOString(),
       activeCharId,
-      uiState:    uiState ?? {},
-      characters: characters ?? [],
+      uiState:       uiState ?? {},
+      settings:      settings ?? {},
+      folders:       folders ?? [],
+      animTemplates: animTemplates ?? [],
+      characters:    characters ?? [],
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -72,6 +75,10 @@ export function WorkspaceMenu({ characters, activeCharId, uiState, onLoad, open:
           characters:   data.characters,
           activeCharId: data.activeCharId ?? data.characters[0]?.id ?? null,
           uiState:      data.uiState ?? {},
+          folders:      Array.isArray(data.folders) ? data.folders : [],
+          // Absent in v1 files → undefined → the loader keeps what's in the browser.
+          animTemplates: Array.isArray(data.animTemplates) ? data.animTemplates : undefined,
+          settings:      data.settings && typeof data.settings === 'object' ? data.settings : undefined,
         });
         close();
       } catch (err) {
@@ -116,7 +123,7 @@ export function WorkspaceMenu({ characters, activeCharId, uiState, onLoad, open:
             className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-sky-400 transition-colors"
           >
             <div>Save Workspace…</div>
-            <div className="text-[10px] opacity-70 mt-0.5">All characters · animations · images</div>
+            <div className="text-[10px] opacity-70 mt-0.5">Characters · folders · templates · settings</div>
           </button>
           <div className="border-t border-border" />
           <button

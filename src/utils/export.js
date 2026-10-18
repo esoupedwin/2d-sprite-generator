@@ -1,4 +1,4 @@
-import { ANIMATIONS, getPoseAtTime, resolveAnimation } from '../systems/AnimationSystem.js';
+import { WEAPON_ANIMATION_SETS, ANIMATIONS, getPoseAtTime, resolveAnimation } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import {
   computeSkinBounds,
@@ -187,6 +187,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       isMelee,
       partsFilter,
       partZOrder: character.animPartZOrder?.[animationName] ?? null,
+      hideWeapon: !!character.animWeaponHidden?.[animationName],
     });
     ctx.restore();
   }
@@ -322,6 +323,7 @@ async function renderPoseBase(character, animationName, currentTime) {
     bodyAccessoryImage,
     isMelee,
     partZOrder: character.animPartZOrder?.[animationName] ?? null,
+    hideWeapon: !!character.animWeaponHidden?.[animationName],
   });
 
   const b = contentBoundsDevice(ctx, big.width, big.height);
@@ -535,7 +537,7 @@ export async function exportPartsSheetSVG(character, animationName, currentTime 
 
   // Build label for weapon from part definition
   const groups = SHEET_GROUPS
-    .filter(g => g.id !== 'weapon' || parts.weapon !== 'none')
+    .filter(g => g.id !== 'weapon' || (parts.weapon !== 'none' && !character.animWeaponHidden?.[animationName]))
     .map(g => ({
       ...g,
       label: g.label ?? CHARACTER_PARTS.weapon?.options[parts.weapon]?.label ?? 'Weapon',
@@ -608,4 +610,114 @@ function download(href, filename) {
   a.href = href;
   a.download = filename;
   a.click();
+}
+
+
+// ─── "All Actions → Folder" export ───────────────────────────────────────────
+// Writes, through the dev server (/api/export-sprites), one body sheet and one
+// legs sheet per visible action:
+//   <root>/<character folder>/<character>/body/<action>.png
+//   <root>/<character folder>/<character>/legs/<action>.png
+// Body = head + torso/arms/weapon/accessories (everything but the legs), so the
+// two sheets overlay at identical frame coords in-game.
+
+/** The actions a character shows in its ACTIONS panel: its weapon set minus hidden, then its own. */
+export function listExportableActions(character) {
+  const weapon   = character?.parts?.weapon ?? 'none';
+  const template = character?.customWeapons?.find(w => w.key === weapon)?.template ?? weapon;
+  const allowed  = WEAPON_ANIMATION_SETS[template] ?? WEAPON_ANIMATION_SETS.none;
+  const hidden   = new Set(character?.hiddenAnimations ?? []);
+  const out = [];
+  const seen = new Set();
+  const push = (id, label) => {
+    const file = sanitizeFileName(resolveAnimLabel(character, id) ?? label);
+    const key = file; // one file per label — a renamed duplicate would overwrite
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ id, label: resolveAnimLabel(character, id) ?? label, file });
+  };
+  for (const id of allowed) if (ANIMATIONS[id] && !hidden.has(id)) push(id, ANIMATIONS[id].name);
+  for (const a of character?.customAnimations ?? []) if (!ANIMATIONS[a.id]) push(a.id, a.name);
+  return out;
+}
+
+/** `<character folder>/<character>` (folder level omitted when the character isn't in one). */
+export function batchExportRelativeDir(character) {
+  const who = sanitizeFileName(character?.displayName || character?.name || 'character');
+  const folder = character?.folder ? sanitizeFileName(character.folder) : null;
+  return folder ? `${folder}/${who}` : who;
+}
+
+export async function fetchDefaultExportDir() {
+  try {
+    const r = await fetch('/api/export-sprites');
+    if (!r.ok) return '';
+    return (await r.json())?.defaultDir ?? '';
+  } catch { return ''; }
+}
+
+async function postSheet(root, relPath, canvas) {
+  const dataUrl = canvas.toDataURL('image/png');
+  const r = await fetch('/api/export-sprites', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ root, relPath, dataUrl }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok || !body.ok) throw new Error(body.error ?? `server responded ${r.status}`);
+  return body.path;
+}
+
+/**
+ * Exports every visible action as body + legs sheets into `root`.
+ * onProgress({ done, total, label }) is called before each file is written.
+ * Resolves { written, root } or throws on the first failure.
+ */
+export async function exportAllActionSheets(character, { frameCount = DEFAULT_FRAMES, root, onProgress } = {}) {
+  if (!character) throw new Error('no character');
+  if (!root) throw new Error('no output folder');
+  const actions = listExportableActions(character);
+  const dir     = batchExportRelativeDir(character);
+  const groups  = [
+    { name: 'body', partsFilter: { others: true,  legs: false, head: true  } },
+    { name: 'legs', partsFilter: { others: false, legs: true,  head: false } },
+  ];
+  const total = actions.length * groups.length;
+  let done = 0, written = 0;
+  for (const action of actions) {
+    for (const g of groups) {
+      const relPath = `${dir}/${g.name}/${action.file}.png`;
+      onProgress?.({ done, total, label: relPath });
+      const sheet = await buildSpriteSheet(character, action.id, { frameCount, partsFilter: g.partsFilter });
+      if (sheet?.canvas) { await postSheet(root, relPath, sheet.canvas); written++; }
+      done++;
+    }
+  }
+  onProgress?.({ done, total, label: 'done' });
+  return { written, root: `${root.replace(/[\\/]+$/, '')}/${dir}` };
+}
+
+/**
+ * Exports several characters (e.g. everyone in one manager folder), each via
+ * exportAllActionSheets, with one aggregated progress counter across them all.
+ * Resolves { written, characters, root }; throws on the first failure.
+ */
+export async function exportCharactersSheets(characters, { frameCount = DEFAULT_FRAMES, root, onProgress } = {}) {
+  const list = (characters ?? []).filter(Boolean);
+  if (!list.length) throw new Error('no characters to export');
+  if (!root) throw new Error('no output folder');
+  const perChar = list.map(c => listExportableActions(c).length * 2);
+  const total   = perChar.reduce((a, b) => a + b, 0);
+  let before = 0, written = 0;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    const res = await exportAllActionSheets(c, {
+      frameCount, root,
+      onProgress: (p) => onProgress?.({ done: before + p.done, total, label: p.label }),
+    });
+    written += res.written;
+    before  += perChar[i];
+  }
+  onProgress?.({ done: total, total, label: 'done' });
+  return { written, characters: list.length, root: root.replace(/[\\/]+$/, '') };
 }

@@ -1,4 +1,5 @@
-import { ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
+import { ChevronUp, ChevronDown, Eye, EyeOff, RotateCcw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { SectionTitle } from '@/components/ui/section-title.jsx';
 import { ORDERABLE_LAYERS } from '../systems/Renderer.js';
 
@@ -10,7 +11,11 @@ const LABELS = Object.fromEntries(ORDERABLE_LAYERS.map(l => [l.key, l.label]));
  * panel). Moving a row up brings it closer to the front. `onChange` receives a
  * new back → front array; `onReset` clears the per-animation override.
  */
-export function LayerOrderPanel({ order, onChange, onReset, isCustom, animationName }) {
+export function LayerOrderPanel({
+  order, onChange, onReset, isCustom, animationName,
+  // Per-animation weapon visibility: an eye toggle on the Weapon row.
+  hasWeapon = false, weaponHidden = false, onToggleWeapon,
+}) {
   // Display front → back (reverse of the back → front draw order).
   const display = [...order].reverse();
 
@@ -43,14 +48,37 @@ export function LayerOrderPanel({ order, onChange, onReset, isCustom, animationN
       </p>
 
       <div className="flex flex-col gap-1 border border-border rounded-md p-1.5">
-        {display.map((key, i) => (
+        {display.map((key, i) => {
+          const isHiddenWeapon = key === 'weapon' && weaponHidden;
+          return (
           <div
             key={key}
-            className="flex items-center gap-2 px-2 py-1 rounded bg-secondary/40 border border-border/60"
+            className={cn(
+              'flex items-center gap-2 px-2 py-1 rounded bg-secondary/40 border border-border/60',
+              isHiddenWeapon && 'opacity-60',
+            )}
           >
             <span className="text-[9px] uppercase tracking-wider text-muted-foreground/50 w-4 tabular-nums">{i + 1}</span>
-            <span className="flex-1 text-xs text-foreground">{LABELS[key] ?? key}</span>
+            <span className={cn('flex-1 text-xs', isHiddenWeapon ? 'text-muted-foreground line-through' : 'text-foreground')}>
+              {LABELS[key] ?? key}
+              {isHiddenWeapon && <span className="ml-1.5 no-underline text-[9px] uppercase tracking-wider text-muted-foreground/70">hidden</span>}
+            </span>
             <div className="flex items-center gap-0.5">
+              {key === 'weapon' && hasWeapon && onToggleWeapon && (
+                <button
+                  type="button"
+                  onClick={onToggleWeapon}
+                  title={weaponHidden
+                    ? `Show the weapon in ${animationName}`
+                    : `Hide the weapon in ${animationName} (this animation only)`}
+                  className={cn(
+                    'p-0.5 mr-1 rounded transition-colors hover:bg-secondary',
+                    weaponHidden ? 'text-amber-400 hover:text-amber-300' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {weaponHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => move(i, -1)}
@@ -71,7 +99,8 @@ export function LayerOrderPanel({ order, onChange, onReset, isCustom, animationN
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
       <div className="flex justify-between text-[9px] uppercase tracking-wider text-muted-foreground/50 px-1">
         <span>Top = front</span>

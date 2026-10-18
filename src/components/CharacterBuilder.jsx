@@ -63,6 +63,8 @@ export const CharacterBuilder = memo(function CharacterBuilder({
   onBodyImageChange, onHeadImageChange, onHeadImageScaleChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter, onReorderCharacters,
+  onDisplayNameChange,
+  folders, onAddFolder, onRenameFolder, onDeleteFolder, onSetCharacterFolder,
   onEditBodyToggle, onToggleBones, showBones,
   onToggleRagdoll, ragdoll,
   children,
@@ -70,6 +72,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
   const isEdit = currentAnimation === 'edit';
   const [managerOpen, setManagerOpen] = useState(false);
   const activeChar = characters.find(c => c.id === activeCharId) ?? characters[0];
+
   return (
     <aside className="w-72 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-1">
       <div className="flex flex-col gap-1.5 pb-1">
@@ -89,6 +92,21 @@ export const CharacterBuilder = memo(function CharacterBuilder({
           </span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
         </button>
+
+        {/* Separate from the workspace label above: the character's own name
+            (what it's called in-game / on exports). Stored as `displayName`. */}
+        <label className="flex items-center gap-2 mt-0.5">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">Name</span>
+          <input
+            type="text"
+            value={activeChar?.displayName ?? ''}
+            onChange={e => activeChar && onDisplayNameChange?.(activeChar.id, e.target.value)}
+            placeholder="Character name"
+            maxLength={60}
+            spellCheck={false}
+            className="flex-1 min-w-0 h-8 px-2.5 rounded-md border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary transition-colors"
+          />
+        </label>
       </div>
       <CharacterManagerDialog
         open={managerOpen}
@@ -101,11 +119,16 @@ export const CharacterBuilder = memo(function CharacterBuilder({
         onRename={onRenameCharacter}
         onDuplicate={onDuplicateCharacter}
         onReorder={onReorderCharacters}
+        folders={folders}
+        onAddFolder={onAddFolder}
+        onRenameFolder={onRenameFolder}
+        onDeleteFolder={onDeleteFolder}
+        onSetCharacterFolder={onSetCharacterFolder}
       />
       <div className="mt-1 flex gap-2 self-start">
         <BigIconButton
           icon={Pencil}
-          label={isEdit ? 'Close' : 'Edit Structure'}
+          label={isEdit ? 'Close' : 'Edit Body'}
           active={isEdit}
           onClick={onEditBodyToggle}
           activeClass="bg-yellow-400 border-yellow-400 text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]"

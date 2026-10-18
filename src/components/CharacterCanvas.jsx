@@ -89,6 +89,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   gridSpacing,
   gridThickness,
   partZOrder,
+  weaponHidden,
 }, ref) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -202,6 +203,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.gridSpacing        = gridSpacing || 50;
   stateRef.current.gridThickness      = gridThickness || 1;
   stateRef.current.partZOrder         = partZOrder ?? null;
+  stateRef.current.weaponHidden       = !!weaponHidden;
 
   // When a keyframe row is clicked, snap to its time and lock there.
   useEffect(() => {
@@ -241,24 +243,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     if (!ragdoll) setRagdollOverlay(o => Object.keys(o).length === 0 ? o : {});
   }, [ragdoll]);
 
-  // Re-center the sprite frame in the canvas whenever Edit Animation toggles.
-  // Frame dimensions are baked here (same constants as the in-frame overlay).
-  // We preserve the current zoom — just nudge pan so the frame's centre lands
-  // on the canvas centre.
-  const recenterInitialMountRef = useRef(true);
-  useEffect(() => {
-    if (recenterInitialMountRef.current) {
-      recenterInitialMountRef.current = false;
-      return;
-    }
-    const zoom  = viewRef.current.zoom;
-    const scale = BASE_SCALE * zoom;
-    viewRef.current = {
-      zoom,
-      panX: (FRAME_ORIGIN_X - FRAME_W / 2) * scale,
-      panY: (FRAME_ORIGIN_Y - FRAME_H / 2) * scale - ORIGIN_Y_OFFSET,
-    };
-  }, [editAnimPose]);
+  // Toggling Edit Animation must not move the view: zoom/pan are left exactly
+  // as the user set them. (The Frame button re-centres on demand.)
 
   // (Body/head/weapon image decoding lives in useImageDataUrl above.)
 
@@ -481,6 +467,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       bodyAccessoryImage: bodyAccessoryImageRef.current,
       isMelee,
       partZOrder: s.partZOrder,
+      hideWeapon: s.weaponHidden,
     });
 
     if (s.showVectors) {
@@ -545,8 +532,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       s.rotateHitTargets = [];
     }
 
-    // Weapon anchor + rotation handles (editAnimPose, weapon equipped)
-    if (s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none') {
+    // Weapon anchor + rotation handles (editAnimPose, weapon equipped and not
+    // hidden for this animation)
+    if (s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none' && !s.weaponHidden) {
       const hand = worldTransforms['right_hand'];
       if (hand) {
         const wo   = s.weaponOffset;
