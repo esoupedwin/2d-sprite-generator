@@ -175,6 +175,7 @@ const SCALE_STEP = 0.1;
 // animation; stored as parts.headImage / parts.headImageScale.
 const HEAD_IMG_MIN = 0.3;
 const HEAD_IMG_MAX = 3.0;
+const HEAD_IMG_STEP = 0.01;
 
 function HeadSkinSection({ image, scale, onImageChange, onScaleChange }) {
   const inputRef = useRef(null);
@@ -236,7 +237,7 @@ function HeadSkinSection({ image, scale, onImageChange, onScaleChange }) {
         <div className="flex items-center justify-end gap-0.5">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head skin size</span>
           <button
-            onClick={() => setScale(Math.max(HEAD_IMG_MIN, scale - 0.1))}
+            onClick={() => setScale(Math.max(HEAD_IMG_MIN, scale - HEAD_IMG_STEP))}
             disabled={scale <= HEAD_IMG_MIN}
             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
           >−</button>
@@ -244,7 +245,7 @@ function HeadSkinSection({ image, scale, onImageChange, onScaleChange }) {
             {Math.round(scale * 100)}%
           </span>
           <button
-            onClick={() => setScale(Math.min(HEAD_IMG_MAX, scale + 0.1))}
+            onClick={() => setScale(Math.min(HEAD_IMG_MAX, scale + HEAD_IMG_STEP))}
             disabled={scale >= HEAD_IMG_MAX}
             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
           >+</button>
