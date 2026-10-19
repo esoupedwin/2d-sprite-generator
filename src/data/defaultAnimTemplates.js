@@ -214,4 +214,293 @@ export const DEFAULT_ANIM_TEMPLATES = [
       ],
     },
   },
+  // Extracted from the workspace's 'Cat - Rifle' 'attack' animation
+  // (customAnimations.rifle baked through resolveAnimation + animBoneOffsets).
+  {
+    id: 'tpl_rifle_attack',
+    name: 'Rifle Attack',
+    duration: 0.6,
+    loop: true,
+    builtIn: true,
+    tracks: {
+      torso: [
+        { time: 0, x: -5.785, y: -1.7179, rotation: 0.04 },
+        { time: 0.03, x: -5.785, y: 0.2821, rotation: -0.05 },
+        { time: 0.18, x: -5.785, y: -2.7179, rotation: 0.07 },
+        { time: 0.4, x: -5.785, y: -1.7179, rotation: 0.04 },
+        { time: 0.6, x: -5.785, y: -1.7179, rotation: 0.04 },
+      ],
+      lower_torso: [
+        { time: 0, rotation: 0 },
+        { time: 0.03, rotation: -0.07 },
+        { time: 0.3, rotation: 0 },
+        { time: 0.6, rotation: 0 },
+      ],
+      head: [
+        { time: 0, rotation: 0.0362 },
+        { time: 0.03, x: -5.5474, y: 0.3944, rotation: 0 },
+        { time: 0.05, rotation: 0.0862 },
+        { time: 0.18, x: -3.6723, y: 0.2004, rotation: 0 },
+        { time: 0.3, rotation: 0.0162 },
+        { time: 0.6, rotation: 0.0362 },
+      ],
+      right_arm: [
+        { time: 0, rotation: 1.3374 },
+        { time: 0.03, rotation: 1.8712 },
+        { time: 0.18, rotation: 1.9167 },
+        { time: 0.25, rotation: 1.6472 },
+        { time: 0.4, rotation: 1.6414 },
+        { time: 0.6, rotation: 1.3374 },
+      ],
+      right_forearm: [
+        { time: 0, rotation: -1.3632 },
+        { time: 0.03, rotation: -2.2773 },
+        { time: 0.18, rotation: -2.0519 },
+        { time: 0.25, rotation: -1.552 },
+        { time: 0.4, rotation: -1.6221 },
+        { time: 0.6, rotation: -1.3632 },
+      ],
+      right_hand: [
+        { time: 0, rotation: 0 },
+        { time: 0.03, rotation: 0.25 },
+        { time: 0.3, rotation: 0 },
+        { time: 0.6, rotation: 0 },
+      ],
+      left_arm: [
+        { time: 0, rotation: -0.9988 },
+        { time: 0.03, rotation: -0.6201 },
+        { time: 0.18, rotation: -0.7564 },
+        { time: 0.25, rotation: -1.0388 },
+        { time: 0.6, rotation: -0.9988 },
+      ],
+      left_forearm: [
+        { time: 0, rotation: -1.5266 },
+        { time: 0.03, rotation: -1.806 },
+        { time: 0.18, rotation: -2.0329 },
+        { time: 0.3, rotation: -1.4966 },
+        { time: 0.6, rotation: -1.5266 },
+      ],
+      left_hand: [
+        { time: 0, rotation: 0 },
+        { time: 0.03, rotation: 0.1 },
+        { time: 0.3, rotation: 0 },
+        { time: 0.6, rotation: 0 },
+      ],
+      left_leg: [
+        { time: 0, x: 0.9306, y: 1.7186, rotation: -0.15 },
+        { time: 0.6, x: 0.9306, y: 1.7186, rotation: -0.15 },
+      ],
+      left_shin: [
+        { time: 0, rotation: 0.22 },
+        { time: 0.6, rotation: 0.22 },
+      ],
+      left_foot: [
+        { time: 0, rotation: -0.05 },
+        { time: 0.6, rotation: -0.05 },
+      ],
+      right_leg: [
+        { time: 0, rotation: -0.2468 },
+        { time: 0.6, rotation: -0.2468 },
+      ],
+      right_shin: [
+        { time: 0, rotation: -0.0902 },
+        { time: 0.6, rotation: -0.0902 },
+      ],
+      right_foot: [
+        { time: 0, rotation: 0.06 },
+        { time: 0.6, rotation: 0.06 },
+      ],
+    },
+  },
+  // Extracted from the workspace's 'Cat - Pistol' 'Shoot' animation
+  // (built-in pistol_fire baked through resolveAnimation + animBoneOffsets).
+  {
+    id: 'tpl_pistol_attack',
+    name: 'Pistol Attack',
+    duration: 0.6,
+    loop: true,
+    builtIn: true,
+    tracks: {
+      torso: [
+        { time: 0, y: 0, rotation: 0.08 },
+        { time: 0.03, y: 2, rotation: -0.04 },
+        { time: 0.18, y: -1, rotation: 0.1 },
+        { time: 0.4, y: 0, rotation: 0.08 },
+        { time: 0.6, y: 0, rotation: 0.08 },
+      ],
+      lower_torso: [
+        { time: 0, rotation: 0 },
+        { time: 0.03, rotation: -0.06 },
+        { time: 0.3, rotation: 0 },
+        { time: 0.6, rotation: 0 },
+      ],
+      head: [
+        { time: 0, x: -16.7929, y: 1.5414, rotation: -0.0686 },
+        { time: 0.03, x: -21.323, y: 1.7455, rotation: -0.0686 },
+        { time: 0.05, x: -16.7929, y: 1.5414, rotation: -0.0186 },
+        { time: 0.3, x: -16.7929, y: 1.5414, rotation: -0.0886 },
+        { time: 0.6, x: -16.7929, y: 1.5414, rotation: -0.0686 },
+      ],
+      right_arm: [
+        { time: 0, rotation: 0.312 },
+        { time: 0.03, x: 0, y: -0.3948, rotation: 1 },
+        { time: 0.25, rotation: 1.13 },
+        { time: 0.4, rotation: 0.7446 },
+        { time: 0.6, rotation: 0.312 },
+      ],
+      right_forearm: [
+        { time: 0, rotation: -0.3964 },
+        { time: 0.03, rotation: -1.82 },
+        { time: 0.25, rotation: -1.44 },
+        { time: 0.4, rotation: -0.8688 },
+        { time: 0.6, rotation: -0.3964 },
+      ],
+      right_hand: [
+        { time: 0, rotation: 0 },
+        { time: 0.03, rotation: 0.22 },
+        { time: 0.3, rotation: 0 },
+        { time: 0.6, rotation: 0 },
+      ],
+      left_arm: [
+        { time: 0, rotation: -0.88 },
+        { time: 0.6, rotation: -0.88 },
+      ],
+      left_forearm: [
+        { time: 0, rotation: -0.4 },
+        { time: 0.6, rotation: -0.4 },
+      ],
+      left_hand: [
+        { time: 0, rotation: 0.06 },
+        { time: 0.6, rotation: 0.06 },
+      ],
+      left_leg: [
+        { time: 0, rotation: -0.15 },
+        { time: 0.6, rotation: -0.15 },
+      ],
+      left_shin: [
+        { time: 0, rotation: 0.22 },
+        { time: 0.6, rotation: 0.22 },
+      ],
+      left_foot: [
+        { time: 0, rotation: -0.05 },
+        { time: 0.6, rotation: -0.05 },
+      ],
+      right_leg: [
+        { time: 0, rotation: -0.3305 },
+        { time: 0.6, rotation: -0.3305 },
+      ],
+      right_shin: [
+        { time: 0, rotation: -0.0902 },
+        { time: 0.6, rotation: -0.0902 },
+      ],
+      right_foot: [
+        { time: 0, rotation: 0.06 },
+        { time: 0.6, rotation: 0.06 },
+      ],
+    },
+  },
+  // Extracted from the workspace's 'Cat - Conscript' 'walk' animation
+  // (customAnimations.walk baked through resolveAnimation + animBoneOffsets).
+  {
+    id: 'tpl_walk',
+    name: 'Walk',
+    duration: 0.72,
+    loop: true,
+    builtIn: true,
+    tracks: {
+      torso: [
+        { time: 0, x: -2.5707, y: 2.9287, rotation: -0.04 },
+        { time: 0.18, x: -2.5707, y: -3.0713, rotation: 0 },
+        { time: 0.36, x: -2.5707, y: 2.9287, rotation: 0.04 },
+        { time: 0.54, x: -2.5707, y: -3.0713, rotation: 0 },
+        { time: 0.72, x: -2.5707, y: 2.9287, rotation: -0.04 },
+      ],
+      lower_torso: [
+        { time: 0, rotation: 0.14 },
+        { time: 0.18, rotation: 0 },
+        { time: 0.36, rotation: -0.14 },
+        { time: 0.54, rotation: 0 },
+        { time: 0.72, rotation: 0.14 },
+      ],
+      head: [
+        { time: 0, rotation: 0 },
+        { time: 0.22, rotation: 0.05 },
+        { time: 0.36, rotation: 0 },
+        { time: 0.58, rotation: 0.05 },
+        { time: 0.72, rotation: 0 },
+      ],
+      left_leg: [
+        { time: 0, rotation: -0.42 },
+        { time: 0.36, rotation: 0.42 },
+        { time: 0.72, rotation: -0.42 },
+      ],
+      left_shin: [
+        { time: 0, rotation: 0.1 },
+        { time: 0.18, rotation: 0.08 },
+        { time: 0.36, rotation: 0.18 },
+        { time: 0.54, rotation: 0.65 },
+        { time: 0.72, rotation: 0.1 },
+      ],
+      left_foot: [
+        { time: 0, rotation: -0.22 },
+        { time: 0.18, rotation: 0 },
+        { time: 0.36, rotation: 0.3 },
+        { time: 0.54, rotation: -0.1 },
+        { time: 0.72, rotation: -0.22 },
+      ],
+      right_leg: [
+        { time: 0, rotation: 0.42 },
+        { time: 0.36, rotation: -0.42 },
+        { time: 0.72, rotation: 0.42 },
+      ],
+      right_shin: [
+        { time: 0, rotation: 0.18 },
+        { time: 0.18, rotation: 0.65 },
+        { time: 0.36, rotation: 0.1 },
+        { time: 0.54, rotation: 0.08 },
+        { time: 0.72, rotation: 0.18 },
+      ],
+      right_foot: [
+        { time: 0, rotation: 0.3 },
+        { time: 0.18, rotation: -0.1 },
+        { time: 0.36, rotation: -0.22 },
+        { time: 0.54, rotation: 0 },
+        { time: 0.72, rotation: 0.3 },
+      ],
+      left_arm: [
+        { time: 0, rotation: -0.773 },
+        { time: 0.36, rotation: -1.373 },
+        { time: 0.72, rotation: -0.773 },
+      ],
+      left_forearm: [
+        { time: 0, rotation: 0.012 },
+        { time: 0.18, rotation: -0.258 },
+        { time: 0.36, rotation: -0.358 },
+        { time: 0.54, rotation: -0.258 },
+        { time: 0.72, rotation: 0.012 },
+      ],
+      left_hand: [
+        { time: 0, rotation: 0.18 },
+        { time: 0.36, rotation: 0.06 },
+        { time: 0.72, rotation: 0.18 },
+      ],
+      right_arm: [
+        { time: 0, rotation: 0.772 },
+        { time: 0.36, rotation: 1.372 },
+        { time: 0.72, rotation: 0.772 },
+      ],
+      right_forearm: [
+        { time: 0, rotation: -0.518 },
+        { time: 0.18, rotation: -0.618 },
+        { time: 0.36, rotation: -0.888 },
+        { time: 0.54, rotation: -0.618 },
+        { time: 0.72, rotation: -0.518 },
+      ],
+      right_hand: [
+        { time: 0, rotation: -0.06 },
+        { time: 0.36, rotation: -0.18 },
+        { time: 0.72, rotation: -0.06 },
+      ],
+    },
+  },
 ];
