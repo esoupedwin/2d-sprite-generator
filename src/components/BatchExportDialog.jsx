@@ -8,9 +8,8 @@ import {
 
 /**
  * "All Actions → Folder" export. Renders every visible action of the character
- * as a body sheet and a legs sheet and writes them, via the dev server, into
- *   <output folder>/<character folder>/<character>/body/<action>.png
- *   <output folder>/<character folder>/<character>/legs/<action>.png
+ * as right-arm, head (still), head_anim, body and legs sheets and writes them, via the dev server, into
+ *   <output folder>/<character folder>/<character>/{right_arm,head,head_anim,body,legs}/<action>.png
  * Frame count defaults to 32; the output folder defaults to ~/Downloads.
  */
 export function BatchExportDialog({ open, onClose, character, onExport }) {
@@ -25,7 +24,7 @@ export function BatchExportDialog({ open, onClose, character, onExport }) {
       title="Export All Actions"
       subtitle={<>
         <span className="text-foreground font-medium">{characterLabel(character)}</span>
-        {' '}· {actions.length} action{actions.length === 1 ? '' : 's'} · body + legs sheets
+        {' '}· {actions.length} action{actions.length === 1 ? '' : 's'} · right arm + head + head_anim + body + legs sheets
       </>}
       busy={ex.busy}
       onClose={onClose}

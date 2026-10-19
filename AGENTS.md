@@ -138,8 +138,9 @@ the weapon-based default above. The live canvas and every export path thread
 callers for filenames/logic), but weapon z-order no longer branches on it — the
 head sits on top regardless, so `isMelee` no longer affects the draw order.
 
-The split export uses `partsFilter` ({ legs, head, others } group flags); the
-layer loop respects it via `includeFor(key)`, so split + custom z-order compose.
+The split export uses `partsFilter` ({ legs, head, others, accessory? } group
+flags); the layer loop respects it via `includeFor(key)`, so split + custom
+z-order compose. `accessory` (the hand accessory drawn last) defaults to `others`.
 
 **Per-animation weapon visibility:** `renderCharacter` also takes `hideWeapon`
 (skips the `weapon` layer). Stored on the character as `animWeaponHidden[animId]
@@ -168,6 +169,10 @@ weapon anchor/rotation handles are not drawn while hidden.
     accessoryScales:  { [weaponKey]: 1.0 },   // right-arm accessory size, per weapon type
     accessoryOffset:  { x, y, rotation },     // default accessory anchor (legacy single offset)
     accessoryAnimOffsets: { [animId]: {x,y,rotation} }, // per-animation accessory anchor
+    headImage:        dataUrl,                 // head-skin PNG = frame 0 (resting frame)
+    headImageFrames:  [dataUrl, ...],          // optional extra head frames, play order (blink etc.)
+    headAnim:         { frameMs, every, bounce }, // head-frame timing (partial; see utils/headAnim.js)
+    headImageScale:   1.0,                     // head PNG size multiplier, character-wide
   },
   boneOffsets:           { [boneId]: {x?,y?,rotation?} },  // drag-adjusted global pose
   skinOverrides:         { [skinKey]: [[...], ...] },       // edited skin templates
@@ -203,6 +208,37 @@ Never access `parts.weaponAnimOffsets` or `parts.accessoryAnimOffsets` directly.
 **Render options** — `resolveRenderOptions(character, animId)` in `Renderer.js` returns `{ animation, isMelee, partZOrder, hideWeapon }`. Every `renderCharacter` caller spreads it (live canvas via the `renderOpts` prop, ghosts, sheet/pose/parts exports). Add a new per-animation flag THERE, not at each call site.
 
 **Character object helpers** (`utils/characters.js`): `withOptional(obj, key, value)` (set-or-delete an optional field), `characterLabel(c)`, folder helpers `mergeFolders` / `uniqueFolderName` / `folderOf`, and `normalizeCharacters` which every ingress (localStorage, `characters.json`, workspace file) runs to strip legacy keys and default the arrays. `utils/names.js` has `uniqueName(base, taken, sep)`.
+
+## Head skin frame sequence (blink)
+
+The head PNG can be a short frame sequence. `parts.headImage` stays a plain
+string (frame 0, the resting frame — single-PNG characters are untouched);
+`parts.headImageFrames[]` holds the extra frames in play order and
+`parts.headAnim = { frameMs, every, bounce }` the timing (defaults in
+`HEAD_ANIM_DEFAULTS`, `utils/headAnim.js`: 80 ms per frame, play every 2 s,
+bounce on). `bounce` plays 0 1 2 1; `every: 0` loops continuously.
+
+`headFrameIndex(parts, t)` picks the frame for clock time `t` using integer
+milliseconds (float modulo drifts at frame boundaries). A play lands at the
+**end** of each `every` interval (first blink at `t = every`). The live canvas
+feeds a continuous playback clock (`stateRef.headClock`, which never wraps at
+the action loop — a 10 s blink is 10 s even in a 2 s idle). **Sprite sheets
+use `headPlayFrameIndex(parts, t)` instead**: one play of the sequence from
+t = 0 of the action, then the resting frame, `every` ignored — a sheet samples
+a single pass from t = 0, so a blink due at t = `every` would otherwise never
+appear in it (an action shorter than one play captures a partial blink). The
+split export's `head` sheet pins frame 0 (`buildSpriteSheet`'s `staticHead`);
+`head_anim` and whole-character sheets use the one-play picker. The
+single-frame exports (pose / parts sheet) keep the clock-based picker at the
+frame's own time. `renderCharacter` still takes a single `headImage`: every
+caller resolves the frame first — the live canvas via `headImageAt(t)` in
+`CharacterCanvas.jsx` (frames decoded by `hooks/useImageDataUrls.js`), sheets
+via `loadRenderAssets().headPlayImageAt(t)`, single frames via `.headImageAt(t)`.
+
+UI: Head Skin section of `CharacterBuilder.jsx` (Edit Body) — frame strip with
+per-frame remove, "Replace PNG" (frame 0 only), "Add frames" (multi-select,
+sorted numeric-aware by filename), and the Frame / Every / Bounce row that
+appears once there is more than one frame. Reset clears all three keys.
 
 ## Right-arm accessory system
 
@@ -339,7 +375,7 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 
 `loadRenderAssets` preloads `weaponImage` from `parts.weaponImages[parts.weapon]` and `accessoryImage` from `parts.accessoryImages[parts.weapon]`. Both are passed into `renderCharacter`. `isMelee` is also resolved (with template fallback) and passed explicitly.
 
-**All Actions → Folder** (`exportAllActionSheets` in `export.js`, `BatchExportDialog.jsx`): for every action in `listExportableActions(character)` (weapon set minus `hiddenAnimations`, plus the character's own custom animations) it builds a **body** sheet (`partsFilter {others, head}`) and a **legs** sheet and POSTs each PNG to the Vite endpoint `/api/export-sprites` (`vite.config.js`), which writes `<root>/<folder>/<character>/{body,legs}/<action>.png`. `<folder>` = `character.folder` (omitted if none), `<character>` = `displayName || name`, `<action>` = the chip label — all via `sanitizeFileName`. Each sheet is POSTed as a raw `image/png` body with `X-Export-Root` / `X-Export-Path` headers (URI-encoded); uploads overlap with the next render. GET on the endpoint returns the default output folder (`~/Downloads`). Only works under `npm run dev` (needs the server); the "Single Sprite Sheet" item is the old per-action browser download.
+**All Actions → Folder** (`exportAllActionSheets` in `export.js`, `BatchExportDialog.jsx`): for every action in `listExportableActions(character)` (weapon set minus `hiddenAnimations`, plus the character's own custom animations) it builds one sheet per `SPLIT_SHEET_GROUPS`, top → bottom as they stack in-game — **right_arm** (`partsFilter {accessory}`: the hand / "Right Arm's Skin" accessory), **head** (`{head}` + `staticHead: true`: head prop + the FIRST head skin on every frame — no blink), **head_anim** (`{head}`: head prop + the head-frame sequence, as previewed), **body** (`{others}`: torso, arms, weapon, back accessory) and **legs** — and POSTs each PNG to the Vite endpoint `/api/export-sprites` (`vite.config.js`), which writes `<root>/<folder>/<character>/{right_arm,head,head_anim,body,legs}/<action>.png`. `head` and `head_anim` are alternatives for the game, not layers to stack; both are always written (identical for a character with no extra head frames) so every character folder has the same layout. The same groups drive the "Single Sprite Sheet" download (`exportSpriteSheet`, `split` defaults on → `<base>_right_arm/_head/_head_anim/_body/_legs.png`). `buildSpriteSheet` takes `staticHead` for this (first head skin instead of `headImageAt(t)`). `renderCharacter`'s `partsFilter` gained an `accessory` flag for this; when absent it follows `others`, so older callers are unchanged. The right_arm sheet is written even for characters without an accessory (transparent) so the folder layout is uniform for the game loader. `<folder>` = `character.folder` (omitted if none), `<character>` = `displayName || name`, `<action>` = the chip label — all via `sanitizeFileName`. Each sheet is POSTed as a raw `image/png` body with `X-Export-Root` / `X-Export-Path` headers (URI-encoded); uploads overlap with the next render. GET on the endpoint returns the default output folder (`~/Downloads`). Only works under `npm run dev` (needs the server); the "Single Sprite Sheet" item is the old per-action browser download.
 
 **Export Folder** (`exportCharactersSheets` in `export.js`, `FolderExportDialog.jsx`): same thing for every character in one manager folder (or the un-foldered ones via the "No folder" option), with one aggregated progress counter. Defaults to the active character's folder.
 

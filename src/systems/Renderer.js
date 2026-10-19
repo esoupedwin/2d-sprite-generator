@@ -186,6 +186,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // set check when omitted.
     isMelee: isMeleeOpt = null,
     // partsFilter: null/undefined draws everything. Otherwise an object of
+    // group flags { legs, head, others, accessory? } — set a group to false to
+    // omit it; `accessory` (the hand accessory) defaults to `others`.
     // group flags { legs, head, others } — set a group to false to omit it.
     // Used by split-export to render legs / head / body onto separate sprite
     // sheets at identical frame coords so they overlay exactly downstream.
@@ -205,6 +207,9 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   const includeLegs   = pf.legs   !== false;
   const includeHead   = pf.head   !== false;
   const includeOthers = pf.others !== false;
+  // Hand ("right arm") accessory: its own group when the filter names it,
+  // otherwise it rides with `others` as it always did.
+  const includeAccessory = pf.accessory !== undefined ? !!pf.accessory : includeOthers;
 
   ctx.save();
   ctx.translate(originX, originY);
@@ -261,7 +266,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   }
 
   // Hand accessory always sits on top of everything (not reorderable).
-  if (includeOthers) drawAccessory(ctx, character, wt, accessoryImage, animation);
+  if (includeAccessory) drawAccessory(ctx, character, wt, accessoryImage, animation);
 
   if (showBones) {
     renderBones(ctx, worldTransforms, highlightBone);

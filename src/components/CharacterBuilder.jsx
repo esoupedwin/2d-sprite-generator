@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
+import { resolveHeadAnim, HEAD_FRAME_MS_MIN, HEAD_FRAME_MS_MAX, HEAD_EVERY_MAX } from '../utils/headAnim.js';
 import { CharacterManagerDialog } from './CharacterManagerDialog.jsx';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
-import { Bone, ChevronDown, Hand, ImageUp, Pencil, RotateCcw, Users, X } from 'lucide-react';
+import { Bone, ChevronDown, Hand, ImageUp, Pencil, Plus, RotateCcw, Users, X } from 'lucide-react';
 
 function BigIconButton({ icon: Icon, label, active, activeClass, inactiveClass, onClick, title }) {
   return (
@@ -60,7 +61,7 @@ function HexInput({ value, onCommit }) {
 export const CharacterBuilder = memo(function CharacterBuilder({
   character, characters, activeCharId, currentAnimation,
   onPartChange, onColorChange, onScaleChange,
-  onBodyImageChange, onHeadImageChange, onHeadImageScaleChange,
+  onBodyImageChange, onHeadImageChange, onHeadImageFramesChange, onHeadAnimChange, onHeadImageScaleChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter, onReorderCharacters,
   onDisplayNameChange,
@@ -168,8 +169,12 @@ export const CharacterBuilder = memo(function CharacterBuilder({
       <Separator className="my-2" />
       <HeadSkinSection
         image={character.headImage}
+        frames={character.headImageFrames}
+        anim={resolveHeadAnim(character)}
         scale={character.headImageScale ?? 1}
         onImageChange={onHeadImageChange}
+        onFramesChange={onHeadImageFramesChange}
+        onAnimChange={onHeadAnimChange}
         onScaleChange={onHeadImageScaleChange}
       />
       <Separator className="my-2" />
@@ -205,23 +210,77 @@ const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;
 const SCALE_STEP = 0.1;
 
-// Character-wide head PNG. One image + size multiplier shared by every
-// animation; stored as parts.headImage / parts.headImageScale.
+// Character-wide head PNG. Frame 0 (parts.headImage) + optional extra frames
+// (parts.headImageFrames) form a short sequence such as a blink, timed by
+// parts.headAnim; the size multiplier (parts.headImageScale) is shared by
+// every animation.
 const HEAD_IMG_MIN = 0.3;
 const HEAD_IMG_MAX = 3.0;
 const HEAD_IMG_STEP = 0.01;
 
-function HeadSkinSection({ image, scale, onImageChange, onScaleChange }) {
-  const inputRef = useRef(null);
+// Reads files as data-URLs, in numeric-aware name order so "1.png, 2.png,
+// 10.png" become frames in the order the user numbered them.
+function readFilesAsDataUrls(fileList) {
+  const files = Array.from(fileList ?? [])
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  return Promise.all(files.map(file => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  }))).then(urls => urls.filter(Boolean));
+}
+
+// Small numeric field that commits on blur/Enter: every character-state
+// change re-persists the whole image-laden character set, so per-keystroke
+// writes would hitch the canvas.
+function CommitNumberField({ value, min, max, step = 1, onCommit, className }) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => { setDraft(String(value)); }, [value]);
+  const commit = () => {
+    const n = parseFloat(draft);
+    if (!Number.isFinite(n)) { setDraft(String(value)); return; }
+    const v = Math.min(max, Math.max(min, n));
+    setDraft(String(v));
+    if (v !== value) onCommit(v);
+  };
+  return (
+    <input
+      type="number"
+      min={min} max={max} step={step}
+      value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      className={cn('h-6 text-center text-[11px] font-mono rounded border border-border bg-secondary text-foreground outline-none focus:border-primary', className)}
+    />
+  );
+}
+
+function HeadSkinSection({ image, frames = [], anim, scale, onImageChange, onFramesChange, onAnimChange, onScaleChange }) {
+  const replaceRef = useRef(null);   // single file → replaces frame 0
+  const addRef     = useRef(null);   // several files → first becomes frame 0 if missing, rest appended
   const isDefault = Math.abs(scale - 1) < 0.001;
   const setScale = (v) => onScaleChange(+v.toFixed(2));
+  const frameCount = image ? 1 + frames.length : 0;
 
-  const handleFile = (file) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => onImageChange(reader.result);
-    reader.readAsDataURL(file);
+  const handleReplace = async (fileList) => {
+    const [url] = await readFilesAsDataUrls(fileList);
+    if (url) onImageChange(url);
   };
+  const handleAdd = async (fileList) => {
+    const urls = await readFilesAsDataUrls(fileList);
+    if (!urls.length) return;
+    if (!image) {
+      onImageChange(urls[0]);
+      if (urls.length > 1) onFramesChange(urls.slice(1));
+    } else {
+      onFramesChange([...frames, ...urls]);
+    }
+  };
+  const removeFrame = (i) => onFramesChange(frames.filter((_, idx) => idx !== i));
+
+  const thumbCls = 'w-10 h-10 object-contain rounded border bg-background/40';
 
   return (
     <section className="flex flex-col gap-2">
@@ -232,41 +291,85 @@ function HeadSkinSection({ image, scale, onImageChange, onScaleChange }) {
             type="button"
             onClick={() => onImageChange(null)}
             className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
-            title="Remove the head PNG (fall back to the vector head)"
+            title="Remove the head PNG and all its frames (fall back to the vector head)"
           >
             Reset
           </button>
         )}
       </div>
-      <div className="flex items-center gap-3">
-        {image ? (
-          <img
-            src={image}
-            alt="Head skin"
-            className="w-12 h-12 object-contain rounded border border-teal-400/40 bg-background/40"
-          />
-        ) : (
+
+      {image ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <img src={image} alt="Head skin frame 1" title="Frame 1 (resting)" className={cn(thumbCls, 'border-teal-400/40')} />
+          {frames.map((url, i) => (
+            <div key={i} className="relative group">
+              <img src={url} alt={`Head skin frame ${i + 2}`} title={`Frame ${i + 2}`} className={cn(thumbCls, 'border-border')} />
+              <button
+                type="button"
+                onClick={() => removeFrame(i)}
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-secondary border border-border text-muted-foreground hover:text-destructive hover:border-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                title={`Remove frame ${i + 2}`}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded border border-dashed border-border bg-background/40 flex items-center justify-center text-[9px] text-muted-foreground">
             none
           </div>
-        )}
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
-          title={image ? 'Replace the head PNG' : 'Upload a PNG to skin the head'}
-        >
-          <ImageUp className="h-3.5 w-3.5" />
-          {image ? 'Replace PNG' : 'Upload PNG'}
-        </button>
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/png,image/jpeg"
-          className="hidden"
-          onChange={e => { handleFile(e.target.files?.[0]); e.target.value = ''; }}
-        />
-      </div>
+          <button
+            type="button"
+            onClick={() => addRef.current?.click()}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
+            title="Upload one PNG to skin the head, or several to make a frame sequence"
+          >
+            <ImageUp className="h-3.5 w-3.5" />
+            Upload PNG
+          </button>
+        </div>
+      )}
+
+      {image && (
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => replaceRef.current?.click()}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
+            title="Replace frame 1 (the resting head PNG)"
+          >
+            <ImageUp className="h-3.5 w-3.5" />
+            Replace PNG
+          </button>
+          <button
+            type="button"
+            onClick={() => addRef.current?.click()}
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
+            title="Add PNG frames after the resting frame (e.g. half-closed and closed eyes for a blink)"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add frames
+          </button>
+        </div>
+      )}
+      <input
+        ref={replaceRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        className="hidden"
+        onChange={e => { handleReplace(e.target.files); e.target.value = ''; }}
+      />
+      <input
+        ref={addRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        multiple
+        className="hidden"
+        onChange={e => { handleAdd(e.target.files); e.target.value = ''; }}
+      />
+
       {image && (
         <div className="flex items-center justify-end gap-0.5">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head skin size</span>
@@ -283,6 +386,44 @@ function HeadSkinSection({ image, scale, onImageChange, onScaleChange }) {
             disabled={scale >= HEAD_IMG_MAX}
             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
           >+</button>
+        </div>
+      )}
+
+      {frameCount > 1 && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground" title="How long each frame is shown">
+              Frame
+              <CommitNumberField
+                value={anim.frameMs} min={HEAD_FRAME_MS_MIN} max={HEAD_FRAME_MS_MAX} step={10}
+                onCommit={v => onAnimChange({ frameMs: Math.round(v) })}
+                className="w-14"
+              />
+              ms
+            </label>
+            <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground" title="Seconds from one play to the next; 0 = loop continuously">
+              Every
+              <CommitNumberField
+                value={anim.every} min={0} max={HEAD_EVERY_MAX} step={0.1}
+                onCommit={v => onAnimChange({ every: +v.toFixed(2) })}
+                className="w-12"
+              />
+              s
+            </label>
+            <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground cursor-pointer" title="Play the frames forward then back (1 2 3 2) — what a blink needs">
+              <input
+                type="checkbox"
+                checked={!!anim.bounce}
+                onChange={e => onAnimChange({ bounce: e.target.checked })}
+                className="accent-teal-400"
+              />
+              Bounce
+            </label>
+          </div>
+          <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
+            {frameCount} frames{anim.bounce ? ', played forward then back' : ''}.
+            A sprite sheet covers one loop of the action, so it only contains the sequence when <em>Every</em> is at or below the action length.
+          </span>
         </div>
       )}
       <span className="text-[10px] text-muted-foreground/70 leading-relaxed">

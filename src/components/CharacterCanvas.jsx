@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useCallback, useMemo, useState, forwardRef, useImperativeHandle } from 'react';
 import { ANIMATIONS, getPoseAtTime, resolveAnimation, keyframeTimeKey } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { renderCharacter } from '../systems/Renderer.js';
@@ -14,6 +14,8 @@ import { mergeOffsets } from '../utils/transforms.js';
 import { worldToLocal } from '../utils/mathUtils.js';
 import { FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y } from '../utils/spriteExportConfig.js';
 import { useImageDataUrl } from '../hooks/useImageDataUrl.js';
+import { useImageDataUrls } from '../hooks/useImageDataUrls.js';
+import { headFrameUrls, headFrameIndex } from '../utils/headAnim.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 // The canvas backing buffer is sized to match its rendered container so the
@@ -133,8 +135,13 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   // Decoded HTMLImageElements for character body/head/weapon PNGs.
   // The hook handles cancellation so rapid weapon swaps don't race.
   const bodyImageRef   = useImageDataUrl(character?.bodyImage);
-  // One head PNG per character, shared by every animation.
-  const headImageRef   = useImageDataUrl(character?.headImage);
+  // Head PNG frames per character (frame 0 + optional blink-style sequence),
+  // shared by every animation; the frame shown is picked by action time.
+  const headFrameUrlList = useMemo(
+    () => headFrameUrls(character),
+    [character?.headImage, character?.headImageFrames],
+  );
+  const headImagesRef  = useImageDataUrls(headFrameUrlList);
   const weaponImageRef    = useImageDataUrl(character?.weaponImages?.[character?.weapon]);
   const accessoryImageRef = useImageDataUrl(character?.accessoryImages?.[character?.weapon]);
   const bodyAccessoryImageRef = useImageDataUrl(character?.bodyAccessoryImage);
@@ -302,6 +309,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const anim = rawAnim
       ? resolveAnimation(rawAnim, (s.animKeyframeOverrides ?? {})[s.currentAnimation] ?? null)
       : null;
+    // Head-skin frame clock: runs continuously while playing and never wraps
+    // at the action loop, so "blink every 10 s" is 10 s even in a 2 s idle.
+    if (anim && s.isPlaying) s.headClock = (s.headClock ?? 0) + delta;
     if (anim && s.isPlaying) {
       s.time += delta;
       if (anim.loop)                       s.time %= anim.duration;
@@ -418,6 +428,12 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const skins = s.cachedSkins;
 
     const drag = dragRef.current;
+    // Head-skin frame on the continuous playback clock, offset by (t − s.time)
+    // so the onion-skin ghosts sample it just before/after the live frame.
+    const headImageAt = (t) => {
+      const imgs = headImagesRef.current;
+      return imgs[headFrameIndex(s.character, (s.headClock ?? 0) + (t - s.time))] ?? imgs[0] ?? null;
+    };
     // Onion skin: faint ghosts of the pose just before/after the playhead so
     // the user can judge spacing while paused in Edit Animation. Drawn behind
     // the live character; skipped during playback (would just smear).
@@ -434,7 +450,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         ctx.globalAlpha = 0.22;
         renderCharacter(ctx, s.character, gp, {
           originX, originY, scale, skins,
-          bodyImage: bodyImageRef.current, headImage: headImageRef.current,
+          bodyImage: bodyImageRef.current, headImage: headImageAt(t),
           weaponImage: weaponImageRef.current, accessoryImage: accessoryImageRef.current,
           bodyAccessoryImage: bodyAccessoryImageRef.current,
           ...s.renderOpts,
@@ -455,7 +471,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
                    : (s.editAnimPose ? (s.activeKeyframe?.boneId ?? null) : null),
       skins,
       bodyImage:       bodyImageRef.current,
-      headImage:       headImageRef.current,
+      headImage:       headImageAt(s.time),
       weaponImage:     weaponImageRef.current,
       accessoryImage:  accessoryImageRef.current,
       bodyAccessoryImage: bodyAccessoryImageRef.current,

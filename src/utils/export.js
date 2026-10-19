@@ -12,6 +12,7 @@ import { uniqueName } from './names.js';
 import { characterLabel } from './characters.js';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
+import { headFrameUrls, headFrameIndex, headPlayFrameIndex } from './headAnim.js';
 import {
   FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y, FRAME_SCALE,
   FRAME_PX, SHEET_COLS, DEFAULT_FRAMES,
@@ -54,9 +55,6 @@ function exportFileBase(character, animationName) {
   return `${w}_${action}`;
 }
 
-function resolveHeadUrl(parts) {
-  return parts?.headImage ?? null;
-}
 
 // Decode a data-URL/asset URL into an HTMLImageElement. Returns null on
 // missing/failed loads so the rest of the export keeps going.
@@ -94,14 +92,19 @@ async function loadRenderAssets(character) {
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
   const parts = character.parts ?? {};
-  const [bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage] = await Promise.all([
+  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
-    loadImage(resolveHeadUrl(parts)),
+    Promise.all(headFrameUrls(parts).map(loadImage)),
     loadImage(parts.weaponImages?.[parts.weapon]),
     loadImage(parts.accessoryImages?.[parts.weapon]),
     loadImage(parts.bodyAccessoryImage),
   ]);
-  return { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage };
+  // headImages = every head-skin frame in play order (see utils/headAnim.js).
+  //   headImageAt(t)     — clock-based (`every` honoured): single-frame exports.
+  //   headPlayImageAt(t) — one play from t = 0 then resting: sprite sheets.
+  const headImageAt     = (t) => headImages[headFrameIndex(parts, t)]     ?? headImages[0] ?? null;
+  const headPlayImageAt = (t) => headImages[headPlayFrameIndex(parts, t)] ?? headImages[0] ?? null;
+  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage };
 }
 
 /**
@@ -127,7 +130,7 @@ async function loadRenderAssets(character) {
  *   duration, loop,    // for playback timing in the preview
  * }
  */
-export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = null, assets = null } = {}) {
+export async function buildSpriteSheet(character, animationName, { frameCount = DEFAULT_FRAMES, drawGrid = false, partsFilter = null, assets = null, staticHead = false } = {}) {
   if (!character) return null;
 
   // Resolve animation + persistent offsets; preload PNGs and build skin map.
@@ -135,11 +138,16 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   // frames match the live preview. Ragdoll overlay is ephemeral and excluded.
   // `assets` lets a caller rendering several sheets of the same action reuse
   // one loadRenderAssets() result instead of decoding every PNG again.
+  // `staticHead` → first head skin on every frame (no head-frame sequence).
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } =
+  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage } =
     assets ?? await loadRenderAssets(character);
+  // `staticHead` pins the head to its first skin (the resting frame) — the still
+  // "head" sheet. Otherwise the head-frame sequence plays ONCE from the top of
+  // the action (headPlayFrameIndex), so the blink is always in the sheet.
+  const headAt = staticHead ? () => headImages[0] ?? null : headPlayImageAt;
   const renderOpts = resolveRenderOptions(character, animationName);
 
   const cols = Math.min(frameCount, SHEET_COLS);
@@ -180,7 +188,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       scale:     FRAME_SCALE,
       skins,
       bodyImage,
-      headImage,
+      headImage: headAt(t),
       weaponImage,
       accessoryImage,
       bodyAccessoryImage,
@@ -204,45 +212,46 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   };
 }
 
+// The part groups every split export produces, all at identical frame coords
+// so a game can overlay them, listed top → bottom as they stack in-game:
+//   right_arm — the hand ("Right Arm's Skin") accessory, drawn above everything
+//   head      — head prop + the FIRST head skin on every frame (no blink)
+//   head_anim — head prop + the head-frame sequence (blink etc.), as previewed
+//   body      — torso, arms, weapon, body (back) accessory
+//   legs
+// `head` and `head_anim` are alternatives for the game to choose between, not
+// layers to stack. Shared by the single-sheet download and the folder exports
+// so they can't drift apart.
+const HEAD_ONLY = { accessory: false, head: true, others: false, legs: false };
+export const SPLIT_SHEET_GROUPS = [
+  { name: 'right_arm', partsFilter: { accessory: true,  head: false, others: false, legs: false } },
+  { name: 'head',      partsFilter: HEAD_ONLY, staticHead: true },
+  { name: 'head_anim', partsFilter: HEAD_ONLY },
+  { name: 'body',      partsFilter: { accessory: false, head: false, others: true,  legs: false } },
+  { name: 'legs',      partsFilter: { accessory: false, head: false, others: false, legs: true  } },
+];
+export const SHEETS_PER_ACTION = SPLIT_SHEET_GROUPS.length;
+
 /**
- * Builds the sprite sheet (no in-frame grid lines) and triggers a PNG download.
- * With `splitLegs` and/or `splitHead`, exports the character across multiple
- * PNGs at identical frame coords (overlay to reconstruct):
- *   - splitLegs        → <base>_body.png (no legs)  + <base>_legs.png
- *   - splitHead        → <base>_body.png (no head)  + <base>_head.png
- *   - both             → <base>_body.png (no legs/head) + _legs.png + _head.png
- * (`split` is accepted as a legacy alias for `splitLegs`.)
+ * Browser download of one action: a single PNG of the whole character, or
+ * (`split`, the default) one PNG per SPLIT_SHEET_GROUPS — `<base>_right_arm.png`,
+ * `<base>_head.png` (still), `<base>_head_anim.png`, `<base>_body.png`, `<base>_legs.png`.
  */
 export async function exportSpriteSheet(character, animationName, opts = {}) {
-  const { splitLegs = false, splitHead = false, split = false, ...sheetOpts } = opts;
-  const legsSplit = splitLegs || split;
+  const { split = true, ...sheetOpts } = opts;
   const base = exportFileBase(character, animationName);
 
-  if (!legsSplit && !splitHead) {
+  if (!split) {
     const sheet = await buildSpriteSheet(character, animationName, sheetOpts);
-    if (!sheet) return;
-    await downloadCanvas(sheet.canvas, `${base}.png`);
+    if (sheet) await downloadCanvas(sheet.canvas, `${base}.png`);
     return;
   }
 
-  // Body = everything except the groups being split out.
-  const body = await buildSpriteSheet(character, animationName, {
-    ...sheetOpts,
-    partsFilter: { others: true, legs: !legsSplit, head: !splitHead },
-  });
-  if (body) await downloadCanvas(body.canvas, `${base}_body.png`);
-
-  if (legsSplit) {
-    const legs = await buildSpriteSheet(character, animationName, {
-      ...sheetOpts, partsFilter: { others: false, legs: true, head: false },
-    });
-    if (legs) await downloadCanvas(legs.canvas, `${base}_legs.png`);
-  }
-  if (splitHead) {
-    const head = await buildSpriteSheet(character, animationName, {
-      ...sheetOpts, partsFilter: { others: false, legs: false, head: true },
-    });
-    if (head) await downloadCanvas(head.canvas, `${base}_head.png`);
+  // Decode the character's PNGs once for all three sheets.
+  const assets = await loadRenderAssets(character);
+  for (const g of SPLIT_SHEET_GROUPS) {
+    const sheet = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: g.partsFilter, staticHead: !!g.staticHead, assets });
+    if (sheet) await downloadCanvas(sheet.canvas, `${base}_${g.name}.png`);
   }
 }
 
@@ -296,7 +305,7 @@ async function renderPoseBase(character, animationName, currentTime) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character);
+  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character);
 
   const big = document.createElement('canvas');
   big.width  = RENDER_W * POSE_PIXEL_RATIO;
@@ -312,7 +321,7 @@ async function renderPoseBase(character, animationName, currentTime) {
     scale:   POSE_SCALE,
     skins,
     bodyImage,
-    headImage,
+    headImage: headImageAt(t),
     weaponImage,
     accessoryImage,
     bodyAccessoryImage,
@@ -525,9 +534,9 @@ export async function exportPartsSheetSVG(character, animationName, currentTime 
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImage, weaponImage, accessoryImage } = await loadRenderAssets(character);
+  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage } = await loadRenderAssets(character);
   const renderOpts = resolveRenderOptions(character, animationName);
-  const imgOpts = { skins, bodyImage, headImage, weaponImage, accessoryImage, ...renderOpts };
+  const imgOpts = { skins, bodyImage, headImage: headImageAt(t), weaponImage, accessoryImage, ...renderOpts };
 
   // Build label for weapon from part definition
   const groups = SHEET_GROUPS
@@ -608,18 +617,10 @@ function download(href, filename) {
 
 
 // ─── "All Actions → Folder" export ───────────────────────────────────────────
-// Writes, through the dev server (/api/export-sprites), one body sheet and one
-// legs sheet per visible action:
-//   <root>/<character folder>/<character>/body/<action>.png
-//   <root>/<character folder>/<character>/legs/<action>.png
-// Body = head + torso/arms/weapon/accessories (everything but the legs), so the
-// two sheets overlay at identical frame coords in-game.
-
-const SHEET_GROUPS_PER_ACTION = [
-  { name: 'body', partsFilter: { others: true,  legs: false, head: true  } },
-  { name: 'legs', partsFilter: { others: false, legs: true,  head: false } },
-];
-export const SHEETS_PER_ACTION = SHEET_GROUPS_PER_ACTION.length;
+// Writes, through the dev server (/api/export-sprites), one sheet per
+// SPLIT_SHEET_GROUPS for every visible action:
+//   <root>/<character folder>/<character>/{right_arm,head,head_anim,body,legs}/<action>.png
+// All at identical frame coords in-game (head and head_anim are alternatives).
 
 /**
  * The character's visible actions (same list as the ACTIONS panel) with the
@@ -678,7 +679,7 @@ async function postSheet(root, relPath, canvas) {
 }
 
 /**
- * Exports every visible action as body + legs sheets into `root`.
+ * Exports every visible action as right-arm + head (still) + head_anim + body + legs sheets into `root`.
  * onProgress({ done, total, label }) is called before each file is written.
  * `relDir` overrides the character's own `<folder>/<name>` directory (used by
  * the multi-character export to keep same-named characters apart).
@@ -697,10 +698,10 @@ export async function exportAllActionSheets(character, { frameCount = DEFAULT_FR
   const assets  = await loadRenderAssets(character);
   let done = 0, written = 0, pending = null;
   for (const action of actions) {
-    for (const g of SHEET_GROUPS_PER_ACTION) {
+    for (const g of SPLIT_SHEET_GROUPS) {
       const relPath = `${dir}/${g.name}/${action.file}.png`;
       onProgress?.({ done, total, label: relPath });
-      const sheet = await buildSpriteSheet(character, action.id, { frameCount, partsFilter: g.partsFilter, assets });
+      const sheet = await buildSpriteSheet(character, action.id, { frameCount, partsFilter: g.partsFilter, staticHead: !!g.staticHead, assets });
       if (pending) { await pending; written++; }
       pending = sheet?.canvas ? postSheet(root, relPath, sheet.canvas) : null;
       done++;

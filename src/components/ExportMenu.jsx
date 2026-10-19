@@ -84,7 +84,7 @@ export function ExportMenu({ onSpriteSheet, onBatchExport, onFolderExport, onSpr
             className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
           >
             <div>All Actions → Folder…</div>
-            <div className="text-[10px] opacity-60 mt-0.5">This character · body + legs sheet per action</div>
+            <div className="text-[10px] opacity-60 mt-0.5">This character · right arm + head + head_anim + body + legs sheets per action</div>
           </button>
           <button
             role="menuitem"

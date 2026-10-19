@@ -127,12 +127,12 @@ export function OutputFolderField({ value, onChange, disabled, children }) {
   );
 }
 
-/** "→ <root>/<relDir>/{body,legs}/<action>.png" — `children` appends a note (e.g. "… ×3"). */
+/** "→ <root>/<relDir>/{right_arm,head,head_anim,body,legs}/<action>.png" — `children` appends a note (e.g. "… ×3"). */
 export function SheetPathPreview({ outDir, relDir, children }) {
   const root = outDir.trim() ? trimTrailingSlashes(outDir.trim()) : '<folder>';
   return (
     <span className="text-[10px] text-muted-foreground font-mono break-all">
-      → {root}/{relDir}/{'{body,legs}'}/{'<action>.png'}{children}
+      → {root}/{relDir}/{'{right_arm,head,head_anim,body,legs}'}/{'<action>.png'}{children}
     </span>
   );
 }

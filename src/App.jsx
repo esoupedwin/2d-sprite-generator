@@ -569,13 +569,38 @@ export default function App() {
     }));
   }, [activeCharId]);
 
+  // Frame 0 of the head skin. Clearing it drops the whole frame sequence and
+  // its timing too — a character without a head PNG has nothing to animate.
   const updateHeadImage = useCallback((dataUrl) => {
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
       const parts = { ...c.parts };
       if (dataUrl) parts.headImage = dataUrl;
-      else         delete parts.headImage;
+      else {
+        delete parts.headImage;
+        delete parts.headImageFrames;
+        delete parts.headAnim;
+      }
       return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  // Extra head-skin frames (after frame 0), in play order. Empty → key removed.
+  const updateHeadImageFrames = useCallback((frames) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (frames?.length) parts.headImageFrames = frames;
+      else                delete parts.headImageFrames;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  // Head-skin sequence timing: merges a partial { frameMs, every, bounce }.
+  const updateHeadAnim = useCallback((patch) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      return { ...c, parts: { ...c.parts, headAnim: { ...(c.parts.headAnim ?? {}), ...patch } } };
     }));
   }, [activeCharId]);
 
@@ -1324,6 +1349,8 @@ export default function App() {
             onScaleChange={updatePartScale}
             onBodyImageChange={updateBodyImage}
             onHeadImageChange={updateHeadImage}
+            onHeadImageFramesChange={updateHeadImageFrames}
+            onHeadAnimChange={updateHeadAnim}
             onHeadImageScaleChange={updateHeadImageScale}
             onAddCharacter={addCharacter}
             onDeleteCharacter={deleteCharacter}

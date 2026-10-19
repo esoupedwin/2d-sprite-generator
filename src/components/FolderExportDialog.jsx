@@ -13,8 +13,8 @@ const ROOT_FOLDER = '\u0000root';
 
 /**
  * "Export Folder" — every character in one manager folder, each written as
- * body + legs sheets per action (same layout as the single-character export):
- *   <output folder>/<folder>/<character>/{body,legs}/<action>.png
+ * right-arm + head + head_anim + body + legs sheets per action (same layout as the single-character export):
+ *   <output folder>/<folder>/<character>/{right_arm,head,head_anim,body,legs}/<action>.png
  */
 export function FolderExportDialog({ open, onClose, characters, folders, defaultFolder, onExport }) {
   const [folder, setFolder] = useState(null);
@@ -54,7 +54,7 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
     <ExportDialogShell
       titleId="folder-export-title"
       title="Export Folder"
-      subtitle="Every character in the folder · body + legs sheets per action"
+      subtitle="Every character in the folder · right arm + head + head_anim + body + legs sheets per action"
       busy={ex.busy}
       onClose={onClose}
     >
