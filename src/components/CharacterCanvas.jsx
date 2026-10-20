@@ -15,7 +15,7 @@ import { worldToLocal } from '../utils/mathUtils.js';
 import { FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y } from '../utils/spriteExportConfig.js';
 import { useImageDataUrl } from '../hooks/useImageDataUrl.js';
 import { useImageDataUrls } from '../hooks/useImageDataUrls.js';
-import { headFrameUrls, headFrameIndex } from '../utils/headAnim.js';
+import { headFrameUrls, headFrameIndex, pickHeadImage } from '../utils/headAnim.js';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 // The canvas backing buffer is sized to match its rendered container so the
@@ -309,10 +309,10 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const anim = rawAnim
       ? resolveAnimation(rawAnim, (s.animKeyframeOverrides ?? {})[s.currentAnimation] ?? null)
       : null;
-    // Head-skin frame clock: runs continuously while playing and never wraps
-    // at the action loop, so "blink every 10 s" is 10 s even in a 2 s idle.
-    if (anim && s.isPlaying) s.headClock = (s.headClock ?? 0) + delta;
     if (anim && s.isPlaying) {
+      // Head-skin frame clock: runs continuously and never wraps at the
+      // action loop, so "blink every 10 s" is 10 s even in a 2 s idle.
+      s.headClock = (s.headClock ?? 0) + delta;
       s.time += delta;
       if (anim.loop)                       s.time %= anim.duration;
       else if (s.time >= anim.duration) {
@@ -430,10 +430,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const drag = dragRef.current;
     // Head-skin frame on the continuous playback clock, offset by (t − s.time)
     // so the onion-skin ghosts sample it just before/after the live frame.
-    const headImageAt = (t) => {
-      const imgs = headImagesRef.current;
-      return imgs[headFrameIndex(s.character, (s.headClock ?? 0) + (t - s.time))] ?? imgs[0] ?? null;
-    };
+    const headImageAt = (t) =>
+      pickHeadImage(headImagesRef.current, headFrameIndex(s.character, (s.headClock ?? 0) + (t - s.time)));
     // Onion skin: faint ghosts of the pose just before/after the playhead so
     // the user can judge spacing while paused in Edit Animation. Drawn behind
     // the live character; skipped during playback (would just smear).

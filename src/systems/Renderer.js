@@ -188,7 +188,6 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // partsFilter: null/undefined draws everything. Otherwise an object of
     // group flags { legs, head, others, accessory? } — set a group to false to
     // omit it; `accessory` (the hand accessory) defaults to `others`.
-    // group flags { legs, head, others } — set a group to false to omit it.
     // Used by split-export to render legs / head / body onto separate sprite
     // sheets at identical frame coords so they overlay exactly downstream.
     //   others = back arm, body accessory, body, weapon, front arm, hand accessory

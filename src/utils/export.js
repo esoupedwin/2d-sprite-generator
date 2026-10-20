@@ -12,7 +12,7 @@ import { uniqueName } from './names.js';
 import { characterLabel } from './characters.js';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
 import { mergeOffsets } from './transforms.js';
-import { headFrameUrls, headFrameIndex, headPlayFrameIndex } from './headAnim.js';
+import { headFrameUrls, headFrameIndex, headPlayFrameIndex, pickHeadImage } from './headAnim.js';
 import {
   FRAME_W, FRAME_H, FRAME_ORIGIN_X, FRAME_ORIGIN_Y, FRAME_SCALE,
   FRAME_PX, SHEET_COLS, DEFAULT_FRAMES,
@@ -102,8 +102,8 @@ async function loadRenderAssets(character) {
   // headImages = every head-skin frame in play order (see utils/headAnim.js).
   //   headImageAt(t)     — clock-based (`every` honoured): single-frame exports.
   //   headPlayImageAt(t) — one play from t = 0 then resting: sprite sheets.
-  const headImageAt     = (t) => headImages[headFrameIndex(parts, t)]     ?? headImages[0] ?? null;
-  const headPlayImageAt = (t) => headImages[headPlayFrameIndex(parts, t)] ?? headImages[0] ?? null;
+  const headImageAt     = (t) => pickHeadImage(headImages, headFrameIndex(parts, t));
+  const headPlayImageAt = (t) => pickHeadImage(headImages, headPlayFrameIndex(parts, t));
   return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage };
 }
 
@@ -147,7 +147,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   // `staticHead` pins the head to its first skin (the resting frame) — the still
   // "head" sheet. Otherwise the head-frame sequence plays ONCE from the top of
   // the action (headPlayFrameIndex), so the blink is always in the sheet.
-  const headAt = staticHead ? () => headImages[0] ?? null : headPlayImageAt;
+  const headAt = staticHead ? () => pickHeadImage(headImages, 0) : headPlayImageAt;
   const renderOpts = resolveRenderOptions(character, animationName);
 
   const cols = Math.min(frameCount, SHEET_COLS);
@@ -247,7 +247,7 @@ export async function exportSpriteSheet(character, animationName, opts = {}) {
     return;
   }
 
-  // Decode the character's PNGs once for all three sheets.
+  // Decode the character's PNGs once for every sheet.
   const assets = await loadRenderAssets(character);
   for (const g of SPLIT_SHEET_GROUPS) {
     const sheet = await buildSpriteSheet(character, animationName, { ...sheetOpts, partsFilter: g.partsFilter, staticHead: !!g.staticHead, assets });

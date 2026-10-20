@@ -31,22 +31,39 @@ export function resolveHeadAnim(parts) {
   return { ...HEAD_ANIM_DEFAULTS, ...(parts?.headAnim ?? {}) };
 }
 
-/** Index into headFrameUrls() to show at `timeSec` on the action's timeline. */
-export function headFrameIndex(parts, timeSec) {
+// The playable sequence, or null when the head is a single PNG (or none):
+//   n       — number of distinct frames (headImage + headImageFrames)
+//   stepLen — frames in one play: n, or 2n−2 when bouncing (0 1 2 1)
+//   frameMs — integer ms per frame; playMs = stepLen · frameMs
+// Integer milliseconds throughout: frame boundaries then land exactly on
+// sheet frame times, where float modulo would drift (0.4 % 0.30000000000000004).
+function headSequence(parts) {
   const n = 1 + (parts?.headImageFrames?.length ?? 0);
-  if (n <= 1 || !parts?.headImage) return 0;
+  if (n <= 1 || !parts?.headImage) return null;
   const { frameMs, every, bounce } = resolveHeadAnim(parts);
-  // Integer milliseconds throughout: frame boundaries land exactly on sheet
-  // frame times, where float modulo would drift (0.4 % 0.30000000000000004).
-  const stepLen  = bounce ? 2 * n - 2 : n;             // frames in one play
-  const frame    = Math.max(1, Math.round(frameMs));
-  const playMs   = stepLen * frame;
-  const periodMs = every > 0 ? Math.max(Math.round(every * 1000), playMs) : playMs;
-  const tMs = Number.isFinite(timeSec) ? Math.floor(timeSec * 1000 + 1e-6) : 0;
-  const t = ((tMs % periodMs) + periodMs) % periodMs - (periodMs - playMs);
-  if (t < 0) return 0;                                 // resting until the interval ends
-  const step = Math.min(stepLen - 1, Math.floor(t / frame));
-  return step < n ? step : stepLen - step;             // 0 1 2 | 1 (bounce leg)
+  const stepLen = bounce ? 2 * n - 2 : n;
+  const frame   = Math.max(1, Math.round(frameMs));
+  return { n, stepLen, frameMs: frame, playMs: stepLen * frame, everyMs: Math.round(every * 1000) };
+}
+
+const toMs = (timeSec) => (Number.isFinite(timeSec) ? Math.floor(timeSec * 1000 + 1e-6) : 0);
+
+// Frame index for an offset into one play (0 ≤ playMs < seq.playMs).
+function frameAtPlayMs(seq, playMs) {
+  const step = Math.min(seq.stepLen - 1, Math.floor(playMs / seq.frameMs));
+  return step < seq.n ? step : seq.stepLen - step;   // 0 1 2 | 1 (bounce leg)
+}
+
+/**
+ * Index into headFrameUrls() at clock time `timeSec`: a play lands at the END
+ * of each `every` interval (first blink at t = every); `every: 0` loops.
+ */
+export function headFrameIndex(parts, timeSec) {
+  const seq = headSequence(parts);
+  if (!seq) return 0;
+  const periodMs = seq.everyMs > 0 ? Math.max(seq.everyMs, seq.playMs) : seq.playMs;
+  const t = ((toMs(timeSec) % periodMs) + periodMs) % periodMs - (periodMs - seq.playMs);
+  return t < 0 ? 0 : frameAtPlayMs(seq, t);          // resting until the interval ends
 }
 
 /**
@@ -57,13 +74,13 @@ export function headFrameIndex(parts, timeSec) {
  * action gives the game a sheet it can trigger whenever a blink is due.
  */
 export function headPlayFrameIndex(parts, timeSec) {
-  const n = 1 + (parts?.headImageFrames?.length ?? 0);
-  if (n <= 1 || !parts?.headImage) return 0;
-  const { frameMs, bounce } = resolveHeadAnim(parts);
-  const stepLen = bounce ? 2 * n - 2 : n;
-  const frame   = Math.max(1, Math.round(frameMs));
-  const tMs = Number.isFinite(timeSec) ? Math.floor(timeSec * 1000 + 1e-6) : 0;
-  if (tMs < 0 || tMs >= stepLen * frame) return 0;    // before/after the single play → resting
-  const step = Math.floor(tMs / frame);
-  return step < n ? step : stepLen - step;
+  const seq = headSequence(parts);
+  if (!seq) return 0;
+  const t = toMs(timeSec);
+  return t < 0 || t >= seq.playMs ? 0 : frameAtPlayMs(seq, t);
+}
+
+/** The decoded image for a frame index, falling back to frame 0 (or null). */
+export function pickHeadImage(images, index) {
+  return images?.[index] ?? images?.[0] ?? null;
 }
