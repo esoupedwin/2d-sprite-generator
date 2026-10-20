@@ -7,6 +7,7 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
 import { Bone, ChevronDown, Hand, ImageUp, Pencil, Plus, RotateCcw, Users, X } from 'lucide-react';
 
+// Mode toggle cell for the 3-column grid under the character selector.
 function BigIconButton({ icon: Icon, label, active, activeClass, inactiveClass, onClick, title }) {
   return (
     <button
@@ -14,11 +15,11 @@ function BigIconButton({ icon: Icon, label, active, activeClass, inactiveClass, 
       onClick={onClick}
       title={title}
       className={cn(
-        'h-[84px] w-[84px] rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1 text-[11px] font-semibold leading-tight text-center',
+        'h-[64px] w-full rounded-md border transition-colors inline-flex flex-col items-center justify-center gap-1.5 text-[10.5px] font-medium leading-none',
         active ? activeClass : inactiveClass,
       )}
     >
-      <Icon className="h-7 w-7" />
+      <Icon className="h-5 w-5" />
       <span>{label}</span>
     </button>
   );
@@ -84,13 +85,13 @@ export const CharacterBuilder = memo(function CharacterBuilder({
   };
 
   return (
-    <aside className="w-72 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-1">
-      <div className="flex flex-col gap-1.5 pb-1">
+    <aside className="w-72 shrink-0 bg-card border-r border-border overflow-y-auto p-3 flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
         <SectionTitle>Characters</SectionTitle>
         <button
           type="button"
           onClick={() => setManagerOpen(true)}
-          className="flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-secondary hover:border-primary/60 transition-colors text-sm group"
+          className="flex items-center gap-2 h-10 px-3 rounded-md border border-border bg-secondary hover:border-primary/60 transition-colors text-sm group"
           title="Open character manager"
         >
           <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
@@ -105,18 +106,18 @@ export const CharacterBuilder = memo(function CharacterBuilder({
 
         {/* Separate from the workspace label above: the character's own name
             (what it's called in-game / on exports). Stored as `displayName`. */}
-        <label className="flex items-center gap-2 mt-0.5">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">Name</span>
+        <label className="flex items-center h-8 rounded-md border border-transparent bg-secondary/50 hover:border-border focus-within:border-primary transition-colors">
+          <span className="pl-3 pr-2 text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">Name</span>
           <input
             type="text"
             value={nameDraft}
             onChange={e => setNameDraft(e.target.value)}
             onBlur={commitDisplayName}
             onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-            placeholder="Character name"
+            placeholder="in-game name"
             maxLength={60}
             spellCheck={false}
-            className="flex-1 min-w-0 h-8 px-2.5 rounded-md border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary transition-colors"
+            className="flex-1 min-w-0 h-full pr-3 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none"
           />
         </label>
       </div>
@@ -137,7 +138,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
         onDeleteFolder={onDeleteFolder}
         onSetCharacterFolder={onSetCharacterFolder}
       />
-      <div className="mt-1 flex gap-2 self-start">
+      <div className="grid grid-cols-3 gap-2">
         <BigIconButton
           icon={Pencil}
           label={isEdit ? 'Close' : 'Edit Body'}
@@ -166,7 +167,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
       </div>
       {children}
       {isEdit && (<>
-      <Separator className="my-2" />
+      <Separator />
       <HeadSkinSection
         image={character.headImage}
         frames={character.headImageFrames}
@@ -177,8 +178,9 @@ export const CharacterBuilder = memo(function CharacterBuilder({
         onAnimChange={onHeadAnimChange}
         onScaleChange={onHeadImageScaleChange}
       />
-      <Separator className="my-2" />
-      <SectionTitle className="text-[13px] mb-2">Parts</SectionTitle>
+      <Separator />
+      <SectionTitle>Parts</SectionTitle>
+      <div className="flex flex-col divide-y divide-border/50 -mt-1">
       {Object.entries(CHARACTER_PARTS).filter(([k]) => k !== 'weapon' && k !== 'lower_torso').map(([partKey, partDef]) => {
         const customColor  = character.customColors?.[partKey] ?? null;
         const presetColor  = CHARACTER_PARTS[partKey].options[character[partKey]]?.color ?? '#888888';
@@ -201,6 +203,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
           />
         );
       })}
+      </div>
       </>)}
     </aside>
   );
@@ -217,6 +220,35 @@ const SCALE_STEP = 0.1;
 const HEAD_IMG_MIN = 0.3;
 const HEAD_IMG_MAX = 3.0;
 const HEAD_IMG_STEP = 0.01;
+
+const STEP_BTN = 'w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors';
+
+/** −/value/+ percentage stepper used for every size control in the panel. */
+function Stepper({ value, min, max, step, onChange }) {
+  const isDefault = Math.abs(value - 1) < 0.001;
+  const set = (v) => onChange(+Math.min(max, Math.max(min, v)).toFixed(2));
+  return (
+    <div className="flex items-center gap-0.5 shrink-0">
+      <button type="button" className={STEP_BTN} disabled={value <= min} onClick={() => set(value - step)}>−</button>
+      <span className={cn('text-[11px] min-w-[36px] text-center font-mono tabular-nums', isDefault ? 'text-muted-foreground' : 'text-primary')}>
+        {Math.round(value * 100)}%
+      </span>
+      <button type="button" className={STEP_BTN} disabled={value >= max} onClick={() => set(value + step)}>+</button>
+    </div>
+  );
+}
+
+/** Label-left / control-right row for the settings grids. */
+function SettingRow({ label, title, children }) {
+  return (
+    <div className="flex items-center justify-between gap-3 min-h-[24px]" title={title}>
+      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+const SMALL_BTN = 'inline-flex items-center justify-center gap-1.5 h-8 rounded-md border border-border bg-secondary text-xs text-foreground hover:border-primary/60 transition-colors';
 
 // Reads files as data-URLs, in numeric-aware name order so "1.png, 2.png,
 // 10.png" become frames in the order the user numbered them.
@@ -260,8 +292,6 @@ function CommitNumberField({ value, min, max, step = 1, onCommit, className }) {
 function HeadSkinSection({ image, frames = [], anim, scale, onImageChange, onFramesChange, onAnimChange, onScaleChange }) {
   const replaceRef = useRef(null);   // single file → replaces frame 0
   const addRef     = useRef(null);   // several files → first becomes frame 0 if missing, rest appended
-  const isDefault = Math.abs(scale - 1) < 0.001;
-  const setScale = (v) => onScaleChange(+v.toFixed(2));
   const frameCount = image ? 1 + frames.length : 0;
 
   const handleReplace = async (fileList) => {
@@ -284,8 +314,8 @@ function HeadSkinSection({ image, frames = [], anim, scale, onImageChange, onFra
 
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <SectionTitle className="text-[13px]">Head skin</SectionTitle>
+      <div className="flex items-center justify-between">
+        <SectionTitle>Head skin</SectionTitle>
         {image && (
           <button
             type="button"
@@ -298,135 +328,78 @@ function HeadSkinSection({ image, frames = [], anim, scale, onImageChange, onFra
         )}
       </div>
 
-      {image ? (
-        <div className="flex flex-wrap items-center gap-1.5">
+      {/* Frame strip (frame 1 = resting), with an add tile at the end */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {image && (
           <img src={image} alt="Head skin frame 1" title="Frame 1 (resting)" className={cn(thumbCls, 'border-teal-400/40')} />
-          {frames.map((url, i) => (
-            <div key={i} className="relative group">
-              <img src={url} alt={`Head skin frame ${i + 2}`} title={`Frame ${i + 2}`} className={cn(thumbCls, 'border-border')} />
-              <button
-                type="button"
-                onClick={() => removeFrame(i)}
-                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-secondary border border-border text-muted-foreground hover:text-destructive hover:border-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                title={`Remove frame ${i + 2}`}
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded border border-dashed border-border bg-background/40 flex items-center justify-center text-[9px] text-muted-foreground">
-            none
+        )}
+        {frames.map((url, i) => (
+          <div key={i} className="relative group">
+            <img src={url} alt={`Head skin frame ${i + 2}`} title={`Frame ${i + 2}`} className={cn(thumbCls, 'border-border')} />
+            <button
+              type="button"
+              onClick={() => removeFrame(i)}
+              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-secondary border border-border text-muted-foreground hover:text-destructive hover:border-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              title={`Remove frame ${i + 2}`}
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => addRef.current?.click()}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
-            title="Upload one PNG to skin the head, or several to make a frame sequence"
-          >
-            <ImageUp className="h-3.5 w-3.5" />
-            Upload PNG
-          </button>
-        </div>
-      )}
+        ))}
+        <button
+          type="button"
+          onClick={() => addRef.current?.click()}
+          className="w-10 h-10 rounded border border-dashed border-border text-muted-foreground hover:border-teal-400/60 hover:text-teal-400 flex items-center justify-center transition-colors"
+          title={image ? 'Add PNG frames after the resting frame (e.g. half-closed and closed eyes for a blink)' : 'Upload one PNG to skin the head, or several to make a frame sequence'}
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
 
       {image && (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => replaceRef.current?.click()}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
-            title="Replace frame 1 (the resting head PNG)"
-          >
-            <ImageUp className="h-3.5 w-3.5" />
-            Replace PNG
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => replaceRef.current?.click()} className={SMALL_BTN} title="Replace frame 1 (the resting head PNG)">
+            <ImageUp className="h-3.5 w-3.5" /> Replace PNG
           </button>
-          <button
-            type="button"
-            onClick={() => addRef.current?.click()}
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-teal-400 transition-colors"
-            title="Add PNG frames after the resting frame (e.g. half-closed and closed eyes for a blink)"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add frames
+          <button type="button" onClick={() => addRef.current?.click()} className={SMALL_BTN} title="Add PNG frames after the resting frame">
+            <Plus className="h-3.5 w-3.5" /> Add frames
           </button>
         </div>
       )}
-      <input
-        ref={replaceRef}
-        type="file"
-        accept="image/png,image/jpeg"
-        className="hidden"
-        onChange={e => { handleReplace(e.target.files); e.target.value = ''; }}
-      />
-      <input
-        ref={addRef}
-        type="file"
-        accept="image/png,image/jpeg"
-        multiple
-        className="hidden"
-        onChange={e => { handleAdd(e.target.files); e.target.value = ''; }}
-      />
+      <input ref={replaceRef} type="file" accept="image/png,image/jpeg" className="hidden"
+        onChange={e => { handleReplace(e.target.files); e.target.value = ''; }} />
+      <input ref={addRef} type="file" accept="image/png,image/jpeg" multiple className="hidden"
+        onChange={e => { handleAdd(e.target.files); e.target.value = ''; }} />
 
       {image && (
-        <div className="flex items-center justify-end gap-0.5">
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head skin size</span>
-          <button
-            onClick={() => setScale(Math.max(HEAD_IMG_MIN, scale - HEAD_IMG_STEP))}
-            disabled={scale <= HEAD_IMG_MIN}
-            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-          >−</button>
-          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', isDefault ? 'text-muted-foreground' : 'text-primary')}>
-            {Math.round(scale * 100)}%
-          </span>
-          <button
-            onClick={() => setScale(Math.min(HEAD_IMG_MAX, scale + HEAD_IMG_STEP))}
-            disabled={scale >= HEAD_IMG_MAX}
-            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-          >+</button>
+        <div className="flex flex-col gap-1 rounded-md border border-border/50 bg-secondary/30 px-2.5 py-2">
+          <SettingRow label="Size">
+            <Stepper value={scale} min={HEAD_IMG_MIN} max={HEAD_IMG_MAX} step={HEAD_IMG_STEP} onChange={onScaleChange} />
+          </SettingRow>
+          {frameCount > 1 && (
+            <>
+              <SettingRow label="Frame" title="How long each frame is shown">
+                <CommitNumberField value={anim.frameMs} min={HEAD_FRAME_MS_MIN} max={HEAD_FRAME_MS_MAX} step={10}
+                  onCommit={v => onAnimChange({ frameMs: Math.round(v) })} className="w-14" />
+                <span className="text-[10px] text-muted-foreground w-5">ms</span>
+              </SettingRow>
+              <SettingRow label="Every" title="Seconds from one play to the next in the live preview; 0 = loop continuously">
+                <CommitNumberField value={anim.every} min={0} max={HEAD_EVERY_MAX} step={0.1}
+                  onCommit={v => onAnimChange({ every: +v.toFixed(2) })} className="w-14" />
+                <span className="text-[10px] text-muted-foreground w-5">s</span>
+              </SettingRow>
+              <SettingRow label="Bounce" title="Play the frames forward then back (1 2 3 2) — what a blink needs">
+                <input type="checkbox" checked={!!anim.bounce} onChange={e => onAnimChange({ bounce: e.target.checked })} className="accent-teal-400 mr-[26px]" />
+              </SettingRow>
+            </>
+          )}
         </div>
       )}
 
-      {frameCount > 1 && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground" title="How long each frame is shown">
-              Frame
-              <CommitNumberField
-                value={anim.frameMs} min={HEAD_FRAME_MS_MIN} max={HEAD_FRAME_MS_MAX} step={10}
-                onCommit={v => onAnimChange({ frameMs: Math.round(v) })}
-                className="w-14"
-              />
-              ms
-            </label>
-            <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground" title="Seconds from one play to the next; 0 = loop continuously">
-              Every
-              <CommitNumberField
-                value={anim.every} min={0} max={HEAD_EVERY_MAX} step={0.1}
-                onCommit={v => onAnimChange({ every: +v.toFixed(2) })}
-                className="w-12"
-              />
-              s
-            </label>
-            <label className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground cursor-pointer" title="Play the frames forward then back (1 2 3 2) — what a blink needs">
-              <input
-                type="checkbox"
-                checked={!!anim.bounce}
-                onChange={e => onAnimChange({ bounce: e.target.checked })}
-                className="accent-teal-400"
-              />
-              Bounce
-            </label>
-          </div>
-          <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
-            {frameCount} frames{anim.bounce ? ', played forward then back' : ''}.
-            A sprite sheet covers one loop of the action, so it only contains the sequence when <em>Every</em> is at or below the action length.
-          </span>
-        </div>
-      )}
       <span className="text-[10px] text-muted-foreground/70 leading-relaxed">
+        {frameCount > 1
+          ? <>{frameCount} frames{anim.bounce ? ', forward then back' : ''}. Sprite sheets export one play at the start of each action; the preview plays it {anim.every > 0 ? `every ${anim.every} s` : 'continuously'}. </>
+          : null}
         Applies to every animation for this character.
       </span>
     </section>
@@ -445,67 +418,44 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
     reader.readAsDataURL(file);
   };
 
-  const decScale = () => onScaleChange(Math.max(MIN_SCALE, +((currentScale - SCALE_STEP).toFixed(2))));
-  const incScale = () => onScaleChange(Math.min(MAX_SCALE, +((currentScale + SCALE_STEP).toFixed(2))));
-  const isDefault = Math.abs(currentScale - 1) < 0.001;
-
   return (
-    <section className="py-2">
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <h3 className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <section className="py-2 flex flex-col gap-1.5">
+      {/* Row 1: swatch (= colour picker) + name on the left, size on the right */}
+      <div className="flex items-center gap-2">
+        {!isShapeSelector && (
+          <div className="relative flex items-center shrink-0">
+            <button
+              type="button"
+              className={cn(
+                'w-3.5 h-3.5 rounded-full ring-1 ring-black/30 transition-transform hover:scale-125',
+                hasCustomColor && 'ring-2 ring-primary',
+              )}
+              style={{ background: currentColor }}
+              onClick={() => colorInputRef.current?.click()}
+              title={hasCustomColor ? 'Custom colour — click to change' : 'Pick a custom colour'}
+            />
+            <input
+              ref={colorInputRef}
+              type="color"
+              value={currentColor}
+              onChange={e => onColorChange(e.target.value)}
+              className="absolute left-full top-1/2 -translate-y-1/2 w-px h-px opacity-0 pointer-events-none border-0 p-0"
+            />
+          </div>
+        )}
+        <h3 className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
           {partDef.label}
         </h3>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center gap-0.5">
-            <button
-              onClick={decScale}
-              disabled={currentScale <= MIN_SCALE}
-              className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-            >
-              −
-            </button>
-            <span className={cn(
-              'text-[11px] min-w-[32px] text-center font-mono',
-              isDefault ? 'text-muted-foreground' : 'text-primary',
-            )}>
-              {Math.round(currentScale * 100)}%
-            </span>
-            <button
-              onClick={incScale}
-              disabled={currentScale >= MAX_SCALE}
-              className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-            >
-              +
-            </button>
-          </div>
-          {!isShapeSelector && (
-            <div className="relative flex items-center">
-              <button
-                className={cn(
-                  'w-4 h-4 rounded-full border-2 border-white/20 flex-shrink-0 cursor-pointer transition-transform hover:scale-125 hover:border-white/50',
-                  hasCustomColor && 'border-primary ring-1 ring-primary',
-                )}
-                style={{ background: currentColor }}
-                onClick={() => colorInputRef.current?.click()}
-                title={hasCustomColor ? 'Custom color — click to change' : 'Pick a custom color'}
-              />
-              <input
-                ref={colorInputRef}
-                type="color"
-                value={currentColor}
-                onChange={e => onColorChange(e.target.value)}
-                className="absolute left-full top-1/2 -translate-y-1/2 w-px h-px opacity-0 pointer-events-none border-0 p-0"
-              />
-            </div>
-          )}
-        </div>
+        <Stepper value={currentScale} min={MIN_SCALE} max={MAX_SCALE} step={SCALE_STEP} onChange={onScaleChange} />
       </div>
 
+      {/* Row 2: hex + reset on the left; PNG skin controls on the right (body only) */}
       {isShapeSelector ? (
         <div className="flex flex-wrap gap-1">
           {Object.entries(partDef.options).map(([key, opt]) => (
             <button
               key={key}
+              type="button"
               onClick={() => onChange(key)}
               className={cn(
                 'px-2.5 py-1 rounded text-xs whitespace-nowrap border transition-colors',
@@ -519,49 +469,37 @@ function PartSelector({ partKey, partDef, selected, onChange, currentColor, hasC
           ))}
         </div>
       ) : (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/30" style={{ background: currentColor }} />
+        <div className="flex items-center gap-2 pl-[22px]">
           <HexInput value={currentColor} onCommit={onColorChange} />
           {hasCustomColor && (
-            <button
-              onClick={() => onColorChange(null)}
-              title="Reset to default color"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <button type="button" onClick={() => onColorChange(null)} title="Reset to default colour"
+              className="text-muted-foreground hover:text-foreground transition-colors">
               <RotateCcw className="h-3 w-3" />
             </button>
           )}
           {onPartImageChange && (
-            <>
+            <div className="ml-auto flex items-center gap-1">
               <button
+                type="button"
                 onClick={() => imageInputRef.current?.click()}
-                title={partImage ? 'Replace image' : `Upload PNG to skin the ${partDef.label.toLowerCase()}`}
-                className="ml-auto inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                title={partImage ? 'Replace the PNG skin' : `Upload a PNG to skin the ${partDef.label.toLowerCase()}`}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ImageUp className="h-3.5 w-3.5" />
-                <span className="text-[11px]">{partImage ? 'Replace' : 'Upload PNG'}</span>
+                {partImage ? 'Replace PNG' : 'Upload PNG'}
               </button>
               {partImage && (
-                <button
-                  onClick={() => onPartImageChange(null)}
-                  title="Remove image"
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                >
+                <button type="button" onClick={() => onPartImageChange(null)} title="Remove PNG skin"
+                  className="text-muted-foreground hover:text-destructive transition-colors">
                   <X className="h-3 w-3" />
                 </button>
               )}
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/png,image/jpeg"
-                className="hidden"
-                onChange={e => { handleImageFile(e.target.files?.[0]); e.target.value = ''; }}
-              />
-            </>
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg" className="hidden"
+                onChange={e => { handleImageFile(e.target.files?.[0]); e.target.value = ''; }} />
+            </div>
           )}
         </div>
       )}
     </section>
   );
 }
-

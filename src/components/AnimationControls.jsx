@@ -111,7 +111,7 @@ export const AnimationControls = memo(function AnimationControls({
   );
 
   return (
-    <div className="flex flex-col gap-3 w-full">
+    <div className="flex flex-col gap-2 w-full">
       <div className="flex items-center justify-between">
         <SectionTitle>Actions</SectionTitle>
         <div className="flex items-center gap-0.5">
@@ -125,7 +125,7 @@ export const AnimationControls = memo(function AnimationControls({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap gap-1.5 border border-border rounded-md p-2">
+      <div className="flex flex-wrap gap-1.5 rounded-md border border-border/50 bg-secondary/30 p-2">
         {builtIns.map(renderRow)}
 
         {own.length > 0 && (
@@ -154,22 +154,27 @@ export const AnimationControls = memo(function AnimationControls({
         </Button>
       </div>
 
-      {editAnimPose && (
-        <span className="text-[10px] text-teal-400/70 font-mono">drag bones to adjust</span>
-      )}
-      {onRenameAnimation && (
-        <span className="text-[10px] text-muted-foreground/60">
-          {showRename ? 'click a pencil to rename · Enter saves, Esc cancels' : 'double-click a chip to rename'}
-        </span>
-      )}
-      {hiddenCount > 0 && onRestoreHidden && (
-        <button
-          type="button"
-          onClick={onRestoreHidden}
-          className="self-start text-[10px] text-muted-foreground/60 hover:text-foreground underline underline-offset-2 transition-colors"
-        >
-          {hiddenCount} hidden action{hiddenCount > 1 ? 's' : ''} — restore
-        </button>
+      {/* One quiet footer line: mode hint · rename hint · hidden-actions restore */}
+      {(editAnimPose || onRenameAnimation || (hiddenCount > 0 && onRestoreHidden)) && (
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] leading-snug text-muted-foreground/60">
+          {editAnimPose && <span className="text-teal-400/80 font-mono">drag bones to adjust</span>}
+          {editAnimPose && onRenameAnimation && <span aria-hidden>·</span>}
+          {onRenameAnimation && (
+            <span>{showRename ? 'click a pencil to rename · Enter saves, Esc cancels' : 'double-click a chip to rename'}</span>
+          )}
+          {hiddenCount > 0 && onRestoreHidden && (
+            <>
+              {(editAnimPose || onRenameAnimation) && <span aria-hidden>·</span>}
+              <button
+                type="button"
+                onClick={onRestoreHidden}
+                className="hover:text-foreground underline underline-offset-2 transition-colors"
+              >
+                {hiddenCount} hidden — restore
+              </button>
+            </>
+          )}
+        </div>
       )}
 
       <ConfirmDialog

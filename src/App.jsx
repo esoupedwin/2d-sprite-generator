@@ -1372,15 +1372,26 @@ export default function App() {
           >
             {currentAnimation !== 'edit' && (<>
             {/* Weapon & Animation — combined since animations are weapon-specific */}
-            <Separator className="my-2" />
-            <SectionTitle>Animations</SectionTitle>
-            <div className="flex items-center gap-2 mt-2">
+            <Separator />
+            <div className="flex items-center justify-between">
+              <SectionTitle>Animations</SectionTitle>
+              {editAnimPose && Object.keys((activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}).length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => resetAnimPose(currentAnimation)}
+                  className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Reset pose
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setIsPlaying(p => !p)}
                 disabled={poseEditorOpen}
                 className={cn(
-                  'inline-flex items-center rounded-full border border-border bg-secondary px-4 py-1 text-xs font-medium transition-colors hover:bg-secondary/80 disabled:opacity-50',
+                  'inline-flex items-center justify-center h-9 rounded-md border border-border bg-secondary text-xs font-medium transition-colors hover:bg-secondary/80 disabled:opacity-50',
                 )}
               >
                 {isPlaying
@@ -1397,7 +1408,7 @@ export default function App() {
                 }}
                 disabled={currentAnimation === 'edit' || poseEditorOpen}
                 className={cn(
-                  'inline-flex items-center rounded-full border px-4 py-1 text-xs font-medium transition-colors disabled:opacity-50',
+                  'inline-flex items-center justify-center h-9 rounded-md border text-xs font-medium transition-colors disabled:opacity-50',
                   editAnimPose
                     ? 'bg-teal-400 border-teal-400 text-black hover:bg-teal-400/90'
                     : 'border-border bg-secondary text-foreground hover:bg-secondary/80',
@@ -1405,22 +1416,13 @@ export default function App() {
               >
                 <Pencil className="h-3 w-3 mr-1.5" />Edit Animation
               </button>
-              {editAnimPose && Object.keys((activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}).length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => resetAnimPose(currentAnimation)}
-                  className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  Reset
-                </button>
-              )}
             </div>
-            <div className="flex flex-col gap-3 mt-4">
+            <div className="flex flex-col gap-3">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setCustomizeOpen(true)}
-                className="self-start text-xs"
+                className="w-full justify-start h-9 text-xs font-medium"
               >
                 <ImageUp className="h-3.5 w-3.5 mr-1.5" />
                 Customize Weapon &amp; Accessories
@@ -1644,7 +1646,8 @@ export default function App() {
               )}
             </div>
 
-            <div className="mt-3">
+            <Separator />
+            <div>
               <AnimationControls
                 currentAnimation={currentAnimation}
                 actions={actions}
