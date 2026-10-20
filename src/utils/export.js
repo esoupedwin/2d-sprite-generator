@@ -182,6 +182,12 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
 
     ctx.save();
     ctx.translate(ox, oy);
+    // Clip to the cell: a pose that overshoots its frame (crouch below the
+    // bottom edge, long weapon past a side) is cut off here rather than
+    // bleeding into the neighbouring cell — the frame below, for the bottom edge.
+    ctx.beginPath();
+    ctx.rect(0, 0, FRAME_W, FRAME_H);
+    ctx.clip();
     renderCharacter(ctx, parts, worldTransforms, {
       originX:   FRAME_ORIGIN_X,
       originY:   FRAME_ORIGIN_Y,
