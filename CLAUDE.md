@@ -394,6 +394,47 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 - Rotation handle: lighter purple `#C084FC` circle offset 22 units from position handle
 - Drag `accessory-pos` → calls `onAccessoryOffsetSet({ x, y, rotation })` via stateRef
 
+## Alignment box
+
+A workspace-level rectangle for eyeballing one character's size against
+another's: transparent, black outline, size readout in character units. Stored
+as `settings.alignBox = {x,y,w,h}` (+ `settings.alignBoxVisible`), so it rides
+along in localStorage and the workspace file and is **not** per-character.
+
+Coords are **character-local**, like the grid — the box holds still relative to
+the character through pan/zoom and stays put when the user switches characters,
+which is the whole point.
+
+UI: the `Box` button and its eye toggle sit beside `Frame` at the canvas's
+bottom-right (App.jsx). `Box` arms `boxDrawMode` and the next canvas drag draws
+a new rectangle (a drag under 4 units is discarded); drawing always replaces the
+previous box and auto-shows it. The eye is disabled while no box exists.
+
+In `CharacterCanvas.jsx` the box is drawn last (on top of the character and the
+frame overlay) at a constant 1.5px stroke. `boxDragRef` holds the live rect so
+dragging never re-renders React — it commits on mouseup, the same trick
+`viewRef` uses for panning. Box hit-testing runs **before** the edit-mode early
+return in `handleMouseDown`, since the box works in every mode.
+
+Three drag modes, tested in this order (`boxDragRef.mode`):
+
+| Mode | Started by | Notes |
+|---|---|---|
+| `new` | any drag while `boxDrawMode` is armed | replaces the previous box |
+| `resize` | one of the 8 handles (`boxHandleAt`) | corners + edge midpoints |
+| `move` | the **outline**, an 8-canvas-px band (`onBoxBorder`) | size unchanged |
+
+The interior is deliberately **not** a move target, so clicks inside the box
+still reach the bones and skin points underneath.
+
+Handles come from `boxHandlePoints(box)` — one list shared by the drawing code
+and the hit test so they can't drift apart — with `BOX_HANDLE_CURSORS` giving
+each the right resize cursor. `resizeBox(rect, handle, pos)` moves only the
+edges named in the handle id (`'nw'` → north + west) and re-normalises, so a
+drag past the opposite edge flips the box cleanly. A resize always recomputes
+from `startRect` (the rect at mousedown), never from the previous frame's
+rect — progressive mutation loses the anchored edge once the box flips.
+
 ## Shared UI pieces
 
 - `SaveTemplateDialog.jsx` — the "Save as template" name prompt (`open`, `defaultName`, `onClose`, `onSave`). Auto-selects text on open; Enter confirms; Save disabled when empty.
@@ -409,7 +450,7 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 | Characters (incl. `customWeapons`) | `localStorage` (`2dsprite:characters`) + `characters.json` via `/api/characters` Vite plugin. File wins on load. |
 | Default build | `character-defaults.json` via `/api/defaults` |
 | Animation templates | `localStorage` (`2dsprite:templates`) — global, shared across characters |
-| Editor settings | `localStorage` (`2dsprite:settings`) — canvas bg, grid |
+| Editor settings | `localStorage` (`2dsprite:settings`) — canvas bg, grid, alignment box |
 | **Workspace file** (Save/Load Workspace) | v2 JSON: `{ version, savedAt, activeCharId, uiState, settings, folders, animTemplates, characters }` — the complete state. Loading a v1 file (no templates/settings) keeps the browser's current templates/settings. |
 | Character folders | `localStorage` (`2dsprite:folders`) — ordered list of folder names (empty folders included); membership is `character.folder`. Included in the Workspace JSON (`folders`). Readers use `folderList` (App.jsx) = `mergeFolders(folders, characters)`, a memo that appends any name found on a character but missing from the list — there is no sync effect. |
 

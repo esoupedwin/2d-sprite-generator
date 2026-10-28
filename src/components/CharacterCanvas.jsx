@@ -31,6 +31,40 @@ const BASE_SCALE = 2.5;
 const VECTOR_HIT_PX = 10;
 const JOINT_HIT_PX  = 14;
 
+// Alignment-box resize handles: drawn as small squares at the 4 corners and 4
+// edge midpoints, sized/hit-tested in canvas px so they hold still under zoom.
+const BOX_HANDLE_PX     = 7;
+const BOX_HANDLE_HIT_PX = 7;
+/** `[id, x, y]` for each handle, in character-local units. */
+function boxHandlePoints({ x, y, w, h }) {
+  const mx = x + w / 2, my = y + h / 2, rx = x + w, by = y + h;
+  return [
+    ['nw', x,  y ], ['n', mx, y ], ['ne', rx, y ],
+    ['w',  x,  my],                ['e',  rx, my],
+    ['sw', x,  by], ['s', mx, by], ['se', rx, by],
+  ];
+}
+const BOX_HANDLE_CURSORS = {
+  nw: 'nwse-resize', se: 'nwse-resize',
+  ne: 'nesw-resize', sw: 'nesw-resize',
+  n:  'ns-resize',   s:  'ns-resize',
+  e:  'ew-resize',   w:  'ew-resize',
+};
+/** `rect` with the edges named by `handle` moved to `pos`, re-normalised if flipped. */
+function resizeBox(rect, handle, pos) {
+  let left = rect.x, top = rect.y, right = rect.x + rect.w, bottom = rect.y + rect.h;
+  if (handle.includes('w')) left   = pos.x;
+  if (handle.includes('e')) right  = pos.x;
+  if (handle.includes('n')) top    = pos.y;
+  if (handle.includes('s')) bottom = pos.y;
+  return {
+    x: Math.min(left, right),
+    y: Math.min(top, bottom),
+    w: Math.abs(right - left),
+    h: Math.abs(bottom - top),
+  };
+}
+
 // Joints that stay rigid in pure ragdoll mode — preserves natural shoulder placement.
 // Still draggable in Edit Structure (free positioning) and in Edit Animation
 // (constrained to slight up/down shrug — see SHOULDER_Y_RANGE).
@@ -91,6 +125,14 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   canvasBg,
   gridSpacing,
   gridThickness,
+  // Alignment box — a workspace-level rectangle in CHARACTER-LOCAL units, used
+  // to eyeball one character's size against another's. `boxDrawMode` arms the
+  // next drag to draw a new one; dragging its outline moves it.
+  alignBox,
+  alignBoxVisible,
+  boxDrawMode,
+  onAlignBoxChange,
+  onBoxDrawEnd,
   renderOpts,
 }, ref) {
   const canvasRef = useRef(null);
@@ -127,6 +169,9 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
   const dragRef    = useRef(null);
   const panDragRef = useRef(null);
+  // Alignment-box drag: { mode:'new'|'move', rect, anchorX, anchorY, grabDX, grabDY }
+  // `rect` is the live rectangle the RAF loop draws until the drag commits.
+  const boxDragRef = useRef(null);
   // Tracks a potential click-to-select on a bone joint: set on mousedown over a
   // joint in Edit Animation, cleared once the pointer moves enough to count as a
   // drag. On mouseup without movement → select that bone in the curve panel.
@@ -209,6 +254,11 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.canvasBg           = canvasBg || '#FFE699';
   stateRef.current.gridSpacing        = gridSpacing || 50;
   stateRef.current.gridThickness      = gridThickness || 1;
+  stateRef.current.alignBox           = alignBox ?? null;
+  stateRef.current.alignBoxVisible    = alignBoxVisible !== false;
+  stateRef.current.boxDrawMode        = !!boxDrawMode;
+  stateRef.current.onAlignBoxChange   = onAlignBoxChange ?? null;
+  stateRef.current.onBoxDrawEnd       = onBoxDrawEnd ?? null;
   // { animation, isMelee, partZOrder, hideWeapon } from resolveRenderOptions —
   // spread into every renderCharacter call below.
   stateRef.current.renderOpts         = renderOpts ?? EMPTY_RENDER_OPTS;
@@ -348,8 +398,30 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const yGridStart = Math.ceil (yMin / GRID_STEP) * GRID_STEP;
     const yGridEnd   = Math.floor(yMax / GRID_STEP) * GRID_STEP;
 
+    // Minor grid: a thinner line every MINOR_STEP units, under the main grid.
+    // Lines that land on a main grid line are skipped, so nothing is drawn
+    // twice; it's omitted when the main spacing is no coarser than the minor
+    // one, or when the lines would be too dense to read at the current zoom.
+    const MINOR_STEP = 25;
+    if (GRID_STEP > MINOR_STEP && MINOR_STEP * scale >= 6) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      ctx.lineWidth = Math.max(0.5, (s.gridThickness || 1) * 0.5);
+      ctx.beginPath();
+      for (let x = Math.ceil(xMin / MINOR_STEP) * MINOR_STEP; x <= xMax; x += MINOR_STEP) {
+        if (x % GRID_STEP === 0) continue;
+        const cx = originX + x * scale;
+        ctx.moveTo(cx, 0); ctx.lineTo(cx, CANVAS_H);
+      }
+      for (let y = Math.ceil(yMin / MINOR_STEP) * MINOR_STEP; y <= yMax; y += MINOR_STEP) {
+        if (y % GRID_STEP === 0) continue;
+        const cy = originY + y * scale;
+        ctx.moveTo(0, cy); ctx.lineTo(CANVAS_W, cy);
+      }
+      ctx.stroke();
+    }
+
     // Batch all grid lines into two paths (one per style) instead of one path per line.
-    ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.084)';
     ctx.lineWidth = s.gridThickness || 1;
     ctx.beginPath();
     for (let x = xGridStart; x <= xGridEnd; x += GRID_STEP) {
@@ -766,6 +838,45 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       ctx.restore();
     }
 
+    // ── Alignment box ─────────────────────────────────────────────────────────
+    // Transparent, black-outlined rectangle drawn on top of everything so the
+    // character's silhouette can be compared against it. Its coords are
+    // character-local, so it holds still relative to the character as the user
+    // pans/zooms and stays put when they switch characters. The in-progress
+    // drag rect wins over the stored one while drawing.
+    const liveBox = boxDragRef.current?.rect ?? (s.alignBoxVisible ? s.alignBox : null);
+    if (liveBox && liveBox.w > 0 && liveBox.h > 0) {
+      const bx = originX + liveBox.x * scale;
+      const by = originY + liveBox.y * scale;
+      const bw = liveBox.w * scale;
+      const bh = liveBox.h * scale;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(bx, by, bw, bh);
+      // Size readout in character units, placed inside the top-left corner.
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(`${Math.round(liveBox.w)}×${Math.round(liveBox.h)}`, bx + 2, by - 3);
+
+      // Resize handles — hidden while drawing a brand-new box or while draw
+      // mode is armed, since there is nothing to resize yet.
+      if (!s.boxDrawMode && boxDragRef.current?.mode !== 'new') {
+        const half = BOX_HANDLE_PX / 2;
+        ctx.lineWidth = 1;
+        for (const [, hx, hy] of boxHandlePoints(liveBox)) {
+          const px = originX + hx * scale, py = originY + hy * scale;
+          ctx.fillStyle   = '#FFFFFF';
+          ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+          ctx.fillRect  (px - half, py - half, BOX_HANDLE_PX, BOX_HANDLE_PX);
+          ctx.strokeRect(px - half, py - half, BOX_HANDLE_PX, BOX_HANDLE_PX);
+        }
+      }
+      ctx.restore();
+    }
+
     if (anim) {
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
       ctx.font = '12px monospace';
@@ -904,6 +1015,44 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     return () => window.removeEventListener('keydown', onKey);
   }, [undo]);
 
+  /**
+   * Which resize handle of the alignment box is under `charPos`, if any.
+   * Handles are the 4 corners + 4 edge midpoints, hit-tested in canvas pixels
+   * so they stay grabbable at any zoom. Checked before the move-the-whole-box
+   * test, so a corner resizes rather than drags.
+   */
+  const boxHandleAt = useCallback((charPos) => {
+    const s = stateRef.current;
+    const box = s.alignBox;
+    if (!box || !s.alignBoxVisible || s.boxDrawMode) return null;
+    const scale = BASE_SCALE * viewRef.current.zoom;
+    const r = BOX_HANDLE_HIT_PX / scale;
+    for (const [id, hx, hy] of boxHandlePoints(box)) {
+      if (Math.abs(charPos.x - hx) <= r && Math.abs(charPos.y - hy) <= r) return id;
+    }
+    return null;
+  }, []);
+
+  /**
+   * Is `charPos` on the alignment box's outline? The band is measured in canvas
+   * pixels so it stays grabbable at any zoom. Border-only (not the interior) so
+   * clicks inside the box still reach the bones and skin points underneath.
+   */
+  const onBoxBorder = useCallback((charPos) => {
+    const s = stateRef.current;
+    const box = s.alignBox;
+    if (!box || !s.alignBoxVisible || s.boxDrawMode) return false;
+    const scale = BASE_SCALE * viewRef.current.zoom;
+    const band  = 8 / scale; // 8 canvas px, expressed in character units
+    const { x, y, w, h } = box;
+    const insideOuter = charPos.x >= x - band && charPos.x <= x + w + band
+                     && charPos.y >= y - band && charPos.y <= y + h + band;
+    if (!insideOuter) return false;
+    const insideInner = charPos.x > x + band && charPos.x < x + w - band
+                     && charPos.y > y + band && charPos.y < y + h - band;
+    return !insideInner;
+  }, []);
+
   // ── Mouse handlers ────────────────────────────────────────────────────────────
   const handleMouseDown = useCallback((e) => {
     if (e.button === 2) {
@@ -915,6 +1064,37 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     }
     if (e.button !== 0) return;
     const s0 = stateRef.current;
+
+    // Alignment box first, and in every mode — it is a workspace marker, not
+    // part of the character, so it must stay usable outside the edit modes.
+    const boxPos = getCharPos(e);
+    if (s0.boxDrawMode) {
+      boxDragRef.current = { mode: 'new', anchorX: boxPos.x, anchorY: boxPos.y, rect: null };
+      if (canvasRef.current) canvasRef.current.style.cursor = 'crosshair';
+      e.preventDefault();
+      return;
+    }
+    const boxHandle = boxHandleAt(boxPos);
+    if (boxHandle) {
+      // `startRect` is the anchor for every move event: recomputing from the
+      // original keeps the opposite edge pinned even after the drag flips the
+      // box inside out, which progressive mutation would get wrong.
+      boxDragRef.current = {
+        mode: 'resize', handle: boxHandle,
+        startRect: { ...s0.alignBox }, rect: { ...s0.alignBox },
+      };
+      if (canvasRef.current) canvasRef.current.style.cursor = BOX_HANDLE_CURSORS[boxHandle];
+      e.preventDefault();
+      return;
+    }
+    if (onBoxBorder(boxPos)) {
+      const b = s0.alignBox;
+      boxDragRef.current = { mode: 'move', rect: { ...b }, grabDX: boxPos.x - b.x, grabDY: boxPos.y - b.y };
+      if (canvasRef.current) canvasRef.current.style.cursor = 'move';
+      e.preventDefault();
+      return;
+    }
+
     if (s0.currentAnimation !== 'edit' && !s0.editAnimPose && !s0.ragdoll) return;
 
     const charPos = getCharPos(e);
@@ -976,10 +1156,42 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     }
 
     const charPos = getCharPos(e);
-    const drag    = dragRef.current;
+
+    // Alignment box drag — draw a new rect, or slide the existing one.
+    const boxDrag = boxDragRef.current;
+    if (boxDrag) {
+      if (boxDrag.mode === 'new') {
+        boxDrag.rect = {
+          x: Math.min(boxDrag.anchorX, charPos.x),
+          y: Math.min(boxDrag.anchorY, charPos.y),
+          w: Math.abs(charPos.x - boxDrag.anchorX),
+          h: Math.abs(charPos.y - boxDrag.anchorY),
+        };
+      } else if (boxDrag.mode === 'resize') {
+        boxDrag.rect = resizeBox(boxDrag.startRect, boxDrag.handle, charPos);
+      } else {
+        boxDrag.rect = { ...boxDrag.rect, x: charPos.x - boxDrag.grabDX, y: charPos.y - boxDrag.grabDY };
+      }
+      return;
+    }
+
+    const drag = dragRef.current;
 
     if (!drag) {
       const s        = stateRef.current;
+      if (s.boxDrawMode) {
+        if (canvasRef.current) canvasRef.current.style.cursor = 'crosshair';
+        return;
+      }
+      const hoverHandle = boxHandleAt(charPos);
+      if (hoverHandle) {
+        if (canvasRef.current) canvasRef.current.style.cursor = BOX_HANDLE_CURSORS[hoverHandle];
+        return;
+      }
+      if (onBoxBorder(charPos)) {
+        if (canvasRef.current) canvasRef.current.style.cursor = 'move';
+        return;
+      }
       const isActive = s.currentAnimation === 'edit' || s.editAnimPose || s.ragdoll;
       const hovered  = isActive ? findTarget(charPos) : null;
       const addMode  = s.currentAnimation === 'edit' && s.showVectors && s.selectedSkin !== 'all' && e.ctrlKey;
@@ -1328,6 +1540,23 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const cc = clickCandidateRef.current;
     clickCandidateRef.current = null;
     if (cc && !cc.moved) stateRef.current.onSelectBone?.(cc.boneId);
+
+    // Commit the alignment box. A "new" drag too small to be deliberate is
+    // discarded, but it still leaves draw mode so the button never sticks on.
+    const boxDrag = boxDragRef.current;
+    boxDragRef.current = null;
+    if (boxDrag) {
+      const s = stateRef.current;
+      if (boxDrag.mode === 'new') {
+        if (boxDrag.rect && boxDrag.rect.w >= 4 && boxDrag.rect.h >= 4) s.onAlignBoxChange?.(boxDrag.rect);
+        s.onBoxDrawEnd?.();
+      } else if (boxDrag.rect && boxDrag.rect.w >= 1 && boxDrag.rect.h >= 1) {
+        // A move or resize. The size floor keeps a resize from collapsing the
+        // box to nothing, which would leave it unselectable.
+        s.onAlignBoxChange?.(boxDrag.rect);
+      }
+    }
+
     dragRef.current    = null;
     panDragRef.current = null;
     if (canvasRef.current) canvasRef.current.style.cursor = 'default';

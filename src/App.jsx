@@ -38,7 +38,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Frame, ImageUp, Pause, Pencil, Play, X } from 'lucide-react';
+import { Eye, EyeOff, Frame, ImageUp, Pause, Pencil, Play, Square, X } from 'lucide-react';
 import { genId } from './utils/genId.js';
 import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
 import { DEFAULT_ANIM_TEMPLATES } from './data/defaultAnimTemplates.js';
@@ -291,6 +291,9 @@ export default function App() {
   const [editAnimPose, setEditAnimPose] = useState(false);
   const [showBones,    setShowBones]    = useState(false);
   const [showFrame,    setShowFrame]    = useState(false);
+  // Arms the next canvas drag to draw a new alignment box (the box itself
+  // lives in `settings`, so it survives character switches and reloads).
+  const [boxDrawMode,  setBoxDrawMode]  = useState(false);
   const [headerTab,    setHeaderTab]    = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [poseExport,   setPoseExport]   = useState(null); // { character, animationName, currentTime } | null
@@ -1746,20 +1749,53 @@ export default function App() {
                   Edit Animation — {(activeChar.customAnimations?.find(a => a.id === currentAnimation) ?? ANIMATIONS[currentAnimation])?.name ?? currentAnimation}
                 </div>
               )}
-              <button
-                type="button"
-                onClick={() => setShowFrame(p => !p)}
-                className={cn(
-                  'absolute top-3 right-3 z-20 flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors',
-                  showFrame
-                    ? 'bg-amber-400/20 border-amber-400 text-amber-400'
-                    : 'bg-card/80 border-border text-muted-foreground hover:border-amber-400/60 hover:text-amber-400',
-                )}
-                title="Toggle sprite frame boundary"
-              >
-                <Frame className="h-3 w-3" />
-                Frame
-              </button>
+              <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setBoxDrawMode(p => !p)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                    boxDrawMode
+                      ? 'bg-sky-400/20 border-sky-400 text-sky-400'
+                      : 'bg-card/80 border-border text-muted-foreground hover:border-sky-400/60 hover:text-sky-400',
+                  )}
+                  title={boxDrawMode
+                    ? 'Drag on the canvas to draw the alignment box (click to cancel)'
+                    : 'Draw an alignment box — drag on the canvas, then drag its outline to move it'}
+                >
+                  <Square className="h-3 w-3" />
+                  {boxDrawMode ? 'Drag…' : 'Box'}
+                </button>
+                <button
+                  type="button"
+                  disabled={!settings.alignBox}
+                  onClick={() => setSettings(s => ({ ...s, alignBoxVisible: !s.alignBoxVisible }))}
+                  className={cn(
+                    'flex items-center rounded-md border px-2 py-1 text-[11px] font-semibold transition-colors',
+                    'disabled:opacity-40 disabled:pointer-events-none',
+                    settings.alignBox && settings.alignBoxVisible
+                      ? 'bg-sky-400/20 border-sky-400 text-sky-400'
+                      : 'bg-card/80 border-border text-muted-foreground hover:border-sky-400/60 hover:text-sky-400',
+                  )}
+                  title={settings.alignBoxVisible ? 'Hide the alignment box' : 'Show the alignment box'}
+                >
+                  {settings.alignBoxVisible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowFrame(p => !p)}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                    showFrame
+                      ? 'bg-amber-400/20 border-amber-400 text-amber-400'
+                      : 'bg-card/80 border-border text-muted-foreground hover:border-amber-400/60 hover:text-amber-400',
+                  )}
+                  title="Toggle sprite frame boundary"
+                >
+                  <Frame className="h-3 w-3" />
+                  Frame
+                </button>
+              </div>
               <CharacterCanvas
                 ref={charCanvasRef}
                 key={poseEditorOpen ? `pose-${activePoseFrame}` : `${activeCharId}:${charsFileRev}`}
@@ -1802,6 +1838,11 @@ export default function App() {
                 canvasBg={settings.canvasBg}
                 gridSpacing={settings.gridSpacing}
                 gridThickness={settings.gridThickness}
+                alignBox={settings.alignBox}
+                alignBoxVisible={settings.alignBoxVisible}
+                boxDrawMode={boxDrawMode}
+                onAlignBoxChange={(box) => setSettings(s => ({ ...s, alignBox: box, alignBoxVisible: true }))}
+                onBoxDrawEnd={() => setBoxDrawMode(false)}
                 renderOpts={renderOpts}
               />
           </main>

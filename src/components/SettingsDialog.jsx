@@ -11,6 +11,10 @@ export const DEFAULT_SETTINGS = {
   canvasBg:      DEFAULT_CANVAS_BG,
   gridSpacing:   DEFAULT_GRID_SPACING,
   gridThickness: DEFAULT_GRID_THICKNESS,
+  // Alignment box: {x,y,w,h} in character-local units, shared by every
+  // character in the workspace (drawn from the canvas, not edited here).
+  alignBox:        null,
+  alignBoxVisible: true,
 };
 
 // A few handy backgrounds: default warm, white, neutral grey, chroma green,
