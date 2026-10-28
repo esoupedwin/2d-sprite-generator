@@ -65,7 +65,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
   onBodyImageChange, onHeadImageChange, onHeadImageFramesChange, onHeadAnimChange, onHeadImageScaleChange,
   onAddCharacter, onDeleteCharacter,
   onRenameCharacter, onSelectCharacter, onDuplicateCharacter, onMergeCharacters, onReorderCharacters,
-  onDisplayNameChange,
+  onDisplayNameChange, onSpecialChange,
   folders, onAddFolder, onRenameFolder, onDeleteFolder, onSetCharacterFolder,
   onEditBodyToggle, onToggleBones, showBones,
   onToggleRagdoll, ragdoll,
@@ -119,6 +119,17 @@ export const CharacterBuilder = memo(function CharacterBuilder({
             spellCheck={false}
             className="flex-1 min-w-0 h-full pr-3 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/40 outline-none"
           />
+        </label>
+
+        {/* Marks a character as special (stored as `special: true`). */}
+        <label className="flex items-center gap-2 px-3 h-7 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={!!activeChar?.special}
+            onChange={e => activeChar && onSpecialChange?.(activeChar.id, e.target.checked)}
+            className="h-4 w-4 shrink-0 cursor-pointer accent-primary"
+          />
+          <span className="text-xs text-foreground">Special character</span>
         </label>
       </div>
       <CharacterManagerDialog

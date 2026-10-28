@@ -114,8 +114,17 @@ All rotations in **radians**. Positive = clockwise (canvas coords). Y increases 
 entry in a `layerDraw` map keyed by part; the loop draws them in the resolved
 order. The **head is always on top** of the other body parts (body, arms, legs,
 weapon); the head prop rides with the head, the **body (back) accessory always
-draws first** (behind every body part, before the layer loop), and the **hand
-accessory always draws last** (on top). Neither accessory is reorderable.
+draws first** (behind every body part, before the layer loop), the **body front
+accessory draws immediately before the `head` layer** (so above both arms and
+the body, below the head), and the **hand accessory always draws last** (on
+top). None of the accessories is reorderable. The front accessory mirrors the
+back one: `parts.bodyFrontAccessoryImage` / `bodyFrontAccessoryScale` /
+`bodyFrontAccessoryOffset` / `bodyFrontAccessoryAnimOffsets[animId]`, read via
+`resolveBodyFrontAccessoryOffset/Scale` in `weaponSettings.js`, torso-anchored,
+sky-blue handles (drag types `body-front-accessory-pos` / `-rot`). Both torso
+accessories' handles show in **Edit Body** (drag sets the character-wide
+`<prefix>Offset`) and in Edit Animation (drag sets the per-animation
+`<prefix>AnimOffsets[animId]` override) — see `setTorsoAccessoryOffset` in App.jsx.
 
 Default order, back → front (code keys; `right_arm` = character's LEFT/support
 arm, `left_arm` = RIGHT/dominant arm):

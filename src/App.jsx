@@ -29,10 +29,10 @@ import {
   DEFAULT_WEAPON_SCALES,
 } from './data/defaultBuild.js';
 import { ANIMATIONS, resolveAnimation, getPoseAtTime, defaultAnimationFor, visibleActions, hiddenActionCount, animTemplateFields } from './systems/AnimationSystem.js';
-import { exportSpriteSheet, exportAllActionSheets, exportCharactersSheets, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG } from './utils/export.js';
+import { exportSpriteSheet, exportAllActionSheets, exportCharactersSheets, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG, exportCharacterCardPNG, exportCharacterCards } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -140,8 +140,38 @@ function animationStateOf(src) {
       weaponAnimOffsets:        p.weaponAnimOffsets        ?? {},
       accessoryAnimOffsets:     p.accessoryAnimOffsets     ?? {},
       bodyAccessoryAnimOffsets: p.bodyAccessoryAnimOffsets ?? {},
+      bodyFrontAccessoryAnimOffsets: p.bodyFrontAccessoryAnimOffsets ?? {},
     },
   });
+}
+
+// Torso accessories (`prefix` = 'bodyAccessory' | 'bodyFrontAccessory').
+// In Edit Body (animation 'edit') a drag sets the character-wide position
+// `parts.<prefix>Offset`, which every animation without its own override uses.
+// In Edit Animation it sets a per-animation override `<prefix>AnimOffsets[anim]`.
+function setTorsoAccessoryOffset(c, prefix, animation, o) {
+  const offset = { x: o.x ?? 0, y: o.y ?? 0, rotation: o.rotation ?? 0 };
+  const animKey = `${prefix}AnimOffsets`;
+  const animOffsets = { ...(c.parts[animKey] ?? {}) };
+  if (animation === 'edit') {
+    delete animOffsets.edit; // never let an 'edit' override shadow the base
+    return { ...c, parts: { ...c.parts, [`${prefix}Offset`]: offset, [animKey]: animOffsets } };
+  }
+  animOffsets[animation] = offset;
+  return { ...c, parts: { ...c.parts, [animKey]: animOffsets } };
+}
+
+// Edit Body resets the character-wide position; Edit Animation drops the
+// current animation's override (falling back to the character-wide one).
+function resetTorsoAccessoryOffset(c, prefix, animation) {
+  const animKey = `${prefix}AnimOffsets`;
+  const animOffsets = { ...(c.parts[animKey] ?? {}) };
+  if (animation === 'edit') {
+    delete animOffsets.edit;
+    return { ...c, parts: { ...c.parts, [`${prefix}Offset`]: { x: 0, y: 0, rotation: 0 }, [animKey]: animOffsets } };
+  }
+  delete animOffsets[animation];
+  return { ...c, parts: { ...c.parts, [animKey]: animOffsets } };
 }
 
 /**
@@ -168,6 +198,9 @@ function cloneCharacter(src) {
       ...(src.parts.bodyAccessoryImage ? { bodyAccessoryImage: src.parts.bodyAccessoryImage } : {}),
       ...(src.parts.bodyAccessoryScale != null ? { bodyAccessoryScale: src.parts.bodyAccessoryScale } : {}),
       bodyAccessoryOffset: { ...(src.parts.bodyAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
+      ...(src.parts.bodyFrontAccessoryImage ? { bodyFrontAccessoryImage: src.parts.bodyFrontAccessoryImage } : {}),
+      ...(src.parts.bodyFrontAccessoryScale != null ? { bodyFrontAccessoryScale: src.parts.bodyFrontAccessoryScale } : {}),
+      bodyFrontAccessoryOffset: { ...(src.parts.bodyFrontAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
       ...animParts,
     },
     boneOffsets:          { ...src.boneOffsets },
@@ -327,6 +360,7 @@ export default function App() {
   const [weaponUploadOpen,    setWeaponUploadOpen]    = useState(false);
   const [accessoryUploadOpen, setAccessoryUploadOpen] = useState(false);
   const [bodyAccessoryUploadOpen, setBodyAccessoryUploadOpen] = useState(false);
+  const [bodyFrontAccessoryUploadOpen, setBodyFrontAccessoryUploadOpen] = useState(false);
   const [customizeOpen,        setCustomizeOpen]        = useState(false);
 
   // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
@@ -337,6 +371,7 @@ export default function App() {
   const [spriteExport,  setSpriteExport]  = useState(null);
   const [batchExportOpen, setBatchExportOpen] = useState(false);
   const [folderExportOpen, setFolderExportOpen] = useState(false);
+  const [folderCardsOpen, setFolderCardsOpen] = useState(false);
 
   // ── Animation keyframe editing ───────────────────────────────────────────────
   // When set, the canvas pauses + seeks to this time. Drags on the named bone
@@ -493,6 +528,11 @@ export default function App() {
     setCharacters(prev => prev.map(c => (c.id === id ? withOptional(c, 'displayName', displayName.trim()) : c)));
   }, []);
 
+  // "Special character" flag. Only `true` is stored; unchecking removes the key.
+  const setCharacterSpecial = useCallback((id, special) => {
+    setCharacters(prev => prev.map(c => (c.id === id ? withOptional(c, 'special', !!special) : c)));
+  }, []);
+
   // ── Folders (one level) ──────────────────────────────────────────────────────
   // Returns the new folder's name so the manager can open it for renaming.
   const addFolder = useCallback(() => {
@@ -565,7 +605,7 @@ export default function App() {
       const { parts: animParts, ...animState } = animationStateOf(sec);
       const copy  = cloneCharacter(base);
       const known = new Set(copy.customWeapons.map(w => w.key));
-      const merged = {
+      const merged = withOptional({
         ...copy,
         ...animState,
         // Named after the secondary with a running number: `Cat - Axe 2`, `Cat - Axe 3`, …
@@ -577,7 +617,9 @@ export default function App() {
           ...copy.customWeapons,
           ...(sec.customWeapons ?? []).filter(w => !known.has(w.key)).map(w => ({ ...w })),
         ],
-      };
+      // The in-game Name (`displayName`) comes from the secondary too; if the
+      // secondary has none, the copy has none rather than keeping the base's.
+      }, 'displayName', sec.displayName ?? '');
       setActiveCharId(merged.id);
       setCurrentAnimation(defaultAnimationFor(merged));
       return [...prev, merged];
@@ -744,12 +786,8 @@ export default function App() {
   }, [activeCharId]);
 
   const setBodyAccessoryOffsetAbsolute = useCallback((newOffset) => {
-    setCharacters(prev => prev.map(c => {
-      if (c.id !== activeCharId) return c;
-      const animOffsets = { ...(c.parts.bodyAccessoryAnimOffsets ?? {}) };
-      animOffsets[currentAnimation] = { x: newOffset.x ?? 0, y: newOffset.y ?? 0, rotation: newOffset.rotation ?? 0 };
-      return { ...c, parts: { ...c.parts, bodyAccessoryAnimOffsets: animOffsets } };
-    }));
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? setTorsoAccessoryOffset(c, 'bodyAccessory', currentAnimation, newOffset) : c));
   }, [activeCharId, currentAnimation]);
 
   const updateBodyAccessoryScale = useCallback((newScale) => {
@@ -759,12 +797,35 @@ export default function App() {
   }, [activeCharId]);
 
   const resetBodyAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'bodyAccessory', currentAnimation) : c));
+  }, [activeCharId, currentAnimation]);
+
+  // ── Body FRONT accessory (torso PNG drawn above both arms, below the head) ──
+  const updateBodyFrontAccessoryImage = useCallback((dataUrl) => {
     setCharacters(prev => prev.map(c => {
       if (c.id !== activeCharId) return c;
-      const animOffsets = { ...(c.parts.bodyAccessoryAnimOffsets ?? {}) };
-      delete animOffsets[currentAnimation];
-      return { ...c, parts: { ...c.parts, bodyAccessoryAnimOffsets: animOffsets } };
+      const parts = { ...c.parts };
+      if (dataUrl) parts.bodyFrontAccessoryImage = dataUrl;
+      else         delete parts.bodyFrontAccessoryImage;
+      return { ...c, parts };
     }));
+  }, [activeCharId]);
+
+  const setBodyFrontAccessoryOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? setTorsoAccessoryOffset(c, 'bodyFrontAccessory', currentAnimation, newOffset) : c));
+  }, [activeCharId, currentAnimation]);
+
+  const updateBodyFrontAccessoryScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, parts: { ...c.parts, bodyFrontAccessoryScale: newScale } } : c
+    ));
+  }, [activeCharId]);
+
+  const resetBodyFrontAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'bodyFrontAccessory', currentAnimation) : c));
   }, [activeCharId, currentAnimation]);
 
   const updateBoneOffsets = useCallback((newOffsets) => {
@@ -1327,6 +1388,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.bodyAccessoryAnimOffsets, activeChar.parts.bodyAccessoryOffset, currentAnimation],
   );
+  const bodyFrontAccessoryOffset = useMemo(
+    () => resolveBodyFrontAccessoryOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.bodyFrontAccessoryAnimOffsets, activeChar.parts.bodyFrontAccessoryOffset, currentAnimation],
+  );
   // Per-animation layer z-order override (null = default). `layerOrder` is the
   // resolved back → front order used by both the render and the editor panel.
   const renderOpts = useMemo(() => resolveRenderOptions(activeChar, currentAnimation), [activeChar, currentAnimation]);
@@ -1395,6 +1461,8 @@ export default function App() {
             onAnimationJSON={() => exportAnimationJSON(activeChar, currentAnimation)}
             onPoseSVG={() => setPoseExport({ character: activeChar, animationName: currentAnimation, currentTime: charCanvasRef.current?.getCurrentTime() ?? 0 })}
             onPartsSheet={() => exportPartsSheetSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
+            onFolderCards={() => setFolderCardsOpen(true)}
+            onCard={() => exportCharacterCardPNG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
             open={headerTab === 'export'}
             onClose={() => setHeaderTab('')}
           />
@@ -1421,6 +1489,7 @@ export default function App() {
             onDeleteCharacter={deleteCharacter}
             onRenameCharacter={renameCharacter}
             onDisplayNameChange={setCharacterDisplayName}
+            onSpecialChange={setCharacterSpecial}
             folders={folderList}
             onAddFolder={addFolder}
             onRenameFolder={renameFolder}
@@ -1687,16 +1756,81 @@ export default function App() {
                         >+</button>
                       </div>
                     )}
-                    {img && editAnimPose && (() => {
+                    {img && (editAnimPose || currentAnimation === 'edit') && (() => {
                       const bo = resolveBodyAccessoryOffset(activeChar.parts, currentAnimation);
                       const isDirty = bo.x !== 0 || bo.y !== 0 || bo.rotation !== 0;
+                      const editBody = currentAnimation === 'edit';
                       return isDirty ? (
                         <button
                           onClick={resetBodyAccessoryOffset}
                           className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
-                          title="Reset body accessory offset"
+                          title={editBody ? 'Reset the back accessory position used by every animation' : "Reset this animation's back accessory position"}
                         >
-                          Reset body offset
+                          {editBody ? 'Reset back position (all animations)' : 'Reset back position (this animation)'}
+                        </button>
+                      ) : null;
+                    })()}
+                  </div>
+                );
+              })()}
+
+              {/* ── Body FRONT accessory (torso; above both arms, below the head) ── */}
+              {(() => {
+                const img = activeChar.parts.bodyFrontAccessoryImage;
+                const curScale = resolveBodyFrontAccessoryScale(activeChar.parts);
+                return (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setBodyFrontAccessoryUploadOpen(true)}
+                        title={img ? "Replace body's front accessory PNG" : 'Upload a PNG drawn over both arms, under the head'}
+                      >
+                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                        {img ? "Edit Body's Front Accessory" : "Upload Body's Front Accessory"}
+                      </Button>
+                      {img && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => updateBodyFrontAccessoryImage(null)}
+                          title="Remove body front accessory image"
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    {img && (
+                      <div className="flex items-center justify-end gap-0.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Front scale</span>
+                        <button
+                          onClick={() => updateBodyFrontAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale <= MIN_ACCESSORY_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >−</button>
+                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                          {Math.round(curScale * 100)}%
+                        </span>
+                        <button
+                          onClick={() => updateBodyFrontAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale >= MAX_ACCESSORY_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >+</button>
+                      </div>
+                    )}
+                    {img && (editAnimPose || currentAnimation === 'edit') && (() => {
+                      const fo = resolveBodyFrontAccessoryOffset(activeChar.parts, currentAnimation);
+                      const isDirty = fo.x !== 0 || fo.y !== 0 || fo.rotation !== 0;
+                      const editBody = currentAnimation === 'edit';
+                      return isDirty ? (
+                        <button
+                          onClick={resetBodyFrontAccessoryOffset}
+                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                          title={editBody ? 'Reset the front accessory position used by every animation' : "Reset this animation's front accessory position"}
+                        >
+                          {editBody ? 'Reset front position (all animations)' : 'Reset front position (this animation)'}
                         </button>
                       ) : null;
                     })()}
@@ -1834,6 +1968,8 @@ export default function App() {
                 onAccessoryOffsetSet={setAccessoryOffsetAbsolute}
                 bodyAccessoryOffset={bodyAccessoryOffset}
                 onBodyAccessoryOffsetSet={setBodyAccessoryOffsetAbsolute}
+                bodyFrontAccessoryOffset={bodyFrontAccessoryOffset}
+                onBodyFrontAccessoryOffsetSet={setBodyFrontAccessoryOffsetAbsolute}
                 onSelectBone={editAnimPose && !poseEditorOpen ? selectBone : undefined}
                 canvasBg={settings.canvasBg}
                 gridSpacing={settings.gridSpacing}
@@ -1991,6 +2127,16 @@ export default function App() {
         moveHint="The back accessory moves with the torso, draws behind the body, and persists across weapon changes."
       />
 
+      <AccessoryUploadDialog
+        open={bodyFrontAccessoryUploadOpen}
+        currentImage={activeChar.parts.bodyFrontAccessoryImage}
+        onPick={updateBodyFrontAccessoryImage}
+        onClose={() => setBodyFrontAccessoryUploadOpen(false)}
+        title="Upload Body's Front Accessory PNG"
+        anchorText="attached in front of the torso (body)"
+        moveHint="The front accessory moves with the torso, draws above both arms but below the head, and persists across weapon changes."
+      />
+
       <SpritePreviewDialog
         open={!!spritePreview}
         character={spritePreview?.character}
@@ -2019,6 +2165,16 @@ export default function App() {
         defaultFolder={activeChar.folder ?? null}
         onExport={({ characters: chars, ...opts }) => exportCharactersSheets(chars, opts)}
         onClose={() => setFolderExportOpen(false)}
+      />
+
+      <FolderExportDialog
+        variant="cards"
+        open={folderCardsOpen}
+        characters={characters}
+        folders={folderList}
+        defaultFolder={activeChar.folder ?? null}
+        onExport={({ characters: chars, root, onProgress }) => exportCharacterCards(chars, { root, onProgress })}
+        onClose={() => setFolderCardsOpen(false)}
       />
     </div>
   );

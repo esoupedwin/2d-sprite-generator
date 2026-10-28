@@ -113,6 +113,9 @@ export function MergeCharactersDialog({ open, onClose, characters, activeCharId,
                   Creates a copy of <span className="text-foreground font-medium">{base.name}</span> with the{' '}
                   {actionCount} action{actionCount === 1 ? '' : 's'} of{' '}
                   <span className="text-foreground font-medium">{secondary.name}</span>. The copy's own animations are replaced.
+                  {secondary.displayName
+                    ? <> Its Name is <span className="text-foreground font-medium">{secondary.displayName}</span>.</>
+                    : <> The secondary has no Name, so the copy's Name is left empty.</>}
                 </p>
                 {weaponChanges && (
                   <p className="mt-1">

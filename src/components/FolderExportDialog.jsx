@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Folder } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
-import { countActionSheets, batchExportRelativeDir } from '../utils/export.js';
+import { countActionSheets, batchExportRelativeDir, cardExportRelativePath, trimTrailingSlashes } from '../utils/export.js';
 import { characterLabel, folderOf } from '../utils/characters.js';
 import {
   useSheetExport, ExportDialogShell, FrameCountField, OutputFolderField, SheetPathPreview,
@@ -15,8 +15,13 @@ const ROOT_FOLDER = '\u0000root';
  * "Export Folder" — every character in one manager folder, each written as
  * right-arm + head + head_anim + body + legs sheets per action (same layout as the single-character export):
  *   <output folder>/<folder>/<character>/{right_arm,head,head_anim,body,legs}/<action>.png
+ *
+ * `variant="cards"` runs the same folder picker but writes one character-card
+ * PNG per character instead (no frames field):
+ *   <output folder>/<folder>/card_buy_<character>.png
  */
-export function FolderExportDialog({ open, onClose, characters, folders, defaultFolder, onExport }) {
+export function FolderExportDialog({ open, onClose, characters, folders, defaultFolder, onExport, variant = 'sheets' }) {
+  const cards = variant === 'cards';
   const [folder, setFolder] = useState(null);
 
   // One option per folder (+ "No folder" for the un-foldered), with sheet
@@ -30,13 +35,13 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
     }
     const toOption = (key, label, chars) => ({
       key, label, chars,
-      sheets: chars.reduce((n, c) => n + countActionSheets(c), 0),
+      sheets: cards ? chars.length : chars.reduce((n, c) => n + countActionSheets(c), 0),
     });
     return [
       ...folders.map(name => toOption(name, name, byFolder.get(name))),
       ...(root.length ? [toOption(ROOT_FOLDER, 'No folder', root)] : []),
     ];
-  }, [characters, folders]);
+  }, [characters, folders, cards]);
 
   const selected = options.find(o => o.key === folder) ?? null;
   const ex = useSheetExport(open, (opts) => onExport({ ...opts, characters: selected.chars }), onClose);
@@ -53,8 +58,10 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
   return (
     <ExportDialogShell
       titleId="folder-export-title"
-      title="Export Folder"
-      subtitle="Every character in the folder · right arm + head + head_anim + body + legs sheets per action"
+      title={cards ? 'Export Folder Cards' : 'Export Folder'}
+      subtitle={cards
+        ? 'Every character in the folder · one framed card PNG each'
+        : 'Every character in the folder · right arm + head + head_anim + body + legs sheets per action'}
       busy={ex.busy}
       onClose={onClose}
     >
@@ -87,14 +94,19 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
           )}
         </div>
 
-        <FrameCountField value={ex.frameCount} onChange={ex.setFrameCount} disabled={ex.busy} />
+        {!cards && <FrameCountField value={ex.frameCount} onChange={ex.setFrameCount} disabled={ex.busy} />}
 
         <OutputFolderField value={ex.outDir} onChange={ex.setOutDir} disabled={ex.busy}>
-          {selected?.chars.length > 0 && (
+          {selected?.chars.length > 0 && (cards ? (
+            <span className="text-[10px] text-muted-foreground font-mono break-all">
+              → {ex.outDir.trim() ? trimTrailingSlashes(ex.outDir.trim()) : '<folder>'}/{cardExportRelativePath(selected.chars[0])}
+              {selected.chars.length > 1 && <span className="text-muted-foreground/60"> … ×{selected.chars.length}</span>}
+            </span>
+          ) : (
             <SheetPathPreview outDir={ex.outDir} relDir={batchExportRelativeDir(selected.chars[0])}>
               {selected.chars.length > 1 && <span className="text-muted-foreground/60"> … ×{selected.chars.length}</span>}
             </SheetPathPreview>
-          )}
+          ))}
         </OutputFolderField>
 
         {selected && (
@@ -102,7 +114,7 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
             {selected.chars.map(c => (
               <span key={c.id} className="px-2 py-0.5 rounded-full border border-border bg-secondary text-[11px] text-muted-foreground">
                 {characterLabel(c)}
-                <span className="font-mono text-muted-foreground/60"> · {countActionSheets(c)}</span>
+                {!cards && <span className="font-mono text-muted-foreground/60"> · {countActionSheets(c)}</span>}
               </span>
             ))}
           </div>
@@ -111,7 +123,7 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
         <ExportProgress progress={ex.progress} />
         <ExportResult
           result={ex.result}
-          renderOk={r => <>Wrote {r.written} file{r.written === 1 ? '' : 's'} for {r.characters} character{r.characters === 1 ? '' : 's'} under <span className="font-mono text-foreground break-all">{r.root}</span></>}
+          renderOk={r => <>Wrote {r.written} {cards ? 'card' : 'file'}{r.written === 1 ? '' : 's'} for {r.characters} character{r.characters === 1 ? '' : 's'} under <span className="font-mono text-foreground break-all">{r.root}</span></>}
         />
       </div>
 
@@ -121,7 +133,9 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
         canExport={ex.ready && !!selected && selected.chars.length > 0}
         onClose={onClose}
         onRun={ex.run}
-        label={`Export ${selected?.sheets ?? 0} sheets`}
+        label={cards
+          ? `Export ${selected?.sheets ?? 0} card${selected?.sheets === 1 ? '' : 's'}`
+          : `Export ${selected?.sheets ?? 0} sheets`}
       />
     </ExportDialogShell>
   );

@@ -1,4 +1,4 @@
-import { ANIMATIONS, getPoseAtTime, resolveAnimation, animationLabel, visibleActions } from '../systems/AnimationSystem.js';
+import { ANIMATIONS, getPoseAtTime, resolveAnimation, animationLabel, visibleActions, defaultAnimationFor } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import {
   computeSkinBounds,
@@ -92,19 +92,20 @@ async function loadRenderAssets(character) {
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
   const parts = character.parts ?? {};
-  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage] = await Promise.all([
+  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
     Promise.all(headFrameUrls(parts).map(loadImage)),
     loadImage(parts.weaponImages?.[parts.weapon]),
     loadImage(parts.accessoryImages?.[parts.weapon]),
     loadImage(parts.bodyAccessoryImage),
+    loadImage(parts.bodyFrontAccessoryImage),
   ]);
   // headImages = every head-skin frame in play order (see utils/headAnim.js).
   //   headImageAt(t)     — clock-based (`every` honoured): single-frame exports.
   //   headPlayImageAt(t) — one play from t = 0 then resting: sprite sheets.
   const headImageAt     = (t) => pickHeadImage(headImages, headFrameIndex(parts, t));
   const headPlayImageAt = (t) => pickHeadImage(headImages, headPlayFrameIndex(parts, t));
-  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage };
+  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage };
 }
 
 /**
@@ -142,7 +143,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage } =
+  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage } =
     assets ?? await loadRenderAssets(character);
   // `staticHead` pins the head to its first skin (the resting frame) — the still
   // "head" sheet. Otherwise the head-frame sequence plays ONCE from the top of
@@ -198,6 +199,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       weaponImage,
       accessoryImage,
       bodyAccessoryImage,
+      bodyFrontAccessoryImage,
       partsFilter,
       ...renderOpts,
     });
@@ -311,7 +313,7 @@ async function renderPoseBase(character, animationName, currentTime) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage } = await loadRenderAssets(character);
+  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage } = await loadRenderAssets(character);
 
   const big = document.createElement('canvas');
   big.width  = RENDER_W * POSE_PIXEL_RATIO;
@@ -331,11 +333,18 @@ async function renderPoseBase(character, animationName, currentTime) {
     weaponImage,
     accessoryImage,
     bodyAccessoryImage,
+    bodyFrontAccessoryImage,
     ...resolveRenderOptions(character, animationName),
   });
 
+  // originX/originY: where the character's ground point (local 0,0) lands in
+  // the returned canvas, in device px — lets callers place every character on
+  // the same anchor regardless of how its content got cropped.
+  const originDevX = RENDER_ORIGIN_X * POSE_PIXEL_RATIO;
+  const originDevY = RENDER_ORIGIN_Y * POSE_PIXEL_RATIO;
+
   const b = contentBoundsDevice(ctx, big.width, big.height);
-  if (!b) return { canvas: big, ratio: POSE_PIXEL_RATIO, wLogical: RENDER_W, hLogical: RENDER_H };
+  if (!b) return { canvas: big, ratio: POSE_PIXEL_RATIO, wLogical: RENDER_W, hLogical: RENDER_H, originX: originDevX, originY: originDevY };
 
   const m  = CONTENT_MARGIN * POSE_PIXEL_RATIO;
   const x0 = Math.max(0, b.minX - m);
@@ -347,7 +356,10 @@ async function renderPoseBase(character, animationName, currentTime) {
   const cropped = document.createElement('canvas');
   cropped.width = cw; cropped.height = ch;
   cropped.getContext('2d').drawImage(big, x0, y0, cw, ch, 0, 0, cw, ch);
-  return { canvas: cropped, ratio: POSE_PIXEL_RATIO, wLogical: cw / POSE_PIXEL_RATIO, hLogical: ch / POSE_PIXEL_RATIO };
+  return {
+    canvas: cropped, ratio: POSE_PIXEL_RATIO, wLogical: cw / POSE_PIXEL_RATIO, hLogical: ch / POSE_PIXEL_RATIO,
+    originX: originDevX - x0, originY: originDevY - y0,
+  };
 }
 
 // Adds a round, solid outline around the character's non-transparent pixels.
@@ -397,7 +409,10 @@ function applyOutline(base, color = '#ffffff', widthLogical = 6) {
   octx.drawImage(dil, 0, 0, ww, wh, 0, 0, out.width, out.height);
   octx.drawImage(canvas, padDev, padDev);
 
-  return { canvas: out, ratio, wLogical: wLogical + pad * 2, hLogical: hLogical + pad * 2 };
+  return {
+    canvas: out, ratio, wLogical: wLogical + pad * 2, hLogical: hLogical + pad * 2,
+    originX: base.originX + padDev, originY: base.originY + padDev,
+  };
 }
 
 // Applies the chosen edits to a rendered base and returns the PNG + dims.
@@ -455,6 +470,164 @@ export async function exportPoseSVG(character, animationName, currentTime = 0, o
   const preview = await buildPosePreview(character, animationName, currentTime, options);
   if (!preview) return;
   downloadPoseSVG(character, animationName, poseSVGMarkup(preview.pngDataUrl, preview.width, preview.height));
+}
+
+// ── Character card ──────────────────────────────────────────────────────────
+// Trading-card style PNG: white rounded border, dark inner frame, parchment
+// background, and the current pose with a white sticker outline centred on it.
+const CARD_W = 720;
+const CARD_H = 990;
+const CARD_BORDER = 28;          // white outer border
+const CARD_FRAME = 10;           // dark frame ring inside the border
+const CARD_RADIUS = 48;
+const CARD_FILL = '#d9cbb4';
+const CARD_FRAME_COLOR = '#2f2350';
+const CARD_STICKER_PX = 10;      // sticker outline radius (render-logical px)
+// Special characters get a sunburst instead of the plain parchment fill.
+const CARD_SPECIAL_BASE = '#ffc200';  // amber
+const CARD_SPECIAL_RAY = '#ffe699';   // cream rays
+const CARD_SPECIAL_RAYS = 12;         // light rays (each as wide as the gap between)
+const CARD_SPECIAL_CENTER_Y = 0.46;   // rays converge this far down the inner area
+// Every character is drawn at the SAME scale and with its ground point pinned
+// to the same spot, so sizes are uniform across cards (a wide helmet or a long
+// weapon may clip slightly at the edge instead of shrinking the character).
+const CARD_UNIT = 2.9;           // card px per character-local unit
+// The pose is anchored on the head joint (local y = -134 in every pose) rather
+// than the ground, so the head stays at a fixed spot whatever the size.
+const CARD_HEAD_Y = 0.40;        // head joint, as a fraction down the inner area
+const CARD_HEAD_LOCAL_Y = 134;   // how far the head joint sits above the ground point
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Alternating amber / cream wedges fanning out from (cx, cy); one cream ray
+// points straight up. The caller sets the clip region.
+function drawSunburst(ctx, cx, cy, reach, rays, base, light) {
+  ctx.fillStyle = base;
+  ctx.fillRect(cx - reach, cy - reach, reach * 2, reach * 2);
+  ctx.fillStyle = light;
+  const half = Math.PI / rays / 2;               // half the width of one light ray
+  const R = reach * 1.5;                         // past the corners so chords never show
+  for (let i = 0; i < rays; i++) {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / rays;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + R * Math.cos(a - half), cy + R * Math.sin(a - half));
+    ctx.lineTo(cx + R * Math.cos(a + half), cy + R * Math.sin(a + half));
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+export async function buildCharacterCard(character, animationName, currentTime = 0) {
+  if (!character) return null;
+  const base = await renderPoseBase(character, animationName, currentTime);
+  if (!base) return null;
+  const sticker = applyOutline(base, '#ffffff', CARD_STICKER_PX);
+
+  const card = document.createElement('canvas');
+  card.width = CARD_W; card.height = CARD_H;
+  const ctx = card.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // Outer white border, then the dark frame ring, then the parchment fill.
+  ctx.fillStyle = '#ffffff';
+  roundRectPath(ctx, 0, 0, CARD_W, CARD_H, CARD_RADIUS);
+  ctx.fill();
+
+  const fx = CARD_BORDER, fy = CARD_BORDER;
+  const fw = CARD_W - CARD_BORDER * 2, fh = CARD_H - CARD_BORDER * 2;
+  const fr = CARD_RADIUS - CARD_BORDER * 0.5;
+  ctx.fillStyle = CARD_FRAME_COLOR;
+  roundRectPath(ctx, fx, fy, fw, fh, fr);
+  ctx.fill();
+
+  const ix = fx + CARD_FRAME, iy = fy + CARD_FRAME;
+  const iw = fw - CARD_FRAME * 2, ih = fh - CARD_FRAME * 2;
+  roundRectPath(ctx, ix, iy, iw, ih, Math.max(0, fr - CARD_FRAME));
+  if (character.special) {
+    ctx.save();
+    ctx.clip();
+    drawSunburst(ctx, ix + iw / 2, iy + ih * CARD_SPECIAL_CENTER_Y, Math.hypot(iw, ih),
+      CARD_SPECIAL_RAYS, CARD_SPECIAL_BASE, CARD_SPECIAL_RAY);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = CARD_FILL;
+    ctx.fill();
+  }
+
+  // Pose at a fixed scale: the head joint lands at the horizontal centre,
+  // CARD_HEAD_Y down the inner area (so the ground point is below it by
+  // CARD_HEAD_LOCAL_Y units). Clipped to the inner area so anything that
+  // overshoots stops at the frame.
+  const k = CARD_UNIT / (POSE_SCALE * sticker.ratio);   // card px per canvas device px
+  const groundY = iy + ih * CARD_HEAD_Y + CARD_HEAD_LOCAL_Y * CARD_UNIT;
+  const dx = ix + iw / 2 - sticker.originX * k;
+  const dy = groundY - sticker.originY * k;
+  ctx.save();
+  roundRectPath(ctx, ix, iy, iw, ih, Math.max(0, fr - CARD_FRAME));
+  ctx.clip();
+  ctx.drawImage(sticker.canvas, dx, dy, sticker.canvas.width * k, sticker.canvas.height * k);
+  ctx.restore();
+  return card;
+}
+
+/** Renders the current pose as a framed character card and downloads it as a PNG. */
+export async function exportCharacterCardPNG(character, animationName, currentTime = 0) {
+  const card = await buildCharacterCard(character, animationName, currentTime);
+  if (!card) return;
+  await downloadCanvas(card, cardFileName(character));
+}
+
+/** `card_buy_<character name>.png` — the file name every card export uses. */
+function cardFileName(character) {
+  return `card_buy_${sanitizeFileName(characterLabel(character))}.png`;
+}
+
+/** `<character folder>/card_buy_<character>.png` (folder level omitted when the character isn't in one). */
+export function cardExportRelativePath(character) {
+  const file   = cardFileName(character);
+  const folder = character?.folder ? sanitizeFileName(character.folder) : null;
+  return folder ? `${folder}/${file}` : file;
+}
+
+/**
+ * Writes one character card PNG per character into `root` through the dev
+ * server (/api/export-sprites): `<root>/<folder>/card_buy_<character>.png`. Each
+ * card shows the character's default action (idle for most) at t = 0.
+ * Same-named characters get numbered files so none overwrites another.
+ * onProgress({ done, total, label }) fires before each card is rendered.
+ * Resolves { written, characters, root }; throws on the first failure.
+ */
+export async function exportCharacterCards(characters, { root, onProgress } = {}) {
+  const list = (characters ?? []).filter(Boolean);
+  if (!list.length) throw new Error('no characters to export');
+  if (!root) throw new Error('no output folder');
+  const taken = new Set();
+  let written = 0, pending = null;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    const rel = cardExportRelativePath(c);
+    const dot = rel.lastIndexOf('.');
+    const unique = uniqueName(rel.slice(0, dot), taken) + rel.slice(dot);
+    taken.add(unique.slice(0, unique.lastIndexOf('.')));
+    onProgress?.({ done: i, total: list.length, label: unique });
+    const card = await buildCharacterCard(c, defaultAnimationFor(c), 0);
+    if (pending) { await pending; written++; }
+    pending = card ? postSheet(root, unique, card) : null;
+  }
+  if (pending) { await pending; written++; }
+  onProgress?.({ done: list.length, total: list.length, label: 'done' });
+  const folder = list[0].folder ? `/${sanitizeFileName(list[0].folder)}` : '';
+  return { written, characters: list.length, root: `${trimTrailingSlashes(root)}${folder}` };
 }
 
 /**

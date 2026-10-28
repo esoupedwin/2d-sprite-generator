@@ -71,6 +71,22 @@ export function resolveBodyAccessoryOffset(parts, animation) {
       ?? ZERO_OFFSET;
 }
 
+// Body FRONT accessory — like the back accessory (single PNG on the torso,
+// persists across weapons) but drawn above both arms and below the head.
+export function resolveBodyFrontAccessoryScale(parts) {
+  if (!parts) return 1;
+  return parts.bodyFrontAccessoryScale ?? 1;
+}
+
+// Same fallback chain as the back accessory:
+//   parts.bodyFrontAccessoryAnimOffsets[animation] → parts.bodyFrontAccessoryOffset → zero
+export function resolveBodyFrontAccessoryOffset(parts, animation) {
+  if (!parts) return ZERO_OFFSET;
+  return parts.bodyFrontAccessoryAnimOffsets?.[animation]
+      ?? parts.bodyFrontAccessoryOffset
+      ?? ZERO_OFFSET;
+}
+
 // ── Weapon TYPE ───────────────────────────────────────────────────────────────
 // `parts.weapon` is either a built-in key ('sword', 'rifle', …, 'none') or a
 // legacy custom key ('cw_…') whose behaviour comes from its `template`. Every
