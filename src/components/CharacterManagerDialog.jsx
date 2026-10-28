@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Copy, Folder, FolderPlus, GripVertical, Pencil, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Combine, Copy, Folder, FolderPlus, GripVertical, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { RenameInput } from '@/components/ui/rename-input.jsx';
 import { useEscapeToClose } from '@/lib/useEscapeToClose.js';
 import { cn } from '@/lib/utils.js';
 import { folderOf } from '../utils/characters.js';
 import { ConfirmDialog } from './ConfirmDialog.jsx';
+import { MergeCharactersDialog } from './MergeCharactersDialog.jsx';
 
 const ROW_INPUT = 'h-7 text-sm px-2 w-full rounded-md';
 
@@ -22,7 +23,7 @@ const ROW_INPUT = 'h-7 text-sm px-2 w-full rounded-md';
 export function CharacterManagerDialog({
   open, onClose,
   characters, activeCharId,
-  onSelect, onAdd, onDelete, onRename, onDuplicate, onReorder,
+  onSelect, onAdd, onDelete, onRename, onDuplicate, onMerge, onReorder,
   folders = [], onAddFolder, onRenameFolder, onDeleteFolder, onSetCharacterFolder,
 }) {
   const [editingId, setEditingId]         = useState(null); // character being renamed
@@ -36,13 +37,15 @@ export function CharacterManagerDialog({
   const [dropTarget, setDropTarget] = useState(null);
   // Pending delete awaiting confirmation: { id, name } | null.
   const [deleteTarget, setDeleteTarget] = useState(null);
+  // "Merge and Create" picker.
+  const [mergeOpen, setMergeOpen] = useState(false);
 
-  // While the delete confirmation is up, Escape belongs to it, not to us.
-  useEscapeToClose(open, onClose, !!deleteTarget);
+  // While the delete confirmation or the merge picker is up, Escape belongs to it, not to us.
+  useEscapeToClose(open, onClose, !!deleteTarget || mergeOpen);
 
   useEffect(() => {
     if (!open) {
-      setEditingId(null); setEditingFolder(null); setDragId(null); setDropTarget(null); setDeleteTarget(null);
+      setEditingId(null); setEditingFolder(null); setDragId(null); setDropTarget(null); setDeleteTarget(null); setMergeOpen(false);
     }
   }, [open]);
 
@@ -297,7 +300,7 @@ export function CharacterManagerDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="character-manager-title"
-        className="relative w-[460px] max-w-[92vw] rounded-lg border border-border bg-card shadow-2xl"
+        className="relative w-[640px] max-w-[92vw] rounded-lg border border-border bg-card shadow-2xl"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 id="character-manager-title" className="text-sm font-semibold text-foreground">
@@ -339,13 +342,24 @@ export function CharacterManagerDialog({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-border bg-secondary/30 rounded-b-lg">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-border bg-secondary/30 rounded-b-lg">
+          <div className="flex flex-wrap items-center gap-1">
             <Button variant="ghost" onClick={onClose}>Close</Button>
             {onAddFolder && (
               <Button variant="outline" size="sm" onClick={addFolder} title="Create a folder">
                 <FolderPlus className="h-3.5 w-3.5 mr-1.5" />
                 Folder
+              </Button>
+            )}
+            {onMerge && characters.length > 1 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMergeOpen(true)}
+                title="Copy a character and give it another character's animations"
+              >
+                <Combine className="h-3.5 w-3.5 mr-1.5" />
+                Merge and Create
               </Button>
             )}
           </div>
@@ -355,6 +369,14 @@ export function CharacterManagerDialog({
           </Button>
         </div>
       </div>
+
+      <MergeCharactersDialog
+        open={mergeOpen}
+        characters={characters}
+        activeCharId={activeCharId}
+        onClose={() => setMergeOpen(false)}
+        onCreate={(baseId, secondaryId) => { onMerge(baseId, secondaryId); setMergeOpen(false); onClose(); }}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

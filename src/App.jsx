@@ -43,6 +43,7 @@ import { genId } from './utils/genId.js';
 import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
 import { DEFAULT_ANIM_TEMPLATES } from './data/defaultAnimTemplates.js';
 import { withOptional, mergeFolders, uniqueFolderName, normalizeCharacters } from './utils/characters.js';
+import { uniqueName } from './utils/names.js';
 import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
 const CHARS_STORAGE     = '2dsprite:characters';
@@ -116,6 +117,66 @@ function cloneNested(src, depth = 2) {
   return Object.fromEntries(
     Object.entries(src).map(([k, v]) => [k, cloneNested(v, depth - 1)])
   );
+}
+
+/**
+ * Every per-animation field of a character, deep-cloned — this is what
+ * "its animations" means to Duplicate and to Merge and Create. Plain JSON
+ * throughout (tracks hold arrays of keyframes, which cloneNested would turn
+ * into objects), hence structuredClone. `parts` holds the per-animation
+ * weapon/accessory anchors; the weapon TYPE itself is the caller's call.
+ */
+function animationStateOf(src) {
+  const p = src.parts ?? {};
+  return structuredClone({
+    customAnimations:      src.customAnimations      ?? [],
+    hiddenAnimations:      src.hiddenAnimations      ?? [],
+    animBoneOffsets:       src.animBoneOffsets       ?? {},
+    animKeyframeOverrides: src.animKeyframeOverrides ?? {},
+    animPartZOrder:        src.animPartZOrder        ?? {},
+    animWeaponHidden:      src.animWeaponHidden      ?? {},
+    animationLabels:       src.animationLabels       ?? {},
+    parts: {
+      weaponAnimOffsets:        p.weaponAnimOffsets        ?? {},
+      accessoryAnimOffsets:     p.accessoryAnimOffsets     ?? {},
+      bodyAccessoryAnimOffsets: p.bodyAccessoryAnimOffsets ?? {},
+    },
+  });
+}
+
+/**
+ * Deep copy of a character under a fresh id — body, skins, images, weapon
+ * settings and animations alike. The caller sets the name. Shared by
+ * Duplicate and Merge and Create.
+ */
+function cloneCharacter(src) {
+  const { parts: animParts, ...animState } = animationStateOf(src);
+  return {
+    ...src,
+    id: genId(),
+    parts: {
+      ...src.parts,
+      customColors:      { ...(src.parts.customColors      ?? {}) },
+      partScales:        { ...(src.parts.partScales        ?? {}) },
+      weaponOffset:      { ...(src.parts.weaponOffset      ?? { x: 0, y: 0, rotation: 0 }) },
+      weaponOffsets:     cloneNested(src.parts.weaponOffsets     ?? {}, 1),
+      weaponScales:      { ...(src.parts.weaponScales      ?? {}) },
+      weaponImages:      { ...(src.parts.weaponImages      ?? {}) },
+      accessoryOffset:   { ...(src.parts.accessoryOffset   ?? { x: 0, y: 0, rotation: 0 }) },
+      accessoryImages:   { ...(src.parts.accessoryImages   ?? {}) },
+      accessoryScales:   { ...(src.parts.accessoryScales   ?? {}) },
+      ...(src.parts.bodyAccessoryImage ? { bodyAccessoryImage: src.parts.bodyAccessoryImage } : {}),
+      ...(src.parts.bodyAccessoryScale != null ? { bodyAccessoryScale: src.parts.bodyAccessoryScale } : {}),
+      bodyAccessoryOffset: { ...(src.parts.bodyAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
+      ...animParts,
+    },
+    boneOffsets:          { ...src.boneOffsets },
+    skinOverrides:        cloneSkinOverrides(src.skinOverrides),
+    defaultBoneOffsets:   { ...src.defaultBoneOffsets },
+    defaultSkinOverrides: cloneSkinOverrides(src.defaultSkinOverrides),
+    ...animState,
+    customWeapons:        (src.customWeapons ?? []).map(w => ({ ...w })),
+  };
 }
 
 function newCharacter(name) {
@@ -482,40 +543,41 @@ export default function App() {
     setCharacters(prev => {
       const src = prev.find(c => c.id === id);
       if (!src) return prev;
-      const copy = {
-        ...src,
-        id:   genId(),
-        name: `${src.name} copy`,
-        parts: {
-          ...src.parts,
-          customColors:      { ...(src.parts.customColors      ?? {}) },
-          partScales:        { ...(src.parts.partScales        ?? {}) },
-          weaponOffset:      { ...(src.parts.weaponOffset      ?? { x: 0, y: 0, rotation: 0 }) },
-          weaponOffsets:     cloneNested(src.parts.weaponOffsets     ?? {}, 1),
-          weaponAnimOffsets: cloneNested(src.parts.weaponAnimOffsets ?? {}, 2),
-          weaponScales:      { ...(src.parts.weaponScales      ?? {}) },
-          weaponImages:      { ...(src.parts.weaponImages      ?? {}) },
-          accessoryOffset:      { ...(src.parts.accessoryOffset      ?? { x: 0, y: 0, rotation: 0 }) },
-          accessoryAnimOffsets: cloneNested(src.parts.accessoryAnimOffsets ?? {}, 1),
-          accessoryImages:      { ...(src.parts.accessoryImages ?? {}) },
-          accessoryScales:     { ...(src.parts.accessoryScales ?? {}) },
-          ...(src.parts.bodyAccessoryImage ? { bodyAccessoryImage: src.parts.bodyAccessoryImage } : {}),
-          ...(src.parts.bodyAccessoryScale != null ? { bodyAccessoryScale: src.parts.bodyAccessoryScale } : {}),
-          bodyAccessoryOffset:      { ...(src.parts.bodyAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
-          bodyAccessoryAnimOffsets: cloneNested(src.parts.bodyAccessoryAnimOffsets ?? {}, 1),
-        },
-        boneOffsets:          { ...src.boneOffsets },
-        skinOverrides:        cloneSkinOverrides(src.skinOverrides),
-        defaultBoneOffsets:   { ...src.defaultBoneOffsets },
-        defaultSkinOverrides: cloneSkinOverrides(src.defaultSkinOverrides),
-        // Custom animations are per-character and not carried over on duplication.
-        animBoneOffsets:       cloneNested(src.animBoneOffsets       ?? {}, 2),
-        animKeyframeOverrides: cloneNested(src.animKeyframeOverrides ?? {}, 3),
-        customWeapons:         (src.customWeapons ?? []).map(w => ({ ...w })),
-      };
+      const copy = { ...cloneCharacter(src), name: `${src.name} copy` };
       setActiveCharId(copy.id);
       setCurrentAnimation('idle');
       return [...prev, copy];
+    });
+  }, []);
+
+  // "Merge and Create": a copy of `base` (body, skins, images, weapon settings)
+  // whose animations are replaced by `secondary`'s. The weapon TYPE follows the
+  // animations — it decides which built-in actions show — while the base's
+  // weapon/accessory PNGs stay under their own keys.
+  const mergeCharacters = useCallback((baseId, secondaryId) => {
+    setCharacters(prev => {
+      const base = prev.find(c => c.id === baseId);
+      const sec  = prev.find(c => c.id === secondaryId);
+      if (!base || !sec || base === sec) return prev;
+      const { parts: animParts, ...animState } = animationStateOf(sec);
+      const copy  = cloneCharacter(base);
+      const known = new Set(copy.customWeapons.map(w => w.key));
+      const merged = {
+        ...copy,
+        ...animState,
+        // Named after the secondary with a running number: `Cat - Axe 2`, `Cat - Axe 3`, …
+        name:  uniqueName(sec.name, prev.map(c => c.name), ' '),
+        parts: { ...copy.parts, weapon: sec.parts?.weapon ?? 'none', ...animParts },
+        // Keep the base's custom weapon entries and add the secondary's, so
+        // every `cw_…` key either character used still resolves its template.
+        customWeapons: [
+          ...copy.customWeapons,
+          ...(sec.customWeapons ?? []).filter(w => !known.has(w.key)).map(w => ({ ...w })),
+        ],
+      };
+      setActiveCharId(merged.id);
+      setCurrentAnimation(defaultAnimationFor(merged));
+      return [...prev, merged];
     });
   }, []);
 
@@ -1363,6 +1425,7 @@ export default function App() {
             onSetCharacterFolder={setCharacterFolder}
             onSelectCharacter={selectCharacter}
             onDuplicateCharacter={duplicateCharacter}
+            onMergeCharacters={mergeCharacters}
             onReorderCharacters={reorderCharacters}
             onEditBodyToggle={() => handleAnimationChange(currentAnimation === 'edit' ? defaultAnimationFor(activeChar) : 'edit')}
             onToggleBones={() => setShowBones(p => !p)}

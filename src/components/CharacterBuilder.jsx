@@ -64,7 +64,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
   onPartChange, onColorChange, onScaleChange,
   onBodyImageChange, onHeadImageChange, onHeadImageFramesChange, onHeadAnimChange, onHeadImageScaleChange,
   onAddCharacter, onDeleteCharacter,
-  onRenameCharacter, onSelectCharacter, onDuplicateCharacter, onReorderCharacters,
+  onRenameCharacter, onSelectCharacter, onDuplicateCharacter, onMergeCharacters, onReorderCharacters,
   onDisplayNameChange,
   folders, onAddFolder, onRenameFolder, onDeleteFolder, onSetCharacterFolder,
   onEditBodyToggle, onToggleBones, showBones,
@@ -131,6 +131,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
         onDelete={onDeleteCharacter}
         onRename={onRenameCharacter}
         onDuplicate={onDuplicateCharacter}
+        onMerge={onMergeCharacters}
         onReorder={onReorderCharacters}
         folders={folders}
         onAddFolder={onAddFolder}
