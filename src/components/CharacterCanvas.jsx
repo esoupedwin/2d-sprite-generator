@@ -27,6 +27,8 @@ import { headFrameUrls, headFrameIndex, pickHeadImage } from '../utils/headAnim.
 const ORIGIN_Y_OFFSET = 170;
 const EMPTY_RENDER_OPTS = Object.freeze({});
 const BASE_SCALE = 2.5;
+// Redraw interval while a modal dialog has paused the canvas.
+const PAUSED_REDRAW_MS = 250;
 
 const VECTOR_HIT_PX = 10;
 const JOINT_HIT_PX  = 14;
@@ -223,6 +225,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     cachedSkins: null, lastSkinOverrides: null,
   });
 
+  stateRef.current.dirty = true; // any re-render may change what's drawn (see the paused RAF loop)
   stateRef.current.canvasW = canvasSize.w;
   stateRef.current.canvasH = canvasSize.h;
   stateRef.current.originX = canvasSize.w / 2;
@@ -902,7 +905,27 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
   useEffect(() => {
     let rafId;
-    const loop = (ts) => { drawFrame(ts); rafId = requestAnimationFrame(loop); };
+    // While a modal dialog is open, its blurred backdrop has to be recomputed
+    // every time the canvas underneath repaints — at 60 fps that's what makes
+    // dialogs lag. So pause: the clock stands still and the frame is redrawn
+    // only when props change (e.g. a scale slider in Customize) or at a slow
+    // tick that picks up images finishing their decode.
+    const loop = (ts) => {
+      const s = stateRef.current;
+      if (document.querySelector('[aria-modal="true"]')) {
+        if (s.dirty || ts - (s.pausedDrawAt ?? 0) >= PAUSED_REDRAW_MS) {
+          s.lastTimestamp = null; // zero delta → time doesn't advance
+          drawFrame(ts);
+          s.pausedDrawAt = ts;
+          s.dirty = false;
+        }
+        s.lastTimestamp = null;   // resume without a jump
+      } else {
+        drawFrame(ts);
+        s.dirty = false;
+      }
+      rafId = requestAnimationFrame(loop);
+    };
     rafId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafId);
   }, [drawFrame]);
