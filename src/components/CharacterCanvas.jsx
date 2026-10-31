@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useMemo, useState, forwardRef, useImper
 import { ANIMATIONS, getPoseAtTime, resolveAnimation, keyframeTimeKey } from '../systems/AnimationSystem.js';
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { renderCharacter } from '../systems/Renderer.js';
+import { weaponAttached } from '../utils/weaponSettings.js';
 import {
   DEFAULT_SKINS, SKIN_COLORS, getSkin,
   renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
@@ -624,7 +625,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
 
     // Weapon anchor + rotation handles (editAnimPose, weapon equipped and not
     // hidden for this animation)
-    if (s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none' && !s.renderOpts.hideWeapon) {
+    if (s.editAnimPose && weaponAttached(s.character) && !s.renderOpts.hideWeapon) {
       const hand = worldTransforms['right_hand'];
       if (hand) {
         const wo   = s.weaponOffset;
@@ -969,7 +970,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const wt = s.lastWorldTransforms;
     // Weapon handles — checked before bone joints so the anchor doesn't get
     // swallowed by the right_hand joint when wo is near zero.
-    if (wt && s.editAnimPose && s.character?.weapon && s.character.weapon !== 'none') {
+    if (wt && s.editAnimPose && weaponAttached(s.character)) {
       const r = hitRadius(JOINT_HIT_PX);
       let closest = null, minDist = r;
       for (const h of s.weaponHitTargets) {

@@ -3,7 +3,7 @@ import {
   resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset, resolveAccessoryScale,
   resolveBodyAccessoryOffset, resolveBodyAccessoryScale,
   resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale,
-  isMeleeWeapon, MELEE_WEAPONS,
+  isMeleeWeapon, MELEE_WEAPONS, weaponAttached,
 } from '../utils/weaponSettings.js';
 import {
   drawSkin, drawSkinImage, drawSkinPinned,
@@ -47,10 +47,10 @@ const DEFAULT_ORDER_ARMED   = ['left_leg', 'right_leg', 'right_arm', 'body', 'we
 const DEFAULT_ORDER_UNARMED = ['right_arm', 'left_leg', 'right_leg', 'body', 'weapon', 'left_arm', 'head'];
 
 // Default back → front order for a character (unarmed tucks the support arm
-// behind the legs). Exported so the editor shows the same starting order.
-export function defaultLayerOrder(weapon) {
-  const unarmed = !weapon || weapon === 'none';
-  return (unarmed ? DEFAULT_ORDER_UNARMED : DEFAULT_ORDER_ARMED).slice();
+// behind the legs). `armed` = weaponAttached(parts). Exported so the editor
+// shows the same starting order.
+export function defaultLayerOrder(armed) {
+  return (armed ? DEFAULT_ORDER_ARMED : DEFAULT_ORDER_UNARMED).slice();
 }
 
 // Keep the override's ordering but guarantee every layer is present.
@@ -241,7 +241,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   //                   `left_arm`  = character's RIGHT (dominant) arm.
   void isMeleeOpt; // melee/ranged no longer changes the order
   const wt = worldTransforms;
-  const armBehindLegs = character.weapon === 'none' || !character.weapon;
+  const armBehindLegs = !weaponAttached(character);
 
   const layerDraw = {
     right_arm: () => drawSkin(ctx, skins.right_arm || RIGHT_ARM_SKIN, wt, getColor(character, 'right_arm'), getScale(character, 'right_arm')),

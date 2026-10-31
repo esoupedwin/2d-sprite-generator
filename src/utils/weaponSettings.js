@@ -11,13 +11,19 @@
 //
 // All three callers (renderer, UI display, mutate path) read through these
 // helpers so the fallback chain stays in one place.
+//
+// `parts.weapon` is only a KEY (and the animation-set selector) — 'none' is a
+// key like any other, so an unarmed-type character can still carry a weapon
+// PNG under `weaponImages.none`. Whether a weapon is actually in the hand is
+// `weaponAttached(parts)`, never a check against 'none'.
+
+import { CHARACTER_PARTS } from '../data/characterParts.js';
 
 export const ZERO_OFFSET = { x: 0, y: 0, rotation: 0 };
 
 export function resolveWeaponOffset(parts, animation) {
   if (!parts) return ZERO_OFFSET;
-  const weapon = parts.weapon;
-  if (!weapon || weapon === 'none') return ZERO_OFFSET;
+  const weapon = parts.weapon ?? 'none';
   return parts.weaponAnimOffsets?.[weapon]?.[animation]
       ?? parts.weaponOffsets?.[weapon]
       ?? parts.weaponOffset
@@ -26,8 +32,7 @@ export function resolveWeaponOffset(parts, animation) {
 
 export function resolveWeaponScale(parts) {
   if (!parts) return 1;
-  const weapon = parts.weapon;
-  if (!weapon || weapon === 'none') return 1;
+  const weapon = parts.weapon ?? 'none';
   return parts.weaponScales?.[weapon]
       ?? parts.partScales?.weapon
       ?? 1;
@@ -37,8 +42,7 @@ export function resolveWeaponScale(parts) {
 // accessory can be sized independently.
 export function resolveAccessoryScale(parts) {
   if (!parts) return 1;
-  const weapon = parts.weapon;
-  if (!weapon || weapon === 'none') return 1;
+  const weapon = parts.weapon ?? 'none';
   return parts.accessoryScales?.[weapon] ?? 1;
 }
 
@@ -105,7 +109,18 @@ export function isMeleeWeapon(character) {
   return MELEE_WEAPONS.has(resolveWeaponTemplate(character));
 }
 
+/**
+ * True when something is drawn in the character's hand: an uploaded weapon
+ * PNG for the current key, or a built-in type with a procedural drawing.
+ * Drives the armed/unarmed default layer order, the weapon handles, the
+ * weapon sheet and the Layer Order eye toggle.
+ */
+export function weaponAttached(parts) {
+  const key = parts?.weapon ?? 'none';
+  if (parts?.weaponImages?.[key]) return true;
+  return key !== 'none' && !!CHARACTER_PARTS.weapon?.options?.[key]?.draw;
+}
+
 export function hasWeapon(character) {
-  const w = character?.parts?.weapon;
-  return !!w && w !== 'none';
+  return weaponAttached(character?.parts);
 }

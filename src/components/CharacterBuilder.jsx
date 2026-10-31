@@ -7,7 +7,7 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { cn } from '@/lib/utils';
 import { Bone, ChevronDown, Hand, ImageUp, Pencil, Plus, RotateCcw, Users, X } from 'lucide-react';
 
-// Mode toggle cell for the 3-column grid under the character selector.
+// Mode toggle cell for the MAIN CONTROLS grid.
 function BigIconButton({ icon: Icon, label, active, activeClass, inactiveClass, onClick, title }) {
   return (
     <button
@@ -69,6 +69,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
   folders, onAddFolder, onRenameFolder, onDeleteFolder, onSetCharacterFolder,
   onEditBodyToggle, onToggleBones, showBones,
   onToggleRagdoll, ragdoll,
+  onOpenAccessories, accessoriesOpen,
   children,
 }) {
   const isEdit = currentAnimation === 'edit';
@@ -150,7 +151,9 @@ export const CharacterBuilder = memo(function CharacterBuilder({
         onDeleteFolder={onDeleteFolder}
         onSetCharacterFolder={onSetCharacterFolder}
       />
-      <div className="grid grid-cols-3 gap-2">
+      <Separator />
+      <SectionTitle>Main Controls</SectionTitle>
+      <div className="grid grid-cols-4 gap-2 -mt-1">
         <BigIconButton
           icon={Pencil}
           label={isEdit ? 'Close' : 'Edit Body'}
@@ -175,6 +178,15 @@ export const CharacterBuilder = memo(function CharacterBuilder({
           title="Drag the character around — ephemeral, doesn't change config, structure or animation"
           activeClass="bg-rose-400/20 border-rose-400 text-rose-300"
           inactiveClass="bg-secondary border-border text-muted-foreground hover:border-rose-400/60 hover:text-rose-300"
+        />
+        <BigIconButton
+          icon={ImageUp}
+          label="Accessories"
+          active={accessoriesOpen}
+          onClick={onOpenAccessories}
+          title="Customize Weapon & Accessories"
+          activeClass="bg-primary/20 border-primary text-primary"
+          inactiveClass="bg-secondary border-border text-muted-foreground hover:border-primary/60 hover:text-foreground"
         />
       </div>
       {children}

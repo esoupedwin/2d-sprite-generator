@@ -8,6 +8,7 @@ import {
 } from '../systems/SkinSystem.js';
 import { DEFAULT_SKINS, getSkin } from '../systems/VectorEditor.js';
 import { renderCharacter, renderPartGroup, resolveRenderOptions } from '../systems/Renderer.js';
+import { weaponAttached } from './weaponSettings.js';
 import { uniqueName } from './names.js';
 import { characterLabel } from './characters.js';
 import { CHARACTER_PARTS } from '../data/characterParts.js';
@@ -719,10 +720,11 @@ export async function exportPartsSheetSVG(character, animationName, currentTime 
 
   // Build label for weapon from part definition
   const groups = SHEET_GROUPS
-    .filter(g => g.id !== 'weapon' || (parts.weapon !== 'none' && !renderOpts.hideWeapon))
+    .filter(g => g.id !== 'weapon' || (weaponAttached(parts) && !renderOpts.hideWeapon))
     .map(g => ({
       ...g,
-      label: g.label ?? CHARACTER_PARTS.weapon?.options[parts.weapon]?.label ?? 'Weapon',
+      // A 'none'-type character carrying a PNG weapon shouldn't be captioned "None".
+      label: g.label ?? ((parts.weapon !== 'none' && CHARACTER_PARTS.weapon?.options[parts.weapon]?.label) || 'Weapon'),
     }));
 
   // Render each group into its own canvas

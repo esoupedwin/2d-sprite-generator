@@ -35,6 +35,7 @@ src/
     SpriteExportDialog.jsx / SpritePreviewDialog.jsx — Export flow
     WeaponUploadDialog.jsx — PNG upload for weapon skin
     AccessoryUploadDialog.jsx — PNG upload for right-arm accessory (per weapon type)
+    AccessoriesDialog.jsx — "Weapon & Accessories" modal (Accessories button under MAIN CONTROLS): the four PNG slots, scale steppers, offset resets
     CharacterManagerDialog.jsx / WorkspaceMenu.jsx
   utils/
     transforms.js         — mergeOffsets() shared by CharacterCanvas and export
@@ -132,8 +133,9 @@ arm, `left_arm` = RIGHT/dominant arm):
 armed:   left_leg → right_leg → right_arm → body → weapon → left_arm → head
 unarmed: right_arm → left_leg → right_leg → body → weapon → left_arm → head
 ```
-`defaultLayerOrder(weapon)` returns this (unarmed tucks the support arm behind
-the legs). `ORDERABLE_LAYERS` lists the reorderable layers with labels.
+`defaultLayerOrder(armed)` returns this (unarmed tucks the support arm behind
+the legs); `armed` is `weaponAttached(parts)`, **not** the weapon type.
+`ORDERABLE_LAYERS` lists the reorderable layers with labels.
 
 **Per-animation z-order override:** `renderCharacter` accepts a `partZOrder`
 option — a back → front array of layer keys (see `ORDERABLE_LAYERS`). It's stored
@@ -207,7 +209,8 @@ Never access `parts.weaponAnimOffsets` or `parts.accessoryAnimOffsets` directly.
 
 **Weapon type** is resolved through `weaponSettings.js` too — never inline the `customWeapons.find(...)?.template` lookup:
 - `resolveWeaponTemplate(character)` → the built-in key driving the animation set / melee rules (handles legacy `cw_…` keys)
-- `isMeleeWeapon(character)`, `hasWeapon(character)`, `MELEE_WEAPONS`
+- `isMeleeWeapon(character)`, `MELEE_WEAPONS`
+- `weaponAttached(parts)` / `hasWeapon(character)` → is something drawn in the hand: a weapon PNG under the current key, or a built-in type's procedural drawing. **There is no armed/unarmed type**: `parts.weapon === 'none'` is just a key (`weaponImages.none` is valid) that selects the generic animation set. Never test the key against `'none'` to decide whether a weapon exists — the default layer order, the weapon handles, the weapon sheet and the Layer Order eye all use `weaponAttached`.
 
 **Per-character animation selectors** (`AnimationSystem.js`) are the one source of truth for the ACTIONS panel, the delete fallback and the sheet exporter:
 - `visibleActions(character)` → `[{ id, label, loop, builtIn }]` in panel order (weapon set minus `hiddenAnimations`, then custom)
