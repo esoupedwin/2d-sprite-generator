@@ -30,6 +30,7 @@ src/
     NewAnimationDialog.jsx — Dialog: blank or from template when creating a new animation
     SaveTemplateDialog.jsx — Reusable name-input dialog (templates + weapon naming)
     ExportMenu.jsx        — Export controls
+    BackgroundSlider.jsx  — vertical black → white canvas-background slider (canvas right edge)
     BatchExportDialog.jsx — "All Actions → Folder": frames (default 32) + output folder, writes via /api/export-sprites
     FolderExportDialog.jsx — "Export Folder": pick a character folder (or "No folder"), same options; runs the batch export per character
     SpriteExportDialog.jsx / SpritePreviewDialog.jsx — Export flow
@@ -399,7 +400,7 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 - **dragRef**: `{ type:'bone'|'anchor'|'handleIn'|'handleOut'|'weapon-pos'|'weapon-rot'|'accessory-pos'|'accessory-rot', ... }`
 - **panDragRef**: middle-mouse pan
 - Undo history in `historyRef` (session only, capped at 60). `pushHistory()` before any bone/skin mutation.
-- Canvas size: 620×640 px. Origin at (310, 490). `BASE_SCALE = 2.5`. Background: `#FFE699`.
+- Canvas size: 620×640 px. Origin at (310, 490). `BASE_SCALE = 2.5`. Background: `settings.canvasBg`, set by the black → white slider on the canvas's right edge (`BackgroundSlider.jsx`, helpers in `utils/canvasBg.js`; default `#E5E5E5`). The grid, coordinate labels, alignment box and animation readout draw with `canvasInk(bg)`: black ink on light backgrounds, white below mid-grey, with the alpha chosen so each element sits a fixed brightness distance (`INK_CONTRAST`) from the background, so contrast holds at mid-grey too.
 
 **Accessory anchor handles** (shown when `editAnimPose && accessoryImageRef.current`):
 - Position handle: purple circle `#A855F7` at `left_hand` + current accessory offset
@@ -462,7 +463,7 @@ rect — progressive mutation loses the anchored edge once the box flips.
 | Characters (incl. `customWeapons`) | `localStorage` (`2dsprite:characters`) + `characters.json` via `/api/characters` Vite plugin. File wins on load. |
 | Default build | `character-defaults.json` via `/api/defaults` |
 | Animation templates | `localStorage` (`2dsprite:templates`) — global, shared across characters |
-| Editor settings | `localStorage` (`2dsprite:settings`) — canvas bg, grid, alignment box |
+| Editor settings | `localStorage` (`2dsprite:settings`) — canvas bg (canvas slider), grid (Settings dialog), alignment box |
 | **Workspace file** (Save/Load Workspace) | v2 JSON: `{ version, savedAt, activeCharId, uiState, settings, folders, animTemplates, characters }` — the complete state. Loading a v1 file (no templates/settings) keeps the browser's current templates/settings. |
 | Character folders | `localStorage` (`2dsprite:folders`) — ordered list of folder names (empty folders included); membership is `character.folder`. Included in the Workspace JSON (`folders`). Readers use `folderList` (App.jsx) = `mergeFolders(folders, characters)`, a memo that appends any name found on a character but missing from the list — there is no sync effect. |
 

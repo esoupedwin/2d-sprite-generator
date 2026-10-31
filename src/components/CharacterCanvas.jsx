@@ -3,6 +3,7 @@ import { ANIMATIONS, getPoseAtTime, resolveAnimation, keyframeTimeKey } from '..
 import { BONES, computeWorldTransforms } from '../systems/SkeletonSystem.js';
 import { renderCharacter } from '../systems/Renderer.js';
 import { weaponAttached } from '../utils/weaponSettings.js';
+import { DEFAULT_CANVAS_BG, canvasInk, INK_CONTRAST as INK } from '../utils/canvasBg.js';
 import {
   DEFAULT_SKINS, SKIN_COLORS, getSkin,
   renderVectorOverlay, renderBoneBinds, updateSkinPoint, addSkinPoint, rebindSkinPoint,
@@ -262,7 +263,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.bodyFrontAccessoryOffset = bodyFrontAccessoryOffset ?? { x: 0, y: 0, rotation: 0 };
   stateRef.current.onBodyFrontAccessoryOffsetSet = onBodyFrontAccessoryOffsetSet ?? null;
   stateRef.current.onSelectBone       = onSelectBone ?? null;
-  stateRef.current.canvasBg           = canvasBg || '#FFE699';
+  stateRef.current.canvasBg           = canvasBg || DEFAULT_CANVAS_BG;
   stateRef.current.gridSpacing        = gridSpacing || 50;
   stateRef.current.gridThickness      = gridThickness || 1;
   stateRef.current.alignBox           = alignBox ?? null;
@@ -387,8 +388,11 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const ctx = canvas.getContext('2d');
     const CANVAS_W = s.canvasW, CANVAS_H = s.canvasH;
 
-    ctx.fillStyle = s.canvasBg || '#FFE699';
+    ctx.fillStyle = s.canvasBg || DEFAULT_CANVAS_BG;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    // Overlay ink (grid, labels, alignment box): black on light backgrounds,
+    // white on dark ones, at a fixed contrast against the background.
+    const ink = canvasInk(s.canvasBg || DEFAULT_CANVAS_BG);
 
     const { zoom, panX, panY } = viewRef.current;
     const originX = s.originX + panX, originY = s.originY + panY;
@@ -415,7 +419,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     // one, or when the lines would be too dense to read at the current zoom.
     const MINOR_STEP = 25;
     if (GRID_STEP > MINOR_STEP && MINOR_STEP * scale >= 6) {
-      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      ctx.strokeStyle = ink(INK.gridMinor);
       ctx.lineWidth = Math.max(0.5, (s.gridThickness || 1) * 0.5);
       ctx.beginPath();
       for (let x = Math.ceil(xMin / MINOR_STEP) * MINOR_STEP; x <= xMax; x += MINOR_STEP) {
@@ -432,7 +436,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     }
 
     // Batch all grid lines into two paths (one per style) instead of one path per line.
-    ctx.strokeStyle = 'rgba(0,0,0,0.084)';
+    ctx.strokeStyle = ink(INK.gridMajor);
     ctx.lineWidth = s.gridThickness || 1;
     ctx.beginPath();
     for (let x = xGridStart; x <= xGridEnd; x += GRID_STEP) {
@@ -446,7 +450,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     ctx.stroke();
 
     // Axis emphasis at x=0 / y=0 — a touch bolder than the grid lines.
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+    ctx.strokeStyle = ink(INK.axis);
     ctx.lineWidth = (s.gridThickness || 1) + 0.5;
     ctx.beginPath();
     if (originX >= 0 && originX <= CANVAS_W) { ctx.moveTo(originX, 0); ctx.lineTo(originX, CANVAS_H); }
@@ -463,7 +467,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     const yLabelStart = Math.ceil (yMin / labelStep) * labelStep;
     const yLabelEnd   = Math.floor(yMax / labelStep) * labelStep;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillStyle = ink(INK.label);
     ctx.font = '10px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -871,11 +875,11 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       const bw = liveBox.w * scale;
       const bh = liveBox.h * scale;
       ctx.save();
-      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeStyle = ink(INK.box);
       ctx.lineWidth = 1.5;
       ctx.strokeRect(bx, by, bw, bh);
       // Size readout in character units, placed inside the top-left corner.
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillStyle = ink(INK.boxLabel);
       ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'bottom';
@@ -898,7 +902,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     }
 
     if (anim) {
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fillStyle = ink(INK.readout);
       ctx.font = '12px monospace';
       ctx.fillText(`${anim.name}  ${s.time.toFixed(2)}s / ${anim.duration.toFixed(2)}s`, 12, 20);
     }

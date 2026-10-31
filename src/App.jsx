@@ -11,6 +11,7 @@ import { BatchExportDialog } from './components/BatchExportDialog.jsx';
 import { FolderExportDialog } from './components/FolderExportDialog.jsx';
 import { WorkspaceMenu } from './components/WorkspaceMenu.jsx';
 import { SettingsDialog, DEFAULT_SETTINGS } from './components/SettingsDialog.jsx';
+import { BackgroundSlider } from './components/BackgroundSlider.jsx';
 import { PosePreviewDialog } from './components/PosePreviewDialog.jsx';
 import { LayerOrderPanel } from './components/LayerOrderPanel.jsx';
 import { defaultLayerOrder, resolveRenderOptions } from './systems/Renderer.js';
@@ -1519,7 +1520,7 @@ export default function App() {
             {/* Weapon & Animation — combined since animations are weapon-specific */}
             <Separator />
             <div className="flex items-center justify-between">
-              <SectionTitle>Animations</SectionTitle>
+              <SectionTitle>Animation</SectionTitle>
               {editAnimPose && Object.keys((activeChar.animBoneOffsets ?? {})[currentAnimation] ?? {}).length > 0 && (
                 <button
                   type="button"
@@ -1583,6 +1584,13 @@ export default function App() {
                   Edit Animation — {(activeChar.customAnimations?.find(a => a.id === currentAnimation) ?? ANIMATIONS[currentAnimation])?.name ?? currentAnimation}
                 </div>
               )}
+              {/* Canvas background: black → white, right edge, vertically centred. */}
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20">
+                <BackgroundSlider
+                  value={settings.canvasBg}
+                  onChange={(canvasBg) => setSettings(s => ({ ...s, canvasBg }))}
+                />
+              </div>
               <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1.5">
                 <button
                   type="button"
