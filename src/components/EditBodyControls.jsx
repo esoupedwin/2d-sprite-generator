@@ -44,7 +44,7 @@ function ToggleRow({ checked, onChange, label, disabled, title }) {
 
 const MIN_SCALE  = 0.5;
 const MAX_SCALE  = 3.0;
-const SCALE_STEP = 0.1;
+const SCALE_STEP = 0.05;
 
 const MIN_NECK = 20;
 const MAX_NECK = 140;

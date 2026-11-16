@@ -101,7 +101,7 @@ export function ExportMenu({ onSpriteSheet, onBatchExport, onFolderExport, onSpr
             onClick={pick(onBatchExport)}
             className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
           >
-            <div>All Actions → Folder…</div>
+            <div>Single Sprite - All Sheets</div>
             <div className="text-[10px] opacity-60 mt-0.5">This character · right arm + head + head_anim + body + legs sheets per action</div>
           </button>
           <button
@@ -110,7 +110,7 @@ export function ExportMenu({ onSpriteSheet, onBatchExport, onFolderExport, onSpr
             onClick={pick(onFolderExport)}
             className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
           >
-            <div>Export Folder…</div>
+            <div>Multiple Sprites' Sheets</div>
             <div className="text-[10px] opacity-60 mt-0.5">Every character in a folder · same layout</div>
           </button>
           <button
