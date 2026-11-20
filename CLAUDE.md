@@ -468,6 +468,7 @@ rect — progressive mutation loses the anchored edge once the box flips.
 - `ConfirmDialog.jsx` — generic confirm (used for action, character and folder deletes).
 - `components/ui/rename-input.jsx` — `RenameInput` inline editor (focus+select on mount, Enter/blur commit, Esc cancel). Used by the ACTIONS chips and the character manager rows.
 - `lib/useEscapeToClose.js` — `useEscapeToClose(open, onClose, blocked)`; pass `blocked` while a nested confirm or an export owns Escape.
+- `CharacterThumb.jsx` — `<CharacterThumb character>` row thumbnail (character manager): first frame of the default action via `buildCharacterThumbnail` in `export.js`, cached per character object (WeakMap) and rendered one at a time.
 - `SheetExportParts.jsx` — `useSheetExport` + the shell/fields/progress/result/footer shared by the two folder-export dialogs.
 
 ## Persistence

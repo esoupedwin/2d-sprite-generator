@@ -605,6 +605,25 @@ export async function renderPosePreviewBase(character, animationName, currentTim
 }
 
 /**
+ * Small square picture of a character (PNG data URL) for list rows: the first
+ * frame of its default action, fitted and centred. Null if nothing renders.
+ */
+export async function buildCharacterThumbnail(character, px = 96) {
+  const base = await renderPoseBase(character, defaultAnimationFor(character), 0);
+  if (!base) return null;
+  const src = base.canvas;
+  const k = Math.min(px / src.width, px / src.height);
+  const w = src.width * k, h = src.height * k;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = px;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(src, (px - w) / 2, (px - h) / 2, w, h);
+  return canvas.toDataURL('image/png');
+}
+
+/**
  * Builds a pose preview PNG (data URL) with optional edits applied (one-shot).
  * options.outline = { enabled, color, width } adds a coloured outline;
  * options.outerOutline (same shape) adds a second band around it, and

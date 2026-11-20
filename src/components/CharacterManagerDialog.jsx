@@ -5,6 +5,7 @@ import { RenameInput } from '@/components/ui/rename-input.jsx';
 import { useEscapeToClose } from '@/lib/useEscapeToClose.js';
 import { cn } from '@/lib/utils.js';
 import { folderOf } from '../utils/characters.js';
+import { CharacterThumb } from './CharacterThumb.jsx';
 import { ConfirmDialog } from './ConfirmDialog.jsx';
 import { MergeCharactersDialog } from './MergeCharactersDialog.jsx';
 
@@ -148,7 +149,7 @@ export function CharacterManagerDialog({
         onDragEnd={endDrag}
         onClick={() => !isEditing && handleSelect(char.id)}
         className={cn(
-          'group relative flex shrink-0 items-center gap-1 pl-1 pr-2.5 py-2 rounded border cursor-pointer min-h-[36px] bg-secondary transition-colors',
+          'group relative flex shrink-0 items-center gap-1 pl-1 pr-2.5 py-1.5 rounded border cursor-pointer min-h-[36px] bg-secondary transition-colors',
           indent && 'ml-5',
           isActive ? 'border-primary bg-primary/15' : 'border-transparent hover:border-border',
           dragId === char.id && 'opacity-40',
@@ -171,6 +172,7 @@ export function CharacterManagerDialog({
         ) : (
           <span className="w-[18px] shrink-0" />
         )}
+        <CharacterThumb character={char} className="mr-1.5" />
         {isEditing ? (
           <RenameInput
             initialValue={char.name}
