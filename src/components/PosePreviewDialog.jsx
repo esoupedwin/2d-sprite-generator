@@ -66,6 +66,11 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
     thirdOutline: { enabled: third,   color: thirdColor,   width: thirdWidth },
     card:         { enabled: card,    color: cardColor,    size: cardSize },
   });
+  // The latest settings, for the async first render below: its closure is from
+  // the render that started it, which can predate the reset-on-open above (so
+  // it would compose with the PREVIOUS opening's colours).
+  const optsRef = useRef(null);
+  optsRef.current = opts();
 
   // Render the character base once per (character, animation, time).
   useEffect(() => {
@@ -75,7 +80,7 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
     renderPosePreviewBase(character, animationName, currentTime).then((base) => {
       if (stale) return;
       baseRef.current = base;
-      setPreview(composePose(base, opts()));
+      setPreview(composePose(base, optsRef.current));
       setRendering(false);
     });
     return () => { stale = true; };
