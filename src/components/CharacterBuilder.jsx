@@ -223,7 +223,7 @@ export const CharacterBuilder = memo(function CharacterBuilder({
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 3.0;
-const SCALE_STEP = 0.1;
+const SCALE_STEP = 0.05;
 
 // Character-wide head PNG. Frame 0 (parts.headImage) + optional extra frames
 // (parts.headImageFrames) form a short sequence such as a blink, timed by

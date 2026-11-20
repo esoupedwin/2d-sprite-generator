@@ -259,6 +259,24 @@ The accessory is a user-uploaded PNG attached to **joint 6** (`left_hand` bone �
 - **Scale**: `parts.accessoryScales[weaponKey]` — independent per weapon type.
 - The accessory PNG is drawn **centered** on its anchor point (`drawImage` at `−w/2, −h/2`). Upload a PNG with the item centered; reposition via the anchor handle. Longest side scales to 80 canvas units before `accessoryScales` multiplier.
 
+## Left-arm accessory system
+
+A user-uploaded PNG on the character's **left / support hand** — the `right_hand` bone (joint 9; bone names are mirrored). Unlike the right-arm accessory it is **character-wide** (not per weapon type), like the body accessories.
+
+- **Data**: `parts.leftArmAccessoryImage` / `leftArmAccessoryScale` / `leftArmAccessoryOffset` / `leftArmAccessoryAnimOffsets[animId]`, read via `resolveLeftArmAccessoryOffset/Scale` in `weaponSettings.js`. `leftArmAccessoryAnimOffsets` is part of `animationStateOf()`.
+- **Z-order**: drawn immediately after the `right_arm` (support / "Back Arm") layer, so it follows that arm in the per-animation Layer Order. Part of the `others` group, so split exports put it on the `body` sheet.
+- **Handles**: pink (`#EC4899` / `#F9A8D4`), drag types `left-arm-accessory-pos` / `-rot`. They share the torso-accessory handle loop in `CharacterCanvas.jsx` (each entry names its anchor `bone`) and `setTorsoAccessoryOffset` / `resetTorsoAccessoryOffset` with prefix `leftArmAccessory`: Edit Body sets the character-wide offset, Edit Animation a per-animation override.
+- Drawn centred on its anchor; longest side scales to 80 units (`ACCESSORY_IMAGE_TARGET`) before the scale multiplier.
+
+## Head accessory system
+
+A user-uploaded PNG anchored to the `head` bone (hat / helmet / ears / halo). Character-wide, like the left-arm and body accessories.
+
+- **Data**: `parts.headAccessoryImage` / `headAccessoryScale` / `headAccessoryOffset` / `headAccessoryAnimOffsets[animId]`, read via `resolveHeadAccessoryOffset/Scale` in `weaponSettings.js`. `headAccessoryAnimOffsets` is part of `animationStateOf()`.
+- **Z-order**: drawn inside the `head` layer, right after the head skin and head prop, so it always sits on the head wherever the head is in the Layer Order. Part of the `head` group, so split exports put it on the `head` and `head_anim` sheets.
+- **Handles**: indigo (`#6366F1` / `#A5B4FC`), drag types `head-accessory-pos` / `-rot`, in the shared character-wide accessory handle loop in `CharacterCanvas.jsx` (anchor `bone: 'head'`). `setTorsoAccessoryOffset` / `resetTorsoAccessoryOffset` with prefix `headAccessory`: Edit Body sets the character-wide offset, Edit Animation a per-animation override.
+- Drawn centred on its anchor; longest side scales to 80 units (`ACCESSORY_IMAGE_TARGET`) before the scale multiplier.
+
 ## Animation layers (how overrides compose)
 
 Three additive layers sit on top of the base animation data:

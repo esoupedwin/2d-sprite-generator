@@ -3,6 +3,8 @@ import {
   resolveWeaponOffset, resolveWeaponScale, resolveAccessoryOffset, resolveAccessoryScale,
   resolveBodyAccessoryOffset, resolveBodyAccessoryScale,
   resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale,
+  resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale,
+  resolveHeadAccessoryOffset, resolveHeadAccessoryScale,
   isMeleeWeapon, MELEE_WEAPONS,
 } from '../utils/weaponSettings.js';
 import {
@@ -142,6 +144,49 @@ function drawAccessory(ctx, character, worldTransforms, accessoryImage, animatio
   ctx.restore();
 }
 
+// Left arm accessory (shield / bracer / torch) on the character's LEFT
+// (support) hand — the `right_hand` bone. Same placement rules as the right
+// arm accessory: centred on its offset point, longest side ACCESSORY_IMAGE_TARGET.
+function drawLeftArmAccessory(ctx, character, worldTransforms, image, animation) {
+  if (!image) return;
+  const bone = worldTransforms['right_hand'];
+  if (!bone) return;
+  const ao = resolveLeftArmAccessoryOffset(character, animation);
+  const s  = resolveLeftArmAccessoryScale(character);
+  const factor = ACCESSORY_IMAGE_TARGET / Math.max(image.naturalWidth, image.naturalHeight);
+  const w = image.naturalWidth  * factor;
+  const h = image.naturalHeight * factor;
+  ctx.save();
+  ctx.translate(bone.x, bone.y);
+  ctx.rotate(bone.rotation);
+  if (ao.x || ao.y) ctx.translate(ao.x, ao.y);
+  if (ao.rotation)  ctx.rotate(ao.rotation);
+  if (s !== 1)      ctx.scale(s, s);
+  ctx.drawImage(image, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+// Head accessory (hat / helmet / ears) on the `head` bone, drawn as part of the
+// head layer right after the head skin + prop, so it always sits on the head.
+function drawHeadAccessory(ctx, character, worldTransforms, image, animation) {
+  if (!image) return;
+  const bone = worldTransforms['head'];
+  if (!bone) return;
+  const ao = resolveHeadAccessoryOffset(character, animation);
+  const s  = resolveHeadAccessoryScale(character);
+  const factor = ACCESSORY_IMAGE_TARGET / Math.max(image.naturalWidth, image.naturalHeight);
+  const w = image.naturalWidth  * factor;
+  const h = image.naturalHeight * factor;
+  ctx.save();
+  ctx.translate(bone.x, bone.y);
+  ctx.rotate(bone.rotation);
+  if (ao.x || ao.y) ctx.translate(ao.x, ao.y);
+  if (ao.rotation)  ctx.rotate(ao.rotation);
+  if (s !== 1)      ctx.scale(s, s);
+  ctx.drawImage(image, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
 // A PNG anchored to the torso, centred on its offset point. Shared by the back
 // and front body accessories (they differ only in data and draw position).
 function drawTorsoImage(ctx, worldTransforms, image, offset, s) {
@@ -195,6 +240,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     skins = {}, bodyImage = null, headImage = null, weaponImage = null, accessoryImage = null,
     bodyAccessoryImage = null,
     bodyFrontAccessoryImage = null,
+    leftArmAccessoryImage = null,
+    headAccessoryImage = null,
     animation = '',
     // isMelee: pass explicitly when the caller has access to customWeapons
     // so that custom weapons (key='cw_…') whose template='sword' draw behind
@@ -206,8 +253,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // omit it; `accessory` (the hand accessory) defaults to `others`.
     // Used by split-export to render legs / head / body onto separate sprite
     // sheets at identical frame coords so they overlay exactly downstream.
-    //   others = back arm, body back/front accessories, body, weapon, front arm, hand accessory
-    //   head   = head skin (+ extras) and the head prop
+    //   others = back arm (+ left arm accessory), body back/front accessories, body, weapon, front arm, hand accessory
+    //   head   = head skin (+ extras), the head prop and the head accessory
     //   legs   = the two legs
     partsFilter = null,
     // partZOrder: optional back → front array of layer keys (see ORDERABLE_LAYERS)
@@ -235,7 +282,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   // the head. The body (back) accessory always sits behind every body part, the
   // body front accessory sits directly beneath the head (so above both arms in
   // the default order), and the hand accessory always sits on top of everything
-  // (none of them reorderable).
+  // (none of them reorderable). The left arm accessory rides directly on top of
+  // the back arm (`right_arm` layer), so it follows that arm in the layer order.
   //
   // Bone-name caveat: `right_arm` = character's LEFT (support) arm;
   //                   `left_arm`  = character's RIGHT (dominant) arm.
@@ -265,6 +313,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
         drawExtras(ctx, 'head', character, wt);
       }
       drawPart(ctx, 'head_prop', character, wt); // head prop rides with the head
+      drawHeadAccessory(ctx, character, wt, headAccessoryImage, animation); // so does the head accessory
     },
   };
   const includeFor = (key) =>
@@ -283,6 +332,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // head, wherever the head sits in the order. Part of the `others` group.
     if (key === 'head' && includeOthers) drawBodyFrontAccessory(ctx, character, wt, bodyFrontAccessoryImage, animation);
     if (includeFor(key)) layerDraw[key]();
+    // Left arm accessory sits on the support (back) arm, wherever that arm is.
+    if (key === 'right_arm' && includeOthers) drawLeftArmAccessory(ctx, character, wt, leftArmAccessoryImage, animation);
   }
 
   // Hand accessory always sits on top of everything (not reorderable).

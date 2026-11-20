@@ -87,6 +87,37 @@ export function resolveBodyFrontAccessoryOffset(parts, animation) {
       ?? ZERO_OFFSET;
 }
 
+// Left arm accessory — a single PNG on the character's LEFT (support) hand,
+// i.e. the `right_hand` bone (joint 9; bone names are mirrored). Character-wide
+// like the body accessories, so it persists across weapon swaps. Same fallback
+// chain: parts.leftArmAccessoryAnimOffsets[animation] → parts.leftArmAccessoryOffset → zero
+export function resolveLeftArmAccessoryScale(parts) {
+  if (!parts) return 1;
+  return parts.leftArmAccessoryScale ?? 1;
+}
+
+export function resolveLeftArmAccessoryOffset(parts, animation) {
+  if (!parts) return ZERO_OFFSET;
+  return parts.leftArmAccessoryAnimOffsets?.[animation]
+      ?? parts.leftArmAccessoryOffset
+      ?? ZERO_OFFSET;
+}
+
+// Head accessory — a single PNG anchored to the `head` bone (hat / helmet /
+// ears / halo). Character-wide. Same fallback chain:
+// parts.headAccessoryAnimOffsets[animation] → parts.headAccessoryOffset → zero
+export function resolveHeadAccessoryScale(parts) {
+  if (!parts) return 1;
+  return parts.headAccessoryScale ?? 1;
+}
+
+export function resolveHeadAccessoryOffset(parts, animation) {
+  if (!parts) return ZERO_OFFSET;
+  return parts.headAccessoryAnimOffsets?.[animation]
+      ?? parts.headAccessoryOffset
+      ?? ZERO_OFFSET;
+}
+
 // ── Weapon TYPE ───────────────────────────────────────────────────────────────
 // `parts.weapon` is either a built-in key ('sword', 'rifle', …, 'none') or a
 // legacy custom key ('cw_…') whose behaviour comes from its `template`. Every

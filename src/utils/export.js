@@ -92,20 +92,22 @@ async function loadRenderAssets(character) {
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
   const parts = character.parts ?? {};
-  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage] = await Promise.all([
+  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
     Promise.all(headFrameUrls(parts).map(loadImage)),
     loadImage(parts.weaponImages?.[parts.weapon]),
     loadImage(parts.accessoryImages?.[parts.weapon]),
     loadImage(parts.bodyAccessoryImage),
     loadImage(parts.bodyFrontAccessoryImage),
+    loadImage(parts.leftArmAccessoryImage),
+    loadImage(parts.headAccessoryImage),
   ]);
   // headImages = every head-skin frame in play order (see utils/headAnim.js).
   //   headImageAt(t)     — clock-based (`every` honoured): single-frame exports.
   //   headPlayImageAt(t) — one play from t = 0 then resting: sprite sheets.
   const headImageAt     = (t) => pickHeadImage(headImages, headFrameIndex(parts, t));
   const headPlayImageAt = (t) => pickHeadImage(headImages, headPlayFrameIndex(parts, t));
-  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage };
+  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage };
 }
 
 /**
@@ -143,7 +145,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage } =
+  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage } =
     assets ?? await loadRenderAssets(character);
   // `staticHead` pins the head to its first skin (the resting frame) — the still
   // "head" sheet. Otherwise the head-frame sequence plays ONCE from the top of
@@ -200,6 +202,8 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       accessoryImage,
       bodyAccessoryImage,
       bodyFrontAccessoryImage,
+      leftArmAccessoryImage,
+      headAccessoryImage,
       partsFilter,
       ...renderOpts,
     });
@@ -275,12 +279,15 @@ function downloadCanvas(canvas, filename) {
   });
 }
 
-// Generous render area, auto-cropped to the character's content afterwards so
-// nothing (ear tips, extended weapons) is clipped for any pose.
-const RENDER_W = 720;
-const RENDER_H = 720;
-const RENDER_ORIGIN_X = RENDER_W / 2;   // centred horizontally
-const RENDER_ORIGIN_Y = RENDER_H * 0.74; // feet sit in the lower portion
+// The pose is rendered in two passes: a cheap low-resolution probe over a very
+// large area finds the character's real extent (tall ears, big heads, scaled-up
+// weapons), then the final high-resolution render gets a canvas sized exactly
+// to that extent — so nothing is clipped however big the character is.
+const PROBE_W = 4000;                 // logical px
+const PROBE_H = 4000;
+const PROBE_ORIGIN_X = PROBE_W / 2;   // centred horizontally
+const PROBE_ORIGIN_Y = PROBE_H * 0.6; // feet below centre: characters extend upward
+const PROBE_RATIO = 0.25;             // device px per logical px for the probe
 const POSE_SCALE = 2.0;
 const POSE_PIXEL_RATIO = 3;
 const CONTENT_MARGIN = 4; // logical px of breathing room around the content
@@ -313,20 +320,10 @@ async function renderPoseBase(character, animationName, currentTime) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage } = await loadRenderAssets(character);
+  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage } = await loadRenderAssets(character);
 
-  const big = document.createElement('canvas');
-  big.width  = RENDER_W * POSE_PIXEL_RATIO;
-  big.height = RENDER_H * POSE_PIXEL_RATIO;
-  const ctx = big.getContext('2d');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.scale(POSE_PIXEL_RATIO, POSE_PIXEL_RATIO);
-
-  renderCharacter(ctx, parts, worldTransforms, {
-    originX: RENDER_ORIGIN_X,
-    originY: RENDER_ORIGIN_Y,
-    scale:   POSE_SCALE,
+  const renderOpts = {
+    scale: POSE_SCALE,
     skins,
     bodyImage,
     headImage: headImageAt(t),
@@ -334,17 +331,55 @@ async function renderPoseBase(character, animationName, currentTime) {
     accessoryImage,
     bodyAccessoryImage,
     bodyFrontAccessoryImage,
+    leftArmAccessoryImage,
+    headAccessoryImage,
     ...resolveRenderOptions(character, animationName),
-  });
+  };
+  // Draws the pose with the ground point (local 0,0) at logical (originX, originY).
+  const drawAt = (w, h, ratio, originX, originY) => {
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.max(1, Math.ceil(w * ratio));
+    canvas.height = Math.max(1, Math.ceil(h * ratio));
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.scale(ratio, ratio);
+    renderCharacter(ctx, parts, worldTransforms, { ...renderOpts, originX, originY });
+    return { canvas, ctx };
+  };
+
+  // Pass 1 — low-res probe over a huge area to find the content's extent.
+  const probe = drawAt(PROBE_W, PROBE_H, PROBE_RATIO, PROBE_ORIGIN_X, PROBE_ORIGIN_Y);
+  const pb = contentBoundsDevice(probe.ctx, probe.canvas.width, probe.canvas.height);
+  if (!pb) {
+    // Nothing drawn: return a small transparent canvas anchored at its centre.
+    const s = 2 * CONTENT_MARGIN;
+    const empty = drawAt(s, s, POSE_PIXEL_RATIO, s / 2, s / 2);
+    return { canvas: empty.canvas, ratio: POSE_PIXEL_RATIO, wLogical: s, hLogical: s, originX: s / 2 * POSE_PIXEL_RATIO, originY: s / 2 * POSE_PIXEL_RATIO };
+  }
+
+  // Probe bounds → logical extent relative to the ground point. One probe pixel
+  // covers 1/PROBE_RATIO logical px, so pad by that plus the margin to be safe.
+  const slack = 1 / PROBE_RATIO + CONTENT_MARGIN;
+  const left   = pb.minX / PROBE_RATIO - PROBE_ORIGIN_X - slack;
+  const top    = pb.minY / PROBE_RATIO - PROBE_ORIGIN_Y - slack;
+  const right  = (pb.maxX + 1) / PROBE_RATIO - PROBE_ORIGIN_X + slack;
+  const bottom = (pb.maxY + 1) / PROBE_RATIO - PROBE_ORIGIN_Y + slack;
+
+  // Pass 2 — full-res render on a canvas just big enough, then trim to the
+  // exact content bounds (+ margin).
+  const w = right - left, h = bottom - top;
+  const originX = -left, originY = -top;   // logical
+  const { canvas: big, ctx } = drawAt(w, h, POSE_PIXEL_RATIO, originX, originY);
 
   // originX/originY: where the character's ground point (local 0,0) lands in
   // the returned canvas, in device px — lets callers place every character on
   // the same anchor regardless of how its content got cropped.
-  const originDevX = RENDER_ORIGIN_X * POSE_PIXEL_RATIO;
-  const originDevY = RENDER_ORIGIN_Y * POSE_PIXEL_RATIO;
+  const originDevX = originX * POSE_PIXEL_RATIO;
+  const originDevY = originY * POSE_PIXEL_RATIO;
 
   const b = contentBoundsDevice(ctx, big.width, big.height);
-  if (!b) return { canvas: big, ratio: POSE_PIXEL_RATIO, wLogical: RENDER_W, hLogical: RENDER_H, originX: originDevX, originY: originDevY };
+  if (!b) return { canvas: big, ratio: POSE_PIXEL_RATIO, wLogical: w, hLogical: h, originX: originDevX, originY: originDevY };
 
   const m  = CONTENT_MARGIN * POSE_PIXEL_RATIO;
   const x0 = Math.max(0, b.minX - m);

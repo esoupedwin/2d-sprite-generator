@@ -32,7 +32,7 @@ import { ANIMATIONS, resolveAnimation, getPoseAtTime, defaultAnimationFor, visib
 import { exportSpriteSheet, exportAllActionSheets, exportCharactersSheets, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG, exportCharacterCardPNG, exportCharacterCards } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale, resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale, resolveHeadAccessoryOffset, resolveHeadAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -87,10 +87,10 @@ const EMPTY_OBJ = {};
 // Weapon scale clamps (matched by the −/+ buttons and the input).
 const MIN_WEAPON_SCALE = 0.1;
 const MAX_WEAPON_SCALE = 3.0;
-const WEAPON_SCALE_STEP = 0.1;
+const WEAPON_SCALE_STEP = 0.05;
 const MIN_ACCESSORY_SCALE = 0.1;
 const MAX_ACCESSORY_SCALE = 3.0;
-const ACCESSORY_SCALE_STEP = 0.1;
+const ACCESSORY_SCALE_STEP = 0.05;
 
 // When a one-shot animation finishes, where to land. Looping animations never
 // trigger onAnimationComplete, so entries for loop:true animations are harmless
@@ -141,11 +141,15 @@ function animationStateOf(src) {
       accessoryAnimOffsets:     p.accessoryAnimOffsets     ?? {},
       bodyAccessoryAnimOffsets: p.bodyAccessoryAnimOffsets ?? {},
       bodyFrontAccessoryAnimOffsets: p.bodyFrontAccessoryAnimOffsets ?? {},
+      leftArmAccessoryAnimOffsets:   p.leftArmAccessoryAnimOffsets   ?? {},
+      headAccessoryAnimOffsets:      p.headAccessoryAnimOffsets      ?? {},
     },
   });
 }
 
-// Torso accessories (`prefix` = 'bodyAccessory' | 'bodyFrontAccessory').
+// Character-wide accessories (`prefix` = 'bodyAccessory' | 'bodyFrontAccessory' |
+// 'leftArmAccessory' | 'headAccessory') — the two torso PNGs, the left (support)
+// hand PNG and the head PNG.
 // In Edit Body (animation 'edit') a drag sets the character-wide position
 // `parts.<prefix>Offset`, which every animation without its own override uses.
 // In Edit Animation it sets a per-animation override `<prefix>AnimOffsets[anim]`.
@@ -201,6 +205,12 @@ function cloneCharacter(src) {
       ...(src.parts.bodyFrontAccessoryImage ? { bodyFrontAccessoryImage: src.parts.bodyFrontAccessoryImage } : {}),
       ...(src.parts.bodyFrontAccessoryScale != null ? { bodyFrontAccessoryScale: src.parts.bodyFrontAccessoryScale } : {}),
       bodyFrontAccessoryOffset: { ...(src.parts.bodyFrontAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
+      ...(src.parts.leftArmAccessoryImage ? { leftArmAccessoryImage: src.parts.leftArmAccessoryImage } : {}),
+      ...(src.parts.leftArmAccessoryScale != null ? { leftArmAccessoryScale: src.parts.leftArmAccessoryScale } : {}),
+      leftArmAccessoryOffset: { ...(src.parts.leftArmAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
+      ...(src.parts.headAccessoryImage ? { headAccessoryImage: src.parts.headAccessoryImage } : {}),
+      ...(src.parts.headAccessoryScale != null ? { headAccessoryScale: src.parts.headAccessoryScale } : {}),
+      headAccessoryOffset: { ...(src.parts.headAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
       ...animParts,
     },
     boneOffsets:          { ...src.boneOffsets },
@@ -361,6 +371,8 @@ export default function App() {
   const [accessoryUploadOpen, setAccessoryUploadOpen] = useState(false);
   const [bodyAccessoryUploadOpen, setBodyAccessoryUploadOpen] = useState(false);
   const [bodyFrontAccessoryUploadOpen, setBodyFrontAccessoryUploadOpen] = useState(false);
+  const [leftArmAccessoryUploadOpen, setLeftArmAccessoryUploadOpen] = useState(false);
+  const [headAccessoryUploadOpen, setHeadAccessoryUploadOpen] = useState(false);
   const [customizeOpen,        setCustomizeOpen]        = useState(false);
 
   // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
@@ -826,6 +838,60 @@ export default function App() {
   const resetBodyFrontAccessoryOffset = useCallback(() => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'bodyFrontAccessory', currentAnimation) : c));
+  }, [activeCharId, currentAnimation]);
+
+  // ── Left arm accessory (PNG on the character's left / support hand) ──
+  const updateLeftArmAccessoryImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (dataUrl) parts.leftArmAccessoryImage = dataUrl;
+      else         delete parts.leftArmAccessoryImage;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  const setLeftArmAccessoryOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? setTorsoAccessoryOffset(c, 'leftArmAccessory', currentAnimation, newOffset) : c));
+  }, [activeCharId, currentAnimation]);
+
+  const updateLeftArmAccessoryScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, parts: { ...c.parts, leftArmAccessoryScale: newScale } } : c
+    ));
+  }, [activeCharId]);
+
+  const resetLeftArmAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'leftArmAccessory', currentAnimation) : c));
+  }, [activeCharId, currentAnimation]);
+
+  // ── Head accessory (PNG on the head bone) ──
+  const updateHeadAccessoryImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (dataUrl) parts.headAccessoryImage = dataUrl;
+      else         delete parts.headAccessoryImage;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  const setHeadAccessoryOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? setTorsoAccessoryOffset(c, 'headAccessory', currentAnimation, newOffset) : c));
+  }, [activeCharId, currentAnimation]);
+
+  const updateHeadAccessoryScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, parts: { ...c.parts, headAccessoryScale: newScale } } : c
+    ));
+  }, [activeCharId]);
+
+  const resetHeadAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'headAccessory', currentAnimation) : c));
   }, [activeCharId, currentAnimation]);
 
   const updateBoneOffsets = useCallback((newOffsets) => {
@@ -1393,6 +1459,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.bodyFrontAccessoryAnimOffsets, activeChar.parts.bodyFrontAccessoryOffset, currentAnimation],
   );
+  const leftArmAccessoryOffset = useMemo(
+    () => resolveLeftArmAccessoryOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.leftArmAccessoryAnimOffsets, activeChar.parts.leftArmAccessoryOffset, currentAnimation],
+  );
+  const headAccessoryOffset = useMemo(
+    () => resolveHeadAccessoryOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.headAccessoryAnimOffsets, activeChar.parts.headAccessoryOffset, currentAnimation],
+  );
   // Per-animation layer z-order override (null = default). `layerOrder` is the
   // resolved back → front order used by both the render and the editor panel.
   const renderOpts = useMemo(() => resolveRenderOptions(activeChar, currentAnimation), [activeChar, currentAnimation]);
@@ -1556,294 +1632,16 @@ export default function App() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCustomizeOpen(true)}
-                className="w-full justify-start h-9 text-xs font-medium"
+                onClick={() => setCustomizeOpen(o => !o)}
+                aria-pressed={customizeOpen}
+                className={cn(
+                  'w-full justify-start h-9 text-xs font-medium',
+                  customizeOpen && 'bg-primary/20 border-primary text-primary hover:bg-primary/25',
+                )}
               >
                 <ImageUp className="h-3.5 w-3.5 mr-1.5" />
                 Customize Weapon &amp; Accessories
               </Button>
-              {customizeOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center">
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setCustomizeOpen(false)} />
-                  <div
-                    role="dialog"
-                    aria-modal="true"
-                    className="relative w-[420px] max-w-[92vw] rounded-lg border border-border bg-card shadow-2xl flex flex-col"
-                  >
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                      <h2 className="text-sm font-semibold text-foreground">Weapon &amp; Accessories</h2>
-                      <button
-                        type="button"
-                        onClick={() => setCustomizeOpen(false)}
-                        className="text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="px-4 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
-
-              {/* ── Weapon skin + scale ───────────────────────────────────── */}
-              {activeChar.parts.weapon !== 'none' && (() => {
-                const weapon = activeChar.parts.weapon;
-                const currentWeaponImage = activeChar.parts.weaponImages?.[weapon];
-                const curScale = activeChar.parts.weaponScales?.[weapon]
-                              ?? activeChar.parts.partScales?.weapon
-                              ?? 1;
-                return (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setWeaponUploadOpen(true)}
-                        title={currentWeaponImage ? `Replace ${weapon} PNG` : `Upload a PNG to skin the ${weapon}`}
-                      >
-                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                        {currentWeaponImage ? "Edit Weapon's Skin" : 'Upload Weapon PNG'}
-                      </Button>
-                      {currentWeaponImage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => updateWeaponImage(null)}
-                          title={`Remove ${weapon} image (revert to procedural)`}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-end gap-0.5">
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Weapon scale</span>
-                      <button
-                        onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
-                        disabled={curScale <= MIN_WEAPON_SCALE}
-                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                      >−</button>
-                      <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                        {Math.round(curScale * 100)}%
-                      </span>
-                      <button
-                        onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
-                        disabled={curScale >= MAX_WEAPON_SCALE}
-                        className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                      >+</button>
-                    </div>
-                    {editAnimPose && (() => {
-                      const wo = resolveWeaponOffset(activeChar.parts, currentAnimation);
-                      const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
-                      return isDirty ? (
-                        <button
-                          onClick={resetWeaponOffset}
-                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
-                          title="Reset weapon offset"
-                        >
-                          Reset offset
-                        </button>
-                      ) : null;
-                    })()}
-                  </div>
-                );
-              })()}
-
-              {/* ── Right arm accessory skin + scale ──────────────────────── */}
-              {(() => {
-                const weapon = activeChar.parts.weapon;
-                const currentAccessoryImage = activeChar.parts.accessoryImages?.[weapon];
-                const curScale = resolveAccessoryScale(activeChar.parts);
-                return (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setAccessoryUploadOpen(true)}
-                        title={currentAccessoryImage ? 'Replace right arm accessory PNG' : 'Upload a PNG for the right arm accessory'}
-                      >
-                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                        {currentAccessoryImage ? "Edit Right Arm's Skin" : 'Upload Right Arm Accessory'}
-                      </Button>
-                      {currentAccessoryImage && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => updateAccessoryImage(null)}
-                          title="Remove right arm accessory image"
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                    {currentAccessoryImage && (
-                      <div className="flex items-center justify-end gap-0.5">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Right arm scale</span>
-                        <button
-                          onClick={() => updateAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale <= MIN_ACCESSORY_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >−</button>
-                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                          {Math.round(curScale * 100)}%
-                        </span>
-                        <button
-                          onClick={() => updateAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale >= MAX_ACCESSORY_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >+</button>
-                      </div>
-                    )}
-                    {currentAccessoryImage && editAnimPose && (() => {
-                      const ao = resolveAccessoryOffset(activeChar.parts, currentAnimation);
-                      const isDirty = ao.x !== 0 || ao.y !== 0 || ao.rotation !== 0;
-                      return isDirty ? (
-                        <button
-                          onClick={resetAccessoryOffset}
-                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
-                          title="Reset right arm accessory offset"
-                        >
-                          Reset right arm offset
-                        </button>
-                      ) : null;
-                    })()}
-                  </div>
-                );
-              })()}
-
-              {/* ── Body accessory (anchored to the torso) ─────────────────── */}
-              {(() => {
-                const img = activeChar.parts.bodyAccessoryImage;
-                const curScale = resolveBodyAccessoryScale(activeChar.parts);
-                return (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setBodyAccessoryUploadOpen(true)}
-                        title={img ? "Replace body's back accessory PNG" : "Upload a PNG anchored behind the body"}
-                      >
-                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                        {img ? "Edit Body's Back Accessory" : "Upload Body's Back Accessory"}
-                      </Button>
-                      {img && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => updateBodyAccessoryImage(null)}
-                          title="Remove body accessory image"
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                    {img && (
-                      <div className="flex items-center justify-end gap-0.5">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Body scale</span>
-                        <button
-                          onClick={() => updateBodyAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale <= MIN_ACCESSORY_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >−</button>
-                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                          {Math.round(curScale * 100)}%
-                        </span>
-                        <button
-                          onClick={() => updateBodyAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale >= MAX_ACCESSORY_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >+</button>
-                      </div>
-                    )}
-                    {img && (editAnimPose || currentAnimation === 'edit') && (() => {
-                      const bo = resolveBodyAccessoryOffset(activeChar.parts, currentAnimation);
-                      const isDirty = bo.x !== 0 || bo.y !== 0 || bo.rotation !== 0;
-                      const editBody = currentAnimation === 'edit';
-                      return isDirty ? (
-                        <button
-                          onClick={resetBodyAccessoryOffset}
-                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
-                          title={editBody ? 'Reset the back accessory position used by every animation' : "Reset this animation's back accessory position"}
-                        >
-                          {editBody ? 'Reset back position (all animations)' : 'Reset back position (this animation)'}
-                        </button>
-                      ) : null;
-                    })()}
-                  </div>
-                );
-              })()}
-
-              {/* ── Body FRONT accessory (torso; above both arms, below the head) ── */}
-              {(() => {
-                const img = activeChar.parts.bodyFrontAccessoryImage;
-                const curScale = resolveBodyFrontAccessoryScale(activeChar.parts);
-                return (
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setBodyFrontAccessoryUploadOpen(true)}
-                        title={img ? "Replace body's front accessory PNG" : 'Upload a PNG drawn over both arms, under the head'}
-                      >
-                        <ImageUp className="h-3.5 w-3.5 mr-1.5" />
-                        {img ? "Edit Body's Front Accessory" : "Upload Body's Front Accessory"}
-                      </Button>
-                      {img && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => updateBodyFrontAccessoryImage(null)}
-                          title="Remove body front accessory image"
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                    {img && (
-                      <div className="flex items-center justify-end gap-0.5">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Front scale</span>
-                        <button
-                          onClick={() => updateBodyFrontAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale <= MIN_ACCESSORY_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >−</button>
-                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                          {Math.round(curScale * 100)}%
-                        </span>
-                        <button
-                          onClick={() => updateBodyFrontAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
-                          disabled={curScale >= MAX_ACCESSORY_SCALE}
-                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
-                        >+</button>
-                      </div>
-                    )}
-                    {img && (editAnimPose || currentAnimation === 'edit') && (() => {
-                      const fo = resolveBodyFrontAccessoryOffset(activeChar.parts, currentAnimation);
-                      const isDirty = fo.x !== 0 || fo.y !== 0 || fo.rotation !== 0;
-                      const editBody = currentAnimation === 'edit';
-                      return isDirty ? (
-                        <button
-                          onClick={resetBodyFrontAccessoryOffset}
-                          className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
-                          title={editBody ? 'Reset the front accessory position used by every animation' : "Reset this animation's front accessory position"}
-                        >
-                          {editBody ? 'Reset front position (all animations)' : 'Reset front position (this animation)'}
-                        </button>
-                      ) : null;
-                    })()}
-                  </div>
-                );
-              })()}
-                    </div>
-                    <div className="flex justify-end px-4 py-3 border-t border-border">
-                      <Button type="button" size="sm" onClick={() => setCustomizeOpen(false)}>Done</Button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             <Separator />
@@ -1970,6 +1768,10 @@ export default function App() {
                 onBodyAccessoryOffsetSet={setBodyAccessoryOffsetAbsolute}
                 bodyFrontAccessoryOffset={bodyFrontAccessoryOffset}
                 onBodyFrontAccessoryOffsetSet={setBodyFrontAccessoryOffsetAbsolute}
+                leftArmAccessoryOffset={leftArmAccessoryOffset}
+                onLeftArmAccessoryOffsetSet={setLeftArmAccessoryOffsetAbsolute}
+                headAccessoryOffset={headAccessoryOffset}
+                onHeadAccessoryOffsetSet={setHeadAccessoryOffsetAbsolute}
                 onSelectBone={editAnimPose && !poseEditorOpen ? selectBone : undefined}
                 canvasBg={settings.canvasBg}
                 gridSpacing={settings.gridSpacing}
@@ -1983,8 +1785,407 @@ export default function App() {
               />
           </main>
 
-          {((currentAnimation === 'edit') || (editAnimPose && !poseEditorOpen)) && (
+          {(customizeOpen || (currentAnimation === 'edit') || (editAnimPose && !poseEditorOpen)) && (
             <aside className="w-80 shrink-0 bg-card border-l border-border overflow-y-auto p-4 flex flex-col gap-4">
+              {customizeOpen && (
+                <section className="flex flex-col gap-4" aria-label="Weapon and accessories">
+                  <div className="flex items-center justify-between">
+                    <SectionTitle>Weapon &amp; Accessories</SectionTitle>
+                    <button
+                      type="button"
+                      onClick={() => setCustomizeOpen(false)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      title="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                {/* ── Weapon skin + scale ───────────────────────────────────── */}
+                {activeChar.parts.weapon !== 'none' && (() => {
+                  const weapon = activeChar.parts.weapon;
+                  const currentWeaponImage = activeChar.parts.weaponImages?.[weapon];
+                  const curScale = activeChar.parts.weaponScales?.[weapon]
+                                ?? activeChar.parts.partScales?.weapon
+                                ?? 1;
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setWeaponUploadOpen(true)}
+                          title={currentWeaponImage ? `Replace ${weapon} PNG` : `Upload a PNG to skin the ${weapon}`}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {currentWeaponImage ? "Edit Weapon's Skin" : 'Upload Weapon PNG'}
+                        </Button>
+                        {currentWeaponImage && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateWeaponImage(null)}
+                            title={`Remove ${weapon} image (revert to procedural)`}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Weapon scale</span>
+                        <button
+                          onClick={() => updateWeaponScale(Math.max(MIN_WEAPON_SCALE, +((curScale - WEAPON_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale <= MIN_WEAPON_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >−</button>
+                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                          {Math.round(curScale * 100)}%
+                        </span>
+                        <button
+                          onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
+                          disabled={curScale >= MAX_WEAPON_SCALE}
+                          className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                        >+</button>
+                      </div>
+                      {editAnimPose && (() => {
+                        const wo = resolveWeaponOffset(activeChar.parts, currentAnimation);
+                        const isDirty = wo.x !== 0 || wo.y !== 0 || wo.rotation !== 0;
+                        return isDirty ? (
+                          <button
+                            onClick={resetWeaponOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title="Reset weapon offset"
+                          >
+                            Reset offset
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
+  
+                {/* ── Right arm accessory skin + scale ──────────────────────── */}
+                {(() => {
+                  const weapon = activeChar.parts.weapon;
+                  const currentAccessoryImage = activeChar.parts.accessoryImages?.[weapon];
+                  const curScale = resolveAccessoryScale(activeChar.parts);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAccessoryUploadOpen(true)}
+                          title={currentAccessoryImage ? 'Replace right arm accessory PNG' : 'Upload a PNG for the right arm accessory'}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {currentAccessoryImage ? "Edit Right Arm's Skin" : 'Upload Right Arm Accessory'}
+                        </Button>
+                        {currentAccessoryImage && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateAccessoryImage(null)}
+                            title="Remove right arm accessory image"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {currentAccessoryImage && (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Right arm scale</span>
+                          <button
+                            onClick={() => updateAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale <= MIN_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                            {Math.round(curScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => updateAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale >= MAX_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      )}
+                      {currentAccessoryImage && editAnimPose && (() => {
+                        const ao = resolveAccessoryOffset(activeChar.parts, currentAnimation);
+                        const isDirty = ao.x !== 0 || ao.y !== 0 || ao.rotation !== 0;
+                        return isDirty ? (
+                          <button
+                            onClick={resetAccessoryOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title="Reset right arm accessory offset"
+                          >
+                            Reset right arm offset
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
+  
+                {/* ── Left arm accessory (character's left / support hand) ──── */}
+                {(() => {
+                  const img = activeChar.parts.leftArmAccessoryImage;
+                  const curScale = resolveLeftArmAccessoryScale(activeChar.parts);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setLeftArmAccessoryUploadOpen(true)}
+                          title={img ? 'Replace left arm accessory PNG' : 'Upload a PNG for the left arm accessory'}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {img ? "Edit Left Arm's Skin" : 'Upload Left Arm Accessory'}
+                        </Button>
+                        {img && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateLeftArmAccessoryImage(null)}
+                            title="Remove left arm accessory image"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {img && (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Left arm scale</span>
+                          <button
+                            onClick={() => updateLeftArmAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale <= MIN_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                            {Math.round(curScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => updateLeftArmAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale >= MAX_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      )}
+                      {img && (editAnimPose || currentAnimation === 'edit') && (() => {
+                        const lo = resolveLeftArmAccessoryOffset(activeChar.parts, currentAnimation);
+                        const isDirty = lo.x !== 0 || lo.y !== 0 || lo.rotation !== 0;
+                        const editBody = currentAnimation === 'edit';
+                        return isDirty ? (
+                          <button
+                            onClick={resetLeftArmAccessoryOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title={editBody ? 'Reset the left arm accessory position used by every animation' : "Reset this animation's left arm accessory position"}
+                          >
+                            {editBody ? 'Reset left arm position (all animations)' : 'Reset left arm position (this animation)'}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
+
+                {/* ── Body accessory (anchored to the torso) ─────────────────── */}
+                {(() => {
+                  const img = activeChar.parts.bodyAccessoryImage;
+                  const curScale = resolveBodyAccessoryScale(activeChar.parts);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setBodyAccessoryUploadOpen(true)}
+                          title={img ? "Replace body's back accessory PNG" : "Upload a PNG anchored behind the body"}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {img ? "Edit Body's Back Accessory" : "Upload Body's Back Accessory"}
+                        </Button>
+                        {img && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateBodyAccessoryImage(null)}
+                            title="Remove body accessory image"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {img && (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Body scale</span>
+                          <button
+                            onClick={() => updateBodyAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale <= MIN_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                            {Math.round(curScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => updateBodyAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale >= MAX_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      )}
+                      {img && (editAnimPose || currentAnimation === 'edit') && (() => {
+                        const bo = resolveBodyAccessoryOffset(activeChar.parts, currentAnimation);
+                        const isDirty = bo.x !== 0 || bo.y !== 0 || bo.rotation !== 0;
+                        const editBody = currentAnimation === 'edit';
+                        return isDirty ? (
+                          <button
+                            onClick={resetBodyAccessoryOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title={editBody ? 'Reset the back accessory position used by every animation' : "Reset this animation's back accessory position"}
+                          >
+                            {editBody ? 'Reset back position (all animations)' : 'Reset back position (this animation)'}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
+  
+                {/* ── Body FRONT accessory (torso; above both arms, below the head) ── */}
+                {(() => {
+                  const img = activeChar.parts.bodyFrontAccessoryImage;
+                  const curScale = resolveBodyFrontAccessoryScale(activeChar.parts);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setBodyFrontAccessoryUploadOpen(true)}
+                          title={img ? "Replace body's front accessory PNG" : 'Upload a PNG drawn over both arms, under the head'}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {img ? "Edit Body's Front Accessory" : "Upload Body's Front Accessory"}
+                        </Button>
+                        {img && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateBodyFrontAccessoryImage(null)}
+                            title="Remove body front accessory image"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {img && (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Front scale</span>
+                          <button
+                            onClick={() => updateBodyFrontAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale <= MIN_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                            {Math.round(curScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => updateBodyFrontAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale >= MAX_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      )}
+                      {img && (editAnimPose || currentAnimation === 'edit') && (() => {
+                        const fo = resolveBodyFrontAccessoryOffset(activeChar.parts, currentAnimation);
+                        const isDirty = fo.x !== 0 || fo.y !== 0 || fo.rotation !== 0;
+                        const editBody = currentAnimation === 'edit';
+                        return isDirty ? (
+                          <button
+                            onClick={resetBodyFrontAccessoryOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title={editBody ? 'Reset the front accessory position used by every animation' : "Reset this animation's front accessory position"}
+                          >
+                            {editBody ? 'Reset front position (all animations)' : 'Reset front position (this animation)'}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
+
+                {/* ── Head accessory (anchored to the head) ───────────────── */}
+                {(() => {
+                  const img = activeChar.parts.headAccessoryImage;
+                  const curScale = resolveHeadAccessoryScale(activeChar.parts);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setHeadAccessoryUploadOpen(true)}
+                          title={img ? 'Replace head accessory PNG' : 'Upload a PNG for the head accessory'}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {img ? "Edit Head Gear" : 'Upload Head Accessory'}
+                        </Button>
+                        {img && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateHeadAccessoryImage(null)}
+                            title="Remove head accessory image"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {img && (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head acc. scale</span>
+                          <button
+                            onClick={() => updateHeadAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale <= MIN_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                            {Math.round(curScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => updateHeadAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale >= MAX_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      )}
+                      {img && (editAnimPose || currentAnimation === 'edit') && (() => {
+                        const lo = resolveHeadAccessoryOffset(activeChar.parts, currentAnimation);
+                        const isDirty = lo.x !== 0 || lo.y !== 0 || lo.rotation !== 0;
+                        const editBody = currentAnimation === 'edit';
+                        return isDirty ? (
+                          <button
+                            onClick={resetHeadAccessoryOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title={editBody ? 'Reset the head accessory position used by every animation' : "Reset this animation's head accessory position"}
+                          >
+                            {editBody ? 'Reset head accessory position (all animations)' : 'Reset head accessory position (this animation)'}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
+                </section>
+              )}
+              {customizeOpen && (currentAnimation === 'edit' || (editAnimPose && !poseEditorOpen)) && <Separator />}
               {currentAnimation === 'edit' && (
                 <EditBodyControls
                   showVectors={showVectors}
@@ -2100,6 +2301,26 @@ export default function App() {
         currentImage={activeChar.parts.accessoryImages?.[activeChar.parts.weapon]}
         onPick={updateAccessoryImage}
         onClose={() => setAccessoryUploadOpen(false)}
+      />
+
+      <AccessoryUploadDialog
+        open={leftArmAccessoryUploadOpen}
+        currentImage={activeChar.parts.leftArmAccessoryImage}
+        onPick={updateLeftArmAccessoryImage}
+        onClose={() => setLeftArmAccessoryUploadOpen(false)}
+        title="Upload Left Arm Accessory PNG"
+        anchorText="attached to joint 9 (support hand)"
+        moveHint="The left arm accessory moves with joint 9 (support hand), draws on top of the left arm, and persists across weapon changes."
+      />
+
+      <AccessoryUploadDialog
+        open={headAccessoryUploadOpen}
+        currentImage={activeChar.parts.headAccessoryImage}
+        onPick={updateHeadAccessoryImage}
+        onClose={() => setHeadAccessoryUploadOpen(false)}
+        title="Upload Head Accessory PNG"
+        anchorText="attached to the head"
+        moveHint="The head accessory moves and rotates with the head, draws on top of the head, and persists across weapon changes."
       />
 
       <SettingsDialog
