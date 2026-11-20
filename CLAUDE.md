@@ -413,7 +413,7 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 - **stateRef pattern**: mutable state the RAF loop reads without triggering re-renders. All frequently-read values (animation, boneOffsets, accessoryOffset, customWeapons, etc.) are mirrored into `stateRef.current` on every render.
 - **dragRef**: `{ type:'bone'|'anchor'|'handleIn'|'handleOut'|'weapon-pos'|'weapon-rot'|'accessory-pos'|'accessory-rot', ... }`
 - **panDragRef**: middle-mouse pan
-- Undo history in `historyRef` (session only, capped at 60). `pushHistory()` before any bone/skin mutation.
+- Undo history in `historyRef` (session only, capped at 60), Ctrl+Z (skipped while typing in a text field or with a dialog open). **Every canvas action is undoable**: call `pushHistory()` before a one-shot mutation, or `beginGesture()` at the start of a drag (it drops the step again on release if nothing changed, so plain clicks leave no undo entry). A snapshot holds the canvas-owned state (`boneOffsets`, `skinOverrides`, `ragdollOverlay`, `animBoneOffsets`) plus App-owned state via `onCaptureUndo` / `onRestoreUndo` (`captureCanvasUndo` / `restoreCanvasUndo` in App.jsx): the weapon/accessory anchor keys in `parts` (`CANVAS_ANCHOR_KEY`), `animKeyframeOverrides` and the alignment box. A new canvas-editable field must be added to one of the two.
 - Canvas size: 620×640 px. Origin at (310, 490). `BASE_SCALE = 2.5`. Background: `#FFE699`.
 
 **Accessory anchor handles** (shown when `editAnimPose && accessoryImageRef.current`):

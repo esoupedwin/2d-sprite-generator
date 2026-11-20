@@ -455,14 +455,147 @@ function applyOutline(base, color = '#ffffff', widthLogical = 6) {
 // without re-rendering the character.
 export function composePose(base, options = {}) {
   if (!base) return null;
-  const composed = options.outline?.enabled
-    ? applyOutline(base, options.outline.color ?? '#ffffff', options.outline.width ?? 6)
-    : base;
+  let composed = base;
+  if (options.outline?.enabled) {
+    composed = applyOutline(composed, options.outline.color ?? '#ffffff', options.outline.width ?? 6);
+    // Optional second band traced around the first (sticker style: white
+    // outline with a thin dark rim). Dilating the already-outlined image makes
+    // its width measure from the first outline's edge.
+    if (options.outerOutline?.enabled) {
+      composed = applyOutline(composed, options.outerOutline.color ?? '#000000', options.outerOutline.width ?? 4);
+      // And an optional third band around the second.
+      if (options.thirdOutline?.enabled) {
+        composed = applyOutline(composed, options.thirdOutline.color ?? '#000000', options.thirdOutline.width ?? 4);
+      }
+    }
+  }
+  if (options.card?.enabled) {
+    const card = buildPoseCard(composed, options.card);
+    return { pngDataUrl: card.toDataURL('image/png'), width: CARD_W, height: CARD_H };
+  }
   return {
     pngDataUrl: composed.canvas.toDataURL('image/png'),
     width:  composed.wLogical,
     height: composed.hLogical,
   };
+}
+
+// ── Pose card background (Current Pose export) ──────────────────────────────
+// A trading-card backdrop: white border, dark frame, a sunburst of three tones
+// of one colour fanning from the centre, and four light shards pointing out.
+// The (already outlined) pose is drawn at a fixed scale, centred. Built at
+// POSE_CARD_RES × the card's logical size (CARD_W × CARD_H) for a crisp SVG.
+export const POSE_CARD_DEFAULT_COLOR = '#1e8ff0';
+// Special characters get a gold card. At exactly this colour the hand-picked
+// GOLD palette is used (a plain lighten/darken of amber goes muddy brown).
+export const POSE_CARD_SPECIAL_COLOR = '#fbb714';
+const POSE_CARD_GOLD = {
+  tones: ['#fbb714', '#fde047', '#f59000'],   // mid / light / dark
+  shard: '#fff8dc',
+  frame: '#2a1408',                                // dark brown
+};
+// Default card colour for a character: gold when it is marked special.
+export function poseCardColorFor(character) {
+  return character?.special ? POSE_CARD_SPECIAL_COLOR : POSE_CARD_DEFAULT_COLOR;
+}
+const POSE_CARD_RES  = 2;
+// Card px per character-local unit at size 1. FIXED, not fitted, so every
+// character is drawn at the same scale and cards are comparable side by side.
+// 1.8 is the largest round value at which the widest current character
+// (weapon + outlines) still fits the inner width; larger sizes clip at the frame.
+const POSE_CARD_UNIT = 1.8;
+const POSE_CARD_RAYS = 18;
+
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function mixHex(hex, withRgb, t) {
+  const a = hexToRgb(hex);
+  const m = a.map((v, i) => Math.round(v + (withRgb[i] - v) * t));
+  return `rgb(${m[0]},${m[1]},${m[2]})`;
+}
+
+// Wedges of uneven width (fixed seed, so every export looks the same) in a
+// mid / light / dark rotation, filling the clip region around (cx, cy).
+function drawToneBurst(ctx, cx, cy, reach, color) {
+  const tones = color.toLowerCase() === POSE_CARD_SPECIAL_COLOR
+    ? POSE_CARD_GOLD.tones
+    : [color, mixHex(color, [255, 255, 255], 0.2), mixHex(color, [0, 0, 0], 0.2)];
+  const order = [0, 1, 2, 1, 0, 2];
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const widths = Array.from({ length: POSE_CARD_RAYS }, () => 0.45 + rnd());
+  const total = widths.reduce((a, b) => a + b, 0);
+  let a = -Math.PI / 2 - 0.12;
+  const R = reach * 1.5;
+  widths.forEach((w, i) => {
+    const span = (w / total) * Math.PI * 2;
+    ctx.fillStyle = tones[order[i % order.length]];
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, R, a, a + span + 0.002); // tiny overlap hides seams
+    ctx.closePath();
+    ctx.fill();
+    a += span;
+  });
+}
+
+// A long thin triangle at (x, y) pointing away from (cx, cy).
+function drawShard(ctx, x, y, cx, cy, len, base) {
+  const ang = Math.atan2(y - cy, x - cx);
+  const ux = Math.cos(ang), uy = Math.sin(ang);
+  ctx.beginPath();
+  ctx.moveTo(x + ux * len / 2, y + uy * len / 2);
+  ctx.lineTo(x - ux * len / 2 - uy * base / 2, y - uy * len / 2 + ux * base / 2);
+  ctx.lineTo(x - ux * len / 2 + uy * base / 2, y - uy * len / 2 - ux * base / 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function buildPoseCard(pose, { color = POSE_CARD_DEFAULT_COLOR, size = 1 } = {}) {
+  const gold = color.toLowerCase() === POSE_CARD_SPECIAL_COLOR;
+  const S = POSE_CARD_RES;
+  const card = document.createElement('canvas');
+  card.width = CARD_W * S; card.height = CARD_H * S;
+  const ctx = card.getContext('2d');
+  ctx.scale(S, S);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  ctx.fillStyle = '#ffffff';
+  roundRectPath(ctx, 0, 0, CARD_W, CARD_H, CARD_RADIUS);
+  ctx.fill();
+  const fx = CARD_BORDER, fy = CARD_BORDER;
+  const fw = CARD_W - CARD_BORDER * 2, fh = CARD_H - CARD_BORDER * 2;
+  const fr = CARD_RADIUS - CARD_BORDER * 0.5;
+  ctx.fillStyle = gold ? POSE_CARD_GOLD.frame : CARD_FRAME_COLOR;
+  roundRectPath(ctx, fx, fy, fw, fh, fr);
+  ctx.fill();
+
+  const ix = fx + CARD_FRAME, iy = fy + CARD_FRAME;
+  const iw = fw - CARD_FRAME * 2, ih = fh - CARD_FRAME * 2;
+  const ir = Math.max(0, fr - CARD_FRAME);
+  const cx = ix + iw / 2, cy = iy + ih / 2;
+  ctx.save();
+  roundRectPath(ctx, ix, iy, iw, ih, ir);
+  ctx.clip();
+  drawToneBurst(ctx, cx, cy, Math.hypot(iw, ih), color);
+  ctx.fillStyle = gold ? POSE_CARD_GOLD.shard : mixHex(color, [255, 255, 255], 0.78);
+  const L = iw * 0.13, B = iw * 0.045;
+  drawShard(ctx, ix + iw * 0.90, iy + ih * 0.18, cx, cy, L, B);
+  drawShard(ctx, ix + iw * 0.08, iy + ih * 0.33, cx, cy, L, B);
+  drawShard(ctx, ix + iw * 0.10, iy + ih * 0.76, cx, cy, L, B);
+  drawShard(ctx, ix + iw * 0.86, iy + ih * 0.76, cx, cy, L, B);
+
+  // Same scale for every character (POSE_CARD_UNIT), centred on its bounding
+  // box; anything past the frame is clipped.
+  const pw = pose.canvas.width, ph = pose.canvas.height;
+  const k = (POSE_CARD_UNIT * size) / (POSE_SCALE * pose.ratio); // card px per pose device px
+  ctx.drawImage(pose.canvas, cx - pw * k / 2, cy - ph * k / 2, pw * k, ph * k);
+  ctx.restore();
+  return card;
 }
 
 // Renders the base pose once; held by the dialog so edits re-compose cheaply.
@@ -473,7 +606,10 @@ export async function renderPosePreviewBase(character, animationName, currentTim
 
 /**
  * Builds a pose preview PNG (data URL) with optional edits applied (one-shot).
- * options.outline = { enabled, color, width } adds a coloured outline.
+ * options.outline = { enabled, color, width } adds a coloured outline;
+ * options.outerOutline (same shape) adds a second band around it, and
+ * options.thirdOutline a third band around that;
+ * options.card = { enabled, color, size } places it on a card background.
  */
 export async function buildPosePreview(character, animationName, currentTime = 0, options = {}) {
   const base = await renderPoseBase(character, animationName, currentTime);
@@ -490,10 +626,24 @@ export function poseSVGMarkup(pngDataUrl, width, height) {
   ].join('');
 }
 
-export function downloadPoseSVG(character, animationName, svgMarkup) {
+// File name (no extension) of a Current Pose export: `<base>_pose`, or — with
+// the card background on — `card_buy_<character name>`, the same name the
+// character-card exports use.
+function poseFileBase(character, animationName, asCard) {
+  return asCard
+    ? `card_buy_${sanitizeFileName(characterLabel(character))}`
+    : `${exportFileBase(character, animationName)}_pose`;
+}
+
+/** Saves the composed pose (outlines / card included) as a PNG. */
+export function downloadPosePNG(character, animationName, pngDataUrl, { asCard = false } = {}) {
+  download(pngDataUrl, `${poseFileBase(character, animationName, asCard)}.png`);
+}
+
+export function downloadPoseSVG(character, animationName, svgMarkup, { asCard = false } = {}) {
   const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
   const url  = URL.createObjectURL(blob);
-  download(url, `${exportFileBase(character, animationName)}_pose.svg`);
+  download(url, `${poseFileBase(character, animationName, asCard)}.svg`);
   URL.revokeObjectURL(url);
 }
 
@@ -504,7 +654,8 @@ export function downloadPoseSVG(character, animationName, svgMarkup) {
 export async function exportPoseSVG(character, animationName, currentTime = 0, options = {}) {
   const preview = await buildPosePreview(character, animationName, currentTime, options);
   if (!preview) return;
-  downloadPoseSVG(character, animationName, poseSVGMarkup(preview.pngDataUrl, preview.width, preview.height));
+  downloadPoseSVG(character, animationName, poseSVGMarkup(preview.pngDataUrl, preview.width, preview.height),
+    { asCard: !!options.card?.enabled });
 }
 
 // ── Character card ──────────────────────────────────────────────────────────

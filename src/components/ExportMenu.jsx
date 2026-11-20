@@ -54,8 +54,8 @@ export function ExportMenu({ onSpriteSheet, onBatchExport, onFolderExport, onSpr
             onClick={pick(onPoseSVG)}
             className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
           >
-            <div>Current Pose (SVG)</div>
-            <div className="text-[10px] opacity-60 mt-0.5">Transparent background · current frame</div>
+            <div>Static Image or Card</div>
+            <div className="text-[10px] opacity-60 mt-0.5">SVG or PNG · current frame</div>
           </button>
           <div className="border-t border-border" />
           <button

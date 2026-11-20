@@ -140,6 +140,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   alignBoxVisible,
   boxDrawMode,
   onAlignBoxChange,
+  onCaptureUndo,
+  onRestoreUndo,
   onBoxDrawEnd,
   renderOpts,
 }, ref) {
@@ -282,6 +284,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   stateRef.current.alignBoxVisible    = alignBoxVisible !== false;
   stateRef.current.boxDrawMode        = !!boxDrawMode;
   stateRef.current.onAlignBoxChange   = onAlignBoxChange ?? null;
+  stateRef.current.onCaptureUndo      = onCaptureUndo ?? null;
+  stateRef.current.onRestoreUndo      = onRestoreUndo ?? null;
   stateRef.current.onBoxDrawEnd       = onBoxDrawEnd ?? null;
   // { animation, isMelee, partZOrder, hideWeapon } from resolveRenderOptions —
   // spread into every renderCharacter call below.
@@ -1046,18 +1050,39 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   }, [hitRadius]);
 
   // ── Undo ──────────────────────────────────────────────────────────────────────
-  const pushHistory = useCallback(() => {
+  // Every canvas action pushes ONE snapshot before it mutates anything. A
+  // snapshot holds the canvas-owned state (global pose, skins, ragdoll overlay,
+  // per-animation pose offsets) plus whatever App owns that the canvas edits —
+  // weapon/accessory anchors, ragdoll keyframe deltas and the alignment box —
+  // via onCaptureUndo / onRestoreUndo. Session-only, capped at 60.
+  const takeSnapshot = useCallback(() => {
     const s = stateRef.current;
-    const snapshot = {
-      boneOffsets:    Object.fromEntries(Object.entries(s.boneOffsets).map(([k, v]) => [k, { ...v }])),
-      skinOverrides:  Object.fromEntries(Object.entries(s.skinOverrides).map(([k, pts]) => [k, pts.map(p => [...p])])),
-      ragdollOverlay: Object.fromEntries(Object.entries(s.ragdollOverlay).map(([k, v]) => [k, { ...v }])),
+    return {
+      boneOffsets:     structuredClone(s.boneOffsets),
+      skinOverrides:   structuredClone(s.skinOverrides),
+      ragdollOverlay:  structuredClone(s.ragdollOverlay),
+      animBoneOffsets: structuredClone(s.animBoneOffsets),
+      app:             s.onCaptureUndo?.() ?? null,
     };
+  }, []);
+
+  // Set while a drag that pushed a snapshot is in progress, so stopDrag can
+  // drop the snapshot again if the gesture changed nothing (a plain click).
+  const gestureSnapshotRef = useRef(null);
+
+  const pushHistory = useCallback(() => {
+    const snap = takeSnapshot();
     const hist = historyRef.current;
     if (hist.length >= 60) hist.shift();
-    hist.push(snapshot);
+    hist.push(snap);
     setCanUndo(true);
-  }, []);
+    return snap;
+  }, [takeSnapshot]);
+
+  // Start of a drag gesture: snapshot now, verify on release.
+  const beginGesture = useCallback(() => {
+    gestureSnapshotRef.current = pushHistory();
+  }, [pushHistory]);
 
   const undo = useCallback(() => {
     const hist = historyRef.current;
@@ -1067,11 +1092,20 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     setBoneOffsets(snapshot.boneOffsets);
     setSkinOverrides(snapshot.skinOverrides);
     setRagdollOverlay(snapshot.ragdollOverlay ?? {});
+    setAnimBoneOffsets(snapshot.animBoneOffsets ?? {});
+    if (snapshot.app) stateRef.current.onRestoreUndo?.(snapshot.app);
   }, []);
 
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z') return;
+      // Leave text fields their own native undo.
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      // A dialog on top owns the keyboard.
+      if (document.querySelector('[aria-modal="true"]')) return;
+      e.preventDefault();
+      undo();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1131,6 +1165,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     // part of the character, so it must stay usable outside the edit modes.
     const boxPos = getCharPos(e);
     if (s0.boxDrawMode) {
+      beginGesture();
       boxDragRef.current = { mode: 'new', anchorX: boxPos.x, anchorY: boxPos.y, rect: null };
       if (canvasRef.current) canvasRef.current.style.cursor = 'crosshair';
       e.preventDefault();
@@ -1138,6 +1173,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     }
     const boxHandle = boxHandleAt(boxPos);
     if (boxHandle) {
+      beginGesture();
       // `startRect` is the anchor for every move event: recomputing from the
       // original keeps the opposite edge pinned even after the drag flips the
       // box inside out, which progressive mutation would get wrong.
@@ -1150,6 +1186,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
       return;
     }
     if (onBoxBorder(boxPos)) {
+      beginGesture();
       const b = s0.alignBox;
       boxDragRef.current = { mode: 'move', rect: { ...b }, grabDX: boxPos.x - b.x, grabDY: boxPos.y - b.y };
       if (canvasRef.current) canvasRef.current.style.cursor = 'move';
@@ -1175,7 +1212,7 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
         e.preventDefault();
         return;
       }
-      pushHistory();
+      beginGesture();
       dragRef.current = (target.type === 'weapon-pos' || target.type === 'accessory-pos'
                          || target.type === 'body-accessory-pos' || target.type === 'body-front-accessory-pos'
                          || target.type === 'left-arm-accessory-pos' || target.type === 'head-accessory-pos')
@@ -1635,7 +1672,21 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
     dragRef.current    = null;
     panDragRef.current = null;
     if (canvasRef.current) canvasRef.current.style.cursor = 'default';
-  }, []);
+
+    // Drop the gesture's undo step if it changed nothing (a click, a box drag
+    // too small to keep). Checked after React has applied the last updates.
+    const snap = gestureSnapshotRef.current;
+    gestureSnapshotRef.current = null;
+    if (snap) {
+      setTimeout(() => {
+        const hist = historyRef.current;
+        if (hist[hist.length - 1] !== snap) return;
+        if (JSON.stringify(takeSnapshot()) !== JSON.stringify(snap)) return;
+        hist.pop();
+        setCanUndo(hist.length > 0);
+      }, 50);
+    }
+  }, [takeSnapshot]);
 
   // ── Zoom helpers ──────────────────────────────────────────────────────────────
   const stepZoom = useCallback((factor) => {
@@ -1657,8 +1708,8 @@ export const CharacterCanvas = forwardRef(function CharacterCanvas({
   }, []);
 
   // ── Reset / Save as Default ───────────────────────────────────────────────────
-  const resetBones = useCallback(() => setBoneOffsets(defaultBoneOffsets.current),    []);
-  const resetSkins = useCallback(() => setSkinOverrides(defaultSkinOverrides.current), []);
+  const resetBones = useCallback(() => { pushHistory(); setBoneOffsets(defaultBoneOffsets.current); },    [pushHistory]);
+  const resetSkins = useCallback(() => { pushHistory(); setSkinOverrides(defaultSkinOverrides.current); }, [pushHistory]);
 
   const saveAsDefault = useCallback(() => {
     const bones = stateRef.current.boneOffsets;

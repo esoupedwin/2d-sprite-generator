@@ -178,6 +178,11 @@ function resetTorsoAccessoryOffset(c, prefix, animation) {
   return { ...c, parts: { ...c.parts, [animKey]: animOffsets } };
 }
 
+// Anchor keys in `parts` that canvas handle drags write (weapon + every
+// accessory, base and per-animation). Canvas undo snapshots exactly these, so
+// undoing a drag never reverts an unrelated change such as an image upload.
+const CANVAS_ANCHOR_KEY = /^(weapon|accessory|bodyAccessory|bodyFrontAccessory|leftArmAccessory|headAccessory)(Anim)?Offsets?$/;
+
 /**
  * Deep copy of a character under a fresh id — body, skins, images, weapon
  * settings and animations alike. The caller sets the name. Shared by
@@ -1459,6 +1464,25 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.bodyFrontAccessoryAnimOffsets, activeChar.parts.bodyFrontAccessoryOffset, currentAnimation],
   );
+  // Canvas undo: the App-owned state that canvas actions edit — anchor offsets,
+  // ragdoll keyframe deltas (Edit Animation) and the alignment box.
+  const captureCanvasUndo = useCallback(() => ({
+    charId: activeChar.id,
+    anchors: Object.fromEntries(Object.entries(activeChar.parts).filter(([k]) => CANVAS_ANCHOR_KEY.test(k))),
+    animKeyframeOverrides: activeChar.animKeyframeOverrides,
+    alignBox: settings.alignBox,
+    alignBoxVisible: settings.alignBoxVisible,
+  }), [activeChar, settings.alignBox, settings.alignBoxVisible]);
+
+  const restoreCanvasUndo = useCallback((snap) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== snap.charId) return c;
+      const parts = Object.fromEntries(Object.entries(c.parts).filter(([k]) => !CANVAS_ANCHOR_KEY.test(k)));
+      return { ...c, parts: { ...parts, ...snap.anchors }, animKeyframeOverrides: snap.animKeyframeOverrides };
+    }));
+    setSettings(s => ({ ...s, alignBox: snap.alignBox, alignBoxVisible: snap.alignBoxVisible }));
+  }, []);
+
   const leftArmAccessoryOffset = useMemo(
     () => resolveLeftArmAccessoryOffset(activeChar.parts, currentAnimation),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1781,6 +1805,8 @@ export default function App() {
                 boxDrawMode={boxDrawMode}
                 onAlignBoxChange={(box) => setSettings(s => ({ ...s, alignBox: box, alignBoxVisible: true }))}
                 onBoxDrawEnd={() => setBoxDrawMode(false)}
+                onCaptureUndo={captureCanvasUndo}
+                onRestoreUndo={restoreCanvasUndo}
                 renderOpts={renderOpts}
               />
           </main>
