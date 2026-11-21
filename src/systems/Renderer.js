@@ -6,6 +6,7 @@ import {
   resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale,
   resolveHeadAccessoryOffset, resolveHeadAccessoryScale,
   resolveFaceAccessoryOffset, resolveFaceAccessoryScale,
+  resolveHeadBackAccessoryOffset, resolveHeadBackAccessoryScale,
   isMeleeWeapon, MELEE_WEAPONS,
 } from '../utils/weaponSettings.js';
 import {
@@ -167,16 +168,23 @@ function drawLeftArmAccessory(ctx, character, worldTransforms, image, animation)
   ctx.restore();
 }
 
-// Head accessories on the `head` bone, drawn as part of the head layer right
-// after the head skin + prop, so they always sit on the head: the face
-// accessory (eye patch / glasses) first, then the head accessory (hat / helmet /
-// ears) on top of it.
-function drawHeadAccessory(ctx, character, worldTransforms, image, animation, face = false) {
+// Head accessories on the `head` bone, drawn as part of the head layer so they
+// always follow the head wherever it sits in the layer order: the head's back
+// accessory (`kind` 'back') just BEFORE the head skin, then — after the skin +
+// prop — the face accessory ('face': eye patch / glasses) and the head
+// accessory ('head': hat / helmet / ears) on top of it.
+const HEAD_ACCESSORY_RESOLVERS = {
+  head: [resolveHeadAccessoryOffset,     resolveHeadAccessoryScale],
+  face: [resolveFaceAccessoryOffset,     resolveFaceAccessoryScale],
+  back: [resolveHeadBackAccessoryOffset, resolveHeadBackAccessoryScale],
+};
+function drawHeadAccessory(ctx, character, worldTransforms, image, animation, kind = 'head') {
   if (!image) return;
   const bone = worldTransforms['head'];
   if (!bone) return;
-  const ao = face ? resolveFaceAccessoryOffset(character, animation) : resolveHeadAccessoryOffset(character, animation);
-  const s  = face ? resolveFaceAccessoryScale(character)              : resolveHeadAccessoryScale(character);
+  const [offsetOf, scaleOf] = HEAD_ACCESSORY_RESOLVERS[kind];
+  const ao = offsetOf(character, animation);
+  const s  = scaleOf(character);
   const factor = ACCESSORY_IMAGE_TARGET / Math.max(image.naturalWidth, image.naturalHeight);
   const w = image.naturalWidth  * factor;
   const h = image.naturalHeight * factor;
@@ -246,6 +254,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     leftArmAccessoryImage = null,
     headAccessoryImage = null,
     faceAccessoryImage = null,
+    headBackAccessoryImage = null,
     animation = '',
     // isMelee: pass explicitly when the caller has access to customWeapons
     // so that custom weapons (key='cw_…') whose template='sword' draw behind
@@ -260,7 +269,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // sheets at identical frame coords so they overlay exactly downstream.
     //   others = back arm (+ left arm accessory), body front accessory, body, weapon, front arm
     //   (+ hand accessory and body back accessory unless split out via `accessory` / `back`)
-    //   head   = head skin (+ extras), the head prop and the head accessory
+    //   head   = head skin (+ extras), the head prop and the head / face / head-back accessories
     //   legs   = the two legs
     partsFilter = null,
     // partZOrder: optional back → front array of layer keys (see ORDERABLE_LAYERS)
@@ -312,6 +321,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
       else           drawSkin(ctx, bodyTmpl, wt, getColor(character, 'body'), bodyScale);
     },
     head: () => {
+      drawHeadAccessory(ctx, character, wt, headBackAccessoryImage, animation, 'back'); // one layer below the head
       const headTmpl  = skins.head || HEAD_SKIN;
       const headScale = getScale(character, 'head');
       if (headImage) {
@@ -321,7 +331,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
         drawExtras(ctx, 'head', character, wt);
       }
       drawPart(ctx, 'head_prop', character, wt); // head prop rides with the head
-      drawHeadAccessory(ctx, character, wt, faceAccessoryImage, animation, true); // so does the face gear…
+      drawHeadAccessory(ctx, character, wt, faceAccessoryImage, animation, 'face'); // so does the face gear…
       drawHeadAccessory(ctx, character, wt, headAccessoryImage, animation); // …and the head gear above it
     },
   };

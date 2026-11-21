@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { cn } from '@/lib/utils';
-import { renderPosePreviewBase, composePose, poseSVGMarkup, downloadPoseSVG, downloadPosePNG, poseCardColorFor, POSE_CARD_FEET_Y } from '../utils/export.js';
+import { renderPosePreviewBase, composePose, poseSVGMarkup, downloadPoseSVG, downloadPosePNG, poseCardColorFor, POSE_CARD_FEET_Y, exportPoseImages, trimTrailingSlashes } from '../utils/export.js';
+import { defaultAnimationFor } from '../systems/AnimationSystem.js';
+import { characterLabel } from '../utils/characters.js';
+import { useFolderOptions, preferredFolderKey, FolderPicker } from './FolderExportDialog.jsx';
+import { useSheetExport, OutputFolderField, ExportProgress, ExportResult, ExportFooter } from './SheetExportParts.jsx';
 
 const OUTLINE_MIN = 1, OUTLINE_MAX = 24, OUTLINE_STEP = 1;
 const CARD_SIZE_MIN = 0.5, CARD_SIZE_MAX = 2, CARD_SIZE_STEP = 0.05;
@@ -22,8 +26,23 @@ const COLOR_NAMES = { '#000000': 'black', '#ffffff': 'white' };
  * Preview + lightweight edit dialog for the "Current Pose" export.
  * Renders the pose to a PNG (with the chosen edits applied), shows it on a
  * checkerboard so transparency reads, and exports the wrapped SVG on confirm.
+ *
+ * `batch` turns it into "Multiple Static Images or Cards": pick a manager
+ * folder and the same edits are applied to every character in it (each in its
+ * default action at t = 0), written as PNGs through the dev server — see
+ * exportPoseImages. Click a character chip to preview it.
  */
-export function PosePreviewDialog({ open, onClose, character, animationName, currentTime = 0 }) {
+export function PosePreviewDialog({ open, onClose, character, animationName, currentTime = 0, batch = false, characters = [], folders = [], defaultFolder = null }) {
+  const folderOptions = useFolderOptions(characters, folders);
+  const [folder, setFolder] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
+  const selected = batch ? (folderOptions.find(o => o.key === folder) ?? null) : null;
+  const previewChar = batch
+    ? (selected?.chars.find(c => c.id === previewId) ?? selected?.chars[0] ?? null)
+    : character;
+  const previewAnim = batch ? (previewChar ? defaultAnimationFor(previewChar) : null) : animationName;
+  const previewTime = batch ? 0 : currentTime;
+
   const [outline, setOutline] = useState(DEFAULTS.outline);
   const [outlineColor, setOutlineColor] = useState(DEFAULTS.outlineColor);
   const [outlineWidth, setOutlineWidth] = useState(DEFAULTS.outlineWidth);
@@ -34,7 +53,10 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
   const [thirdColor, setThirdColor] = useState(DEFAULTS.thirdColor);
   const [thirdWidth, setThirdWidth] = useState(DEFAULTS.thirdWidth);
   const [card, setCard] = useState(DEFAULTS.card);
-  const [cardColor, setCardColor] = useState(() => poseCardColorFor(character));
+  // null = each character's own default (blue, gold when special).
+  const [cardColor, setCardColor] = useState(null);
+  const cardDefault = poseCardColorFor(previewChar);
+  const cardColorShown = cardColor ?? cardDefault;
   const [cardSize, setCardSize] = useState(DEFAULTS.cardSize);
   const [feetY, setFeetY] = useState(DEFAULTS.feetY);
   const [preview, setPreview] = useState(null); // { pngDataUrl, width, height }
@@ -51,22 +73,23 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
       setOutline(DEFAULTS.outline); setOutlineColor(DEFAULTS.outlineColor); setOutlineWidth(DEFAULTS.outlineWidth);
       setOuter(DEFAULTS.outer); setOuterColor(DEFAULTS.outerColor); setOuterWidth(DEFAULTS.outerWidth);
       setThird(DEFAULTS.third); setThirdColor(DEFAULTS.thirdColor); setThirdWidth(DEFAULTS.thirdWidth);
-      setCard(DEFAULTS.card); setCardColor(poseCardColorFor(character)); setCardSize(DEFAULTS.cardSize); setFeetY(DEFAULTS.feetY);
+      setCard(DEFAULTS.card); setCardColor(null); setCardSize(DEFAULTS.cardSize); setFeetY(DEFAULTS.feetY);
+      if (batch) { setFolder(preferredFolderKey(folderOptions, defaultFolder)); setPreviewId(null); }
     }
-  }, [open]);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || batch) return; // batch: useSheetExport owns Escape (blocked mid-export)
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open, batch, onClose]);
 
-  const opts = () => ({
+  const opts = (c = previewChar) => ({
     outline:      { enabled: outline, color: outlineColor, width: outlineWidth },
     outerOutline: { enabled: outer,   color: outerColor,   width: outerWidth },
     thirdOutline: { enabled: third,   color: thirdColor,   width: thirdWidth },
-    card:         { enabled: card,    color: cardColor,    size: cardSize, feetY },
+    card:         { enabled: card,    color: cardColor ?? poseCardColorFor(c), size: cardSize, feetY },
   });
   // The latest settings, for the async first render below: its closure is from
   // the render that started it, which can predate the reset-on-open above (so
@@ -76,10 +99,10 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
 
   // Render the character base once per (character, animation, time).
   useEffect(() => {
-    if (!open || !character) { baseRef.current = null; setPreview(null); return; }
+    if (!open || !previewChar) { baseRef.current = null; setPreview(null); return; }
     let stale = false;
     setRendering(true);
-    renderPosePreviewBase(character, animationName, currentTime).then((base) => {
+    renderPosePreviewBase(previewChar, previewAnim, previewTime).then((base) => {
       if (stale) return;
       baseRef.current = base;
       setPreview(composePose(base, optsRef.current));
@@ -87,7 +110,7 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
     });
     return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, character, animationName, currentTime]);
+  }, [open, previewChar, previewAnim, previewTime]);
 
   // Re-compose (cheap) when an edit changes, reusing the cached base.
   useEffect(() => {
@@ -96,7 +119,12 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outline, outlineColor, outlineWidth, outer, outerColor, outerWidth, third, thirdColor, thirdWidth, card, cardColor, cardSize, feetY]);
 
+  const ex = useSheetExport(open && batch,
+    (o) => exportPoseImages(selected?.chars ?? [], { root: o.root, onProgress: o.onProgress, optionsFor: (c) => opts(c) }),
+    onClose);
+
   if (!open) return null;
+  const count = selected?.chars.length ?? 0;
 
   const handleExport = () => {
     if (!preview) return;
@@ -112,18 +140,20 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !ex.busy && onClose()} />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="pose-preview-title"
-        className="relative w-[640px] max-w-[94vw] rounded-lg border border-border bg-card shadow-2xl"
+        className="relative w-[640px] max-w-[94vw] max-h-[94vh] overflow-y-auto rounded-lg border border-border bg-card shadow-2xl"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 id="pose-preview-title" className="text-sm font-semibold text-foreground">
-            Export Current Pose{animationName ? ` · ${animationName}` : ''}
+            {batch
+              ? <>Export Multiple Static Images or Cards{previewChar ? <span className="font-normal text-muted-foreground"> · previewing {characterLabel(previewChar)}</span> : null}</>
+              : <>Export Current Pose{animationName ? ` · ${animationName}` : ''}</>}
           </h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-foreground transition-colors">
+          <button type="button" onClick={onClose} disabled={ex.busy} aria-label="Close" className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -206,7 +236,7 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
               </label>
               {card && (
                 <div className="flex flex-col gap-2 pl-1">
-                  <ColorRow color={cardColor} onColor={setCardColor} defaultColor={poseCardColorFor(character)} defaultLabel={character?.special ? 'gold' : 'blue'} colorRef={cardColorRef} />
+                  <ColorRow color={cardColorShown} onColor={(c) => setCardColor(c.toLowerCase() === cardDefault ? null : c)} defaultColor={cardDefault} defaultLabel={batch ? 'each default' : (previewChar?.special ? 'gold' : 'blue')} colorRef={cardColorRef} />
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] text-muted-foreground">Character size</span>
                     <div className="flex items-center gap-0.5">
@@ -236,22 +266,75 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
             </div>
 
             <p className="text-[10px] text-muted-foreground/70 leading-relaxed mt-auto">
-              {card
-                ? 'The card is included in the exported SVG or PNG.'
-                : 'The exported SVG / PNG has a transparent background; the checkerboard is only shown here so the outline is visible.'}
+              {batch
+                ? (card
+                  ? 'Each character gets the card, in its default action. Left at its default, the card colour follows each character (gold when special).'
+                  : 'Transparent PNG per character, in its default action; the checkerboard is only shown here.')
+                : card
+                  ? 'The card is included in the exported SVG or PNG.'
+                  : 'The exported SVG / PNG has a transparent background; the checkerboard is only shown here so the outline is visible.'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-secondary/30 rounded-b-lg">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="outline" onClick={handleExportPNG} disabled={!preview} className={cn(!preview && 'opacity-50')}>
-            <Download className="h-3.5 w-3.5 mr-1.5" /> Export PNG
-          </Button>
-          <Button onClick={handleExport} disabled={!preview} className={cn(!preview && 'opacity-50')}>
-            <Download className="h-3.5 w-3.5 mr-1.5" /> Export SVG
-          </Button>
-        </div>
+        {batch ? (
+          <>
+            <div className="px-4 pb-3 grid grid-cols-2 gap-4 border-t border-border pt-3">
+              <FolderPicker options={folderOptions} value={folder} onChange={(k) => { setFolder(k); setPreviewId(null); }} disabled={ex.busy} />
+              <div className="flex flex-col gap-3 min-w-0">
+                <OutputFolderField value={ex.outDir} onChange={ex.setOutDir} disabled={ex.busy}>
+                  {count > 0 && (
+                    <span className="text-[10px] text-muted-foreground font-mono break-all">
+                      → {ex.outDir.trim() ? trimTrailingSlashes(ex.outDir.trim()) : '<folder>'}/{selected.chars[0].folder ? `${selected.chars[0].folder}/` : ''}{card ? 'card_buy_<character>' : '<character>_pose'}.png
+                      <span className="text-muted-foreground/60"> ×{count}</span>
+                    </span>
+                  )}
+                </OutputFolderField>
+                {selected && (
+                  <div className="flex flex-wrap gap-1">
+                    {selected.chars.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setPreviewId(c.id)}
+                        title="Preview this character"
+                        className={cn(
+                          'px-2 py-0.5 rounded-full border text-[11px] transition-colors',
+                          c.id === previewChar?.id ? 'border-primary bg-primary/15 text-foreground' : 'border-border bg-secondary text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        {characterLabel(c)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <ExportProgress progress={ex.progress} />
+                <ExportResult
+                  result={ex.result}
+                  renderOk={r => <>Wrote {r.written} PNG{r.written === 1 ? '' : 's'} for {r.characters} character{r.characters === 1 ? '' : 's'} under <span className="font-mono text-foreground break-all">{r.root}</span></>}
+                />
+              </div>
+            </div>
+            <ExportFooter
+              busy={ex.busy}
+              ok={!!ex.result?.ok}
+              canExport={ex.ready && count > 0}
+              onClose={onClose}
+              onRun={ex.run}
+              label={`Export ${count} PNG${count === 1 ? '' : 's'}`}
+            />
+          </>
+        ) : (
+          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-secondary/30 rounded-b-lg">
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" onClick={handleExportPNG} disabled={!preview} className={cn(!preview && 'opacity-50')}>
+              <Download className="h-3.5 w-3.5 mr-1.5" /> Export PNG
+            </Button>
+            <Button onClick={handleExport} disabled={!preview} className={cn(!preview && 'opacity-50')}>
+              <Download className="h-3.5 w-3.5 mr-1.5" /> Export SVG
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

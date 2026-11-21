@@ -133,6 +133,21 @@ export function resolveFaceAccessoryOffset(parts, animation) {
       ?? ZERO_OFFSET;
 }
 
+// Head's back accessory — a single PNG on the `head` bone (ponytail / hood /
+// back of a hat), drawn just BEHIND the head skin. Character-wide. Same chain:
+// parts.headBackAccessoryAnimOffsets[animation] → parts.headBackAccessoryOffset → zero
+export function resolveHeadBackAccessoryScale(parts) {
+  if (!parts) return 1;
+  return parts.headBackAccessoryScale ?? 1;
+}
+
+export function resolveHeadBackAccessoryOffset(parts, animation) {
+  if (!parts) return ZERO_OFFSET;
+  return parts.headBackAccessoryAnimOffsets?.[animation]
+      ?? parts.headBackAccessoryOffset
+      ?? ZERO_OFFSET;
+}
+
 // ── Weapon TYPE ───────────────────────────────────────────────────────────────
 // `parts.weapon` is either a built-in key ('sword', 'rifle', …, 'none') or a
 // legacy custom key ('cw_…') whose behaviour comes from its `template`. Every

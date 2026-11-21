@@ -92,7 +92,7 @@ async function loadRenderAssets(character) {
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
   const parts = character.parts ?? {};
-  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage] = await Promise.all([
+  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage, headBackAccessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
     Promise.all(headFrameUrls(parts).map(loadImage)),
     loadImage(parts.weaponImages?.[parts.weapon]),
@@ -102,13 +102,14 @@ async function loadRenderAssets(character) {
     loadImage(parts.leftArmAccessoryImage),
     loadImage(parts.headAccessoryImage),
     loadImage(parts.faceAccessoryImage),
+    loadImage(parts.headBackAccessoryImage),
   ]);
   // headImages = every head-skin frame in play order (see utils/headAnim.js).
   //   headImageAt(t)     — clock-based (`every` honoured): single-frame exports.
   //   headPlayImageAt(t) — one play from t = 0 then resting: sprite sheets.
   const headImageAt     = (t) => pickHeadImage(headImages, headFrameIndex(parts, t));
   const headPlayImageAt = (t) => pickHeadImage(headImages, headPlayFrameIndex(parts, t));
-  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage };
+  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage, headBackAccessoryImage };
 }
 
 /**
@@ -146,7 +147,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage } =
+  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage, headBackAccessoryImage } =
     assets ?? await loadRenderAssets(character);
   // `staticHead` pins the head to its first skin (the resting frame) — the still
   // "head" sheet. Otherwise the head-frame sequence plays ONCE from the top of
@@ -206,6 +207,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       leftArmAccessoryImage,
       headAccessoryImage,
       faceAccessoryImage,
+      headBackAccessoryImage,
       partsFilter,
       ...renderOpts,
     });
@@ -324,7 +326,7 @@ async function renderPoseBase(character, animationName, currentTime) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage } = await loadRenderAssets(character);
+  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage, headBackAccessoryImage } = await loadRenderAssets(character);
 
   const renderOpts = {
     scale: POSE_SCALE,
@@ -338,6 +340,7 @@ async function renderPoseBase(character, animationName, currentTime) {
     leftArmAccessoryImage,
     headAccessoryImage,
     faceAccessoryImage,
+    headBackAccessoryImage,
     ...resolveRenderOptions(character, animationName),
   };
   // Draws the pose with the ground point (local 0,0) at logical (originX, originY).
@@ -459,10 +462,10 @@ function applyOutline(base, color = '#ffffff', widthLogical = 6) {
   };
 }
 
-// Applies the chosen edits to a rendered base and returns the PNG + dims.
-// Synchronous (canvas ops only) so the dialog can re-compose on every edit
-// without re-rendering the character.
-export function composePose(base, options = {}) {
+// Applies the chosen edits to a rendered base and returns the canvas + its
+// logical dims. Synchronous (canvas ops only) so the dialog can re-compose on
+// every edit without re-rendering the character.
+function composePoseCanvas(base, options = {}) {
   if (!base) return null;
   let composed = base;
   if (options.outline?.enabled) {
@@ -479,14 +482,15 @@ export function composePose(base, options = {}) {
     }
   }
   if (options.card?.enabled) {
-    const card = buildPoseCard(composed, options.card);
-    return { pngDataUrl: card.toDataURL('image/png'), width: CARD_W, height: CARD_H };
+    return { canvas: buildPoseCard(composed, options.card), width: CARD_W, height: CARD_H };
   }
-  return {
-    pngDataUrl: composed.canvas.toDataURL('image/png'),
-    width:  composed.wLogical,
-    height: composed.hLogical,
-  };
+  return { canvas: composed.canvas, width: composed.wLogical, height: composed.hLogical };
+}
+
+// composePoseCanvas as a PNG data URL + dims (what the preview dialog shows).
+export function composePose(base, options = {}) {
+  const out = composePoseCanvas(base, options);
+  return out && { pngDataUrl: out.canvas.toDataURL('image/png'), width: out.width, height: out.height };
 }
 
 // ── Pose card background (Current Pose export) ──────────────────────────────
@@ -679,6 +683,42 @@ export function downloadPoseSVG(character, animationName, svgMarkup, { asCard = 
   const url  = URL.createObjectURL(blob);
   download(url, `${poseFileBase(character, animationName, asCard)}.svg`);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * "Multiple Static Images or Cards": the Static Image / Card export for many
+ * characters at once, written through the dev server (/api/export-sprites).
+ * Each character is posed in its default action at t = 0, composed with
+ * `optionsFor(character)` (same shape as composePose's options — a function
+ * so the card colour can follow each character's own default) and written as
+ *   <root>/<folder>/card_buy_<character>.png   (card on)
+ *   <root>/<folder>/<character>_pose.png       (card off)
+ * Same-named characters get numbered files. Resolves { written, characters, root }.
+ */
+export async function exportPoseImages(characters, { root, onProgress, optionsFor } = {}) {
+  const list = (characters ?? []).filter(Boolean);
+  if (!list.length) throw new Error('no characters to export');
+  if (!root) throw new Error('no output folder');
+  const taken = new Set();
+  let written = 0, pending = null;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    const opts = optionsFor?.(c) ?? {};
+    const name = sanitizeFileName(characterLabel(c));
+    const file = opts.card?.enabled ? `card_buy_${name}` : `${name}_pose`;
+    const stem = c.folder ? `${sanitizeFileName(c.folder)}/${file}` : file;
+    const unique = uniqueName(stem, taken);
+    taken.add(unique);
+    onProgress?.({ done: i, total: list.length, label: `${unique}.png` });
+    const base = await renderPoseBase(c, defaultAnimationFor(c), 0);
+    const out  = composePoseCanvas(base, opts);
+    if (pending) { await pending; written++; }
+    pending = out ? postSheet(root, `${unique}.png`, out.canvas) : null;
+  }
+  if (pending) { await pending; written++; }
+  onProgress?.({ done: list.length, total: list.length, label: 'done' });
+  const folder = list[0].folder ? `/${sanitizeFileName(list[0].folder)}` : '';
+  return { written, characters: list.length, root: `${trimTrailingSlashes(root)}${folder}` };
 }
 
 /**

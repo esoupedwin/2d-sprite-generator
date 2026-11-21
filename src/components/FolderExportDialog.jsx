@@ -9,7 +9,65 @@ import {
 } from './SheetExportParts.jsx';
 
 // Sentinel option key for characters that aren't in any folder.
-const ROOT_FOLDER = '\u0000root';
+export const ROOT_FOLDER = '\u0000root';
+
+/**
+ * One option per manager folder (+ "No folder" for the un-foldered, when there
+ * are any): [{ key, label, chars }]. Shared with the multi-character pose export.
+ */
+export function useFolderOptions(characters, folders) {
+  return useMemo(() => {
+    const byFolder = new Map(folders.map(name => [name, []]));
+    const root = [];
+    for (const c of characters) {
+      const f = folderOf(c, folders);
+      (f ? byFolder.get(f) : root).push(c);
+    }
+    return [
+      ...folders.map(name => ({ key: name, label: name, chars: byFolder.get(name) })),
+      ...(root.length ? [{ key: ROOT_FOLDER, label: 'No folder', chars: root }] : []),
+    ];
+  }, [characters, folders]);
+}
+
+/** The option key to preselect: the given folder (null = root) if it exists, else the first. */
+export function preferredFolderKey(options, defaultFolder) {
+  const preferred = defaultFolder == null ? ROOT_FOLDER : defaultFolder;
+  return options.some(o => o.key === preferred) ? preferred : (options[0]?.key ?? null);
+}
+
+/** Scrollable list of folder buttons with character counts. */
+export function FolderPicker({ options, value, onChange, disabled }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-foreground">Folder</span>
+      {options.length === 0 ? (
+        <span className="text-[11px] text-muted-foreground">No characters to export.</span>
+      ) : (
+        <div className="flex flex-col gap-1 max-h-[180px] overflow-y-auto pr-1">
+          {options.map(o => (
+            <button
+              key={o.key}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(o.key)}
+              className={cn(
+                'flex items-center gap-2 px-2.5 py-1.5 rounded border text-left transition-colors',
+                value === o.key ? 'border-primary bg-primary/15' : 'border-border/60 bg-secondary/40 hover:border-border',
+              )}
+            >
+              <Folder className={cn('h-3.5 w-3.5 shrink-0', o.key === ROOT_FOLDER ? 'text-muted-foreground' : 'text-amber-400/80')} />
+              <span className="flex-1 text-sm text-foreground truncate">{o.label}</span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground tabular-nums">
+                {o.chars.length} character{o.chars.length === 1 ? '' : 's'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * "Export Folder" — every character in one manager folder, each written as
@@ -24,24 +82,11 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
   const cards = variant === 'cards';
   const [folder, setFolder] = useState(null);
 
-  // One option per folder (+ "No folder" for the un-foldered), with sheet
-  // counts precomputed so renders don't re-derive every character's actions.
-  const options = useMemo(() => {
-    const byFolder = new Map(folders.map(name => [name, []]));
-    const root = [];
-    for (const c of characters) {
-      const f = folderOf(c, folders);
-      (f ? byFolder.get(f) : root).push(c);
-    }
-    const toOption = (key, label, chars) => ({
-      key, label, chars,
-      sheets: cards ? chars.length : chars.reduce((n, c) => n + countActionSheets(c), 0),
-    });
-    return [
-      ...folders.map(name => toOption(name, name, byFolder.get(name))),
-      ...(root.length ? [toOption(ROOT_FOLDER, 'No folder', root)] : []),
-    ];
-  }, [characters, folders, cards]);
+  // Sheet counts precomputed so renders don't re-derive every character's actions.
+  const folderOptions = useFolderOptions(characters, folders);
+  const options = useMemo(() => folderOptions.map(o => ({
+    ...o, sheets: cards ? o.chars.length : o.chars.reduce((n, c) => n + countActionSheets(c), 0),
+  })), [folderOptions, cards]);
 
   const selected = options.find(o => o.key === folder) ?? null;
   const ex = useSheetExport(open, (opts) => onExport({ ...opts, characters: selected.chars }), onClose);
@@ -49,8 +94,7 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
   // On open, default to the active character's folder, else the first option.
   useEffect(() => {
     if (!open) return;
-    const preferred = defaultFolder == null ? ROOT_FOLDER : defaultFolder;
-    setFolder(options.some(o => o.key === preferred) ? preferred : (options[0]?.key ?? null));
+    setFolder(preferredFolderKey(options, defaultFolder));
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open) return null;
@@ -66,33 +110,7 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
       onClose={onClose}
     >
       <div className="px-4 py-3 flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-foreground">Folder</span>
-          {options.length === 0 ? (
-            <span className="text-[11px] text-muted-foreground">No characters to export.</span>
-          ) : (
-            <div className="flex flex-col gap-1 max-h-[180px] overflow-y-auto pr-1">
-              {options.map(o => (
-                <button
-                  key={o.key}
-                  type="button"
-                  disabled={ex.busy}
-                  onClick={() => setFolder(o.key)}
-                  className={cn(
-                    'flex items-center gap-2 px-2.5 py-1.5 rounded border text-left transition-colors',
-                    folder === o.key ? 'border-primary bg-primary/15' : 'border-border/60 bg-secondary/40 hover:border-border',
-                  )}
-                >
-                  <Folder className={cn('h-3.5 w-3.5 shrink-0', o.key === ROOT_FOLDER ? 'text-muted-foreground' : 'text-amber-400/80')} />
-                  <span className="flex-1 text-sm text-foreground truncate">{o.label}</span>
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground tabular-nums">
-                    {o.chars.length} character{o.chars.length === 1 ? '' : 's'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <FolderPicker options={options} value={folder} onChange={setFolder} disabled={ex.busy} />
 
         {!cards && <FrameCountField value={ex.frameCount} onChange={ex.setFrameCount} disabled={ex.busy} />}
 

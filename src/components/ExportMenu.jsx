@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/utils.js';
 
-export function ExportMenu({ onSpriteSheet, onBatchExport, onFolderExport, onSpriteSheetPreview, onAnimationJSON, onPoseSVG, onPartsSheet, onCard, onFolderCards, open: openProp, onClose }) {
+export function ExportMenu({ onSpriteSheet, onBatchExport, onFolderExport, onSpriteSheetPreview, onAnimationJSON, onPoseSVG, onPartsSheet, onCard, onFolderCards, onFolderPoses, open: openProp, onClose }) {
   const [openInternal, setOpenInternal] = useState(false);
   const open = openProp !== undefined ? openProp : openInternal;
   const wrapRef = useRef(null);
@@ -56,6 +56,15 @@ export function ExportMenu({ onSpriteSheet, onBatchExport, onFolderExport, onSpr
           >
             <div>Static Image or Card</div>
             <div className="text-[10px] opacity-60 mt-0.5">SVG or PNG · current frame</div>
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={pick(onFolderPoses)}
+            className="w-full text-left px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-emerald-500 transition-colors"
+          >
+            <div>Multiple Static Images or Cards</div>
+            <div className="text-[10px] opacity-60 mt-0.5">Every character in a folder · PNG each</div>
           </button>
           <div className="border-t border-border" />
           <button

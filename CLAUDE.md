@@ -284,6 +284,13 @@ A second head-bone PNG (eye patch / glasses / mask), identical to the head acces
 - **Data**: `parts.faceAccessoryImage` / `faceAccessoryScale` / `faceAccessoryOffset` / `faceAccessoryAnimOffsets[animId]`, read via `resolveFaceAccessoryOffset/Scale`. `faceAccessoryAnimOffsets` is part of `animationStateOf()`; prefix `faceAccessory` in `setTorsoAccessoryOffset` / `resetTorsoAccessoryOffset`.
 - **Handles**: amber (`#F59E0B` / `#FCD34D`), drag types `face-accessory-pos` / `-rot`. Part of the `head` group in split exports.
 
+## Head's back accessory
+
+A third head-bone PNG (ponytail / hood / back of a hat), drawn **first** in the `head` layer — before the head skin — so it sits one layer below the head and follows it in the Layer Order. `drawHeadAccessory(..., kind)` in Renderer.js takes `'back' | 'face' | 'head'`.
+
+- **Data**: `parts.headBackAccessoryImage` / `headBackAccessoryScale` / `headBackAccessoryOffset` / `headBackAccessoryAnimOffsets[animId]`, read via `resolveHeadBackAccessoryOffset/Scale`; in `animationStateOf()`; prefix `headBackAccessory`.
+- **Handles**: teal (`#14B8A6` / `#5EEAD4`), drag types `head-back-accessory-pos` / `-rot`. Part of the `head` group in split exports.
+
 ## Animation layers (how overrides compose)
 
 Three additive layers sit on top of the base animation data:
@@ -414,6 +421,8 @@ Then: `resolveAnimation → getPoseAtTime → mergeOffsets → computeWorldTrans
 **All Actions → Folder** (`exportAllActionSheets` in `export.js`, `BatchExportDialog.jsx`): for every action in `listExportableActions(character)` (weapon set minus `hiddenAnimations`, plus the character's own custom animations) it builds one sheet per `SPLIT_SHEET_GROUPS`, top → bottom as they stack in-game — **right_arm** (`partsFilter {accessory}`: the hand / "Right Arm's Skin" accessory), **head** (`{head}` + `staticHead: true`: head prop + the FIRST head skin on every frame — no blink), **head_anim** (`{head}`: head prop + the head-frame sequence, as previewed), **body** (`{others}`: torso, arms, weapon), **legs** and **back** (`{back}`: the body back accessory, drawn behind everything) — and POSTs each PNG to the Vite endpoint `/api/export-sprites` (`vite.config.js`), which writes `<root>/<folder>/<character>/{right_arm,head,head_anim,body,legs,back}/<action>.png`. `head` and `head_anim` are alternatives for the game, not layers to stack; both are always written (identical for a character with no extra head frames) so every character folder has the same layout. The same groups drive the "Single Sprite Sheet" download (`exportSpriteSheet`, `split` defaults on → `<base>_right_arm/_head/_head_anim/_body/_legs/_back.png`). `buildSpriteSheet` takes `staticHead` for this (first head skin instead of `headImageAt(t)`). `renderCharacter`'s `partsFilter` gained `accessory` and `back` flags for this; when absent each follows `others`, so older callers are unchanged. The right_arm and back sheets are written even for characters without that accessory (transparent) so the folder layout is uniform for the game loader. `<folder>` = `character.folder` (omitted if none), `<character>` = `displayName || name`, `<action>` = the chip label — all via `sanitizeFileName`. Each sheet is POSTed as a raw `image/png` body with `X-Export-Root` / `X-Export-Path` headers (URI-encoded); uploads overlap with the next render. GET on the endpoint returns the default output folder (`~/Downloads`). Only works under `npm run dev` (needs the server); the "Single Sprite Sheet" item is the old per-action browser download.
 
 **Export Folder** (`exportCharactersSheets` in `export.js`, `FolderExportDialog.jsx`): same thing for every character in one manager folder (or the un-foldered ones via the "No folder" option), with one aggregated progress counter. Defaults to the active character's folder.
+
+**Multiple Static Images or Cards** (`exportPoseImages` in `export.js`; `PosePreviewDialog` with `batch`): the Static Image / Card dialog in folder mode — same outline / card / feet edits, a `FolderPicker` (shared with `FolderExportDialog` via `useFolderOptions`), clickable character chips to preview. Each character is posed in its default action at t = 0 and written as PNG (the dev-server endpoint is PNG-only) to `<root>/<folder>/card_buy_<character>.png` (card on) or `<character>_pose.png` (card off). Card colour `null` = each character's own default (gold when special).
 
 ## Canvas interaction (CharacterCanvas.jsx)
 

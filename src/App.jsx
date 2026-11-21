@@ -32,7 +32,7 @@ import { ANIMATIONS, resolveAnimation, getPoseAtTime, defaultAnimationFor, visib
 import { exportSpriteSheet, exportAllActionSheets, exportCharactersSheets, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG, exportCharacterCardPNG, exportCharacterCards } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale, resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale, resolveHeadAccessoryOffset, resolveHeadAccessoryScale, resolveFaceAccessoryOffset, resolveFaceAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale, resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale, resolveHeadAccessoryOffset, resolveHeadAccessoryScale, resolveFaceAccessoryOffset, resolveFaceAccessoryScale, resolveHeadBackAccessoryOffset, resolveHeadBackAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -44,6 +44,7 @@ import { NewAnimationDialog } from './components/NewAnimationDialog.jsx';
 import { DEFAULT_ANIM_TEMPLATES } from './data/defaultAnimTemplates.js';
 import { withOptional, mergeFolders, uniqueFolderName, normalizeCharacters } from './utils/characters.js';
 import { uniqueName } from './utils/names.js';
+import { PercentField } from './components/ui/percent-field.jsx';
 import { SaveTemplateDialog } from './components/SaveTemplateDialog.jsx';
 
 const CHARS_STORAGE     = '2dsprite:characters';
@@ -86,10 +87,10 @@ const EMPTY_OBJ = {};
 
 // Weapon scale clamps (matched by the −/+ buttons and the input).
 const MIN_WEAPON_SCALE = 0.1;
-const MAX_WEAPON_SCALE = 3.0;
+const MAX_WEAPON_SCALE = 4.0;
 const WEAPON_SCALE_STEP = 0.05;
 const MIN_ACCESSORY_SCALE = 0.1;
-const MAX_ACCESSORY_SCALE = 3.0;
+const MAX_ACCESSORY_SCALE = 4.0;
 const ACCESSORY_SCALE_STEP = 0.05;
 
 // When a one-shot animation finishes, where to land. Looping animations never
@@ -144,13 +145,14 @@ function animationStateOf(src) {
       leftArmAccessoryAnimOffsets:   p.leftArmAccessoryAnimOffsets   ?? {},
       headAccessoryAnimOffsets:      p.headAccessoryAnimOffsets      ?? {},
       faceAccessoryAnimOffsets:      p.faceAccessoryAnimOffsets      ?? {},
+      headBackAccessoryAnimOffsets:      p.headBackAccessoryAnimOffsets      ?? {},
     },
   });
 }
 
 // Character-wide accessories (`prefix` = 'bodyAccessory' | 'bodyFrontAccessory' |
-// 'leftArmAccessory' | 'headAccessory' | 'faceAccessory') — the two torso PNGs,
-// the left (support) hand PNG and the head + face PNGs.
+// 'leftArmAccessory' | 'headAccessory' | 'faceAccessory' | 'headBackAccessory')
+// — the two torso PNGs, the left (support) hand PNG and the three head PNGs.
 // In Edit Body (animation 'edit') a drag sets the character-wide position
 // `parts.<prefix>Offset`, which every animation without its own override uses.
 // In Edit Animation it sets a per-animation override `<prefix>AnimOffsets[anim]`.
@@ -182,7 +184,7 @@ function resetTorsoAccessoryOffset(c, prefix, animation) {
 // Anchor keys in `parts` that canvas handle drags write (weapon + every
 // accessory, base and per-animation). Canvas undo snapshots exactly these, so
 // undoing a drag never reverts an unrelated change such as an image upload.
-const CANVAS_ANCHOR_KEY = /^(weapon|accessory|bodyAccessory|bodyFrontAccessory|leftArmAccessory|headAccessory|faceAccessory)(Anim)?Offsets?$/;
+const CANVAS_ANCHOR_KEY = /^(weapon|accessory|bodyAccessory|bodyFrontAccessory|leftArmAccessory|headAccessory|faceAccessory|headBackAccessory)(Anim)?Offsets?$/;
 
 /**
  * Deep copy of a character under a fresh id — body, skins, images, weapon
@@ -220,6 +222,9 @@ function cloneCharacter(src) {
       ...(src.parts.faceAccessoryImage ? { faceAccessoryImage: src.parts.faceAccessoryImage } : {}),
       ...(src.parts.faceAccessoryScale != null ? { faceAccessoryScale: src.parts.faceAccessoryScale } : {}),
       faceAccessoryOffset: { ...(src.parts.faceAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
+      ...(src.parts.headBackAccessoryImage ? { headBackAccessoryImage: src.parts.headBackAccessoryImage } : {}),
+      ...(src.parts.headBackAccessoryScale != null ? { headBackAccessoryScale: src.parts.headBackAccessoryScale } : {}),
+      headBackAccessoryOffset: { ...(src.parts.headBackAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
       ...animParts,
     },
     boneOffsets:          { ...src.boneOffsets },
@@ -383,6 +388,7 @@ export default function App() {
   const [leftArmAccessoryUploadOpen, setLeftArmAccessoryUploadOpen] = useState(false);
   const [headAccessoryUploadOpen, setHeadAccessoryUploadOpen] = useState(false);
   const [faceAccessoryUploadOpen, setFaceAccessoryUploadOpen] = useState(false);
+  const [headBackAccessoryUploadOpen, setHeadBackAccessoryUploadOpen] = useState(false);
   const [customizeOpen,        setCustomizeOpen]        = useState(false);
 
   // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
@@ -394,6 +400,7 @@ export default function App() {
   const [batchExportOpen, setBatchExportOpen] = useState(false);
   const [folderExportOpen, setFolderExportOpen] = useState(false);
   const [folderCardsOpen, setFolderCardsOpen] = useState(false);
+  const [folderPosesOpen, setFolderPosesOpen] = useState(false);
 
   // ── Animation keyframe editing ───────────────────────────────────────────────
   // When set, the canvas pauses + seeks to this time. Drags on the named bone
@@ -929,6 +936,33 @@ export default function App() {
   const resetFaceAccessoryOffset = useCallback(() => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'faceAccessory', currentAnimation) : c));
+  }, [activeCharId, currentAnimation]);
+
+  // ── Head's back accessory (PNG on the head bone, behind the head skin) ──
+  const updateHeadBackAccessoryImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (dataUrl) parts.headBackAccessoryImage = dataUrl;
+      else         delete parts.headBackAccessoryImage;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  const setHeadBackAccessoryOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? setTorsoAccessoryOffset(c, 'headBackAccessory', currentAnimation, newOffset) : c));
+  }, [activeCharId, currentAnimation]);
+
+  const updateHeadBackAccessoryScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, parts: { ...c.parts, headBackAccessoryScale: newScale } } : c
+    ));
+  }, [activeCharId]);
+
+  const resetHeadBackAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'headBackAccessory', currentAnimation) : c));
   }, [activeCharId, currentAnimation]);
 
   const updateBoneOffsets = useCallback((newOffsets) => {
@@ -1530,6 +1564,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.faceAccessoryAnimOffsets, activeChar.parts.faceAccessoryOffset, currentAnimation],
   );
+  const headBackAccessoryOffset = useMemo(
+    () => resolveHeadBackAccessoryOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.headBackAccessoryAnimOffsets, activeChar.parts.headBackAccessoryOffset, currentAnimation],
+  );
   // Per-animation layer z-order override (null = default). `layerOrder` is the
   // resolved back → front order used by both the render and the editor panel.
   const renderOpts = useMemo(() => resolveRenderOptions(activeChar, currentAnimation), [activeChar, currentAnimation]);
@@ -1599,6 +1638,7 @@ export default function App() {
             onPoseSVG={() => setPoseExport({ character: activeChar, animationName: currentAnimation, currentTime: charCanvasRef.current?.getCurrentTime() ?? 0 })}
             onPartsSheet={() => exportPartsSheetSVG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
             onFolderCards={() => setFolderCardsOpen(true)}
+            onFolderPoses={() => setFolderPosesOpen(true)}
             onCard={() => exportCharacterCardPNG(activeChar, currentAnimation, charCanvasRef.current?.getCurrentTime() ?? 0)}
             open={headerTab === 'export'}
             onClose={() => setHeaderTab('')}
@@ -1835,6 +1875,8 @@ export default function App() {
                 onHeadAccessoryOffsetSet={setHeadAccessoryOffsetAbsolute}
                 faceAccessoryOffset={faceAccessoryOffset}
                 onFaceAccessoryOffsetSet={setFaceAccessoryOffsetAbsolute}
+                headBackAccessoryOffset={headBackAccessoryOffset}
+                onHeadBackAccessoryOffsetSet={setHeadBackAccessoryOffsetAbsolute}
                 onSelectBone={editAnimPose && !poseEditorOpen ? selectBone : undefined}
                 canvasBg={settings.canvasBg}
                 gridSpacing={settings.gridSpacing}
@@ -1903,9 +1945,7 @@ export default function App() {
                           disabled={curScale <= MIN_WEAPON_SCALE}
                           className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                         >−</button>
-                        <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                          {Math.round(curScale * 100)}%
-                        </span>
+                        <PercentField value={curScale} min={MIN_WEAPON_SCALE} max={MAX_WEAPON_SCALE} onChange={updateWeaponScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
                         <button
                           onClick={() => updateWeaponScale(Math.min(MAX_WEAPON_SCALE, +((curScale + WEAPON_SCALE_STEP).toFixed(2))))}
                           disabled={curScale >= MAX_WEAPON_SCALE}
@@ -1966,9 +2006,7 @@ export default function App() {
                             disabled={curScale <= MIN_ACCESSORY_SCALE}
                             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                           >−</button>
-                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                            {Math.round(curScale * 100)}%
-                          </span>
+                          <PercentField value={curScale} min={MIN_ACCESSORY_SCALE} max={MAX_ACCESSORY_SCALE} onChange={updateAccessoryScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
                           <button
                             onClick={() => updateAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
                             disabled={curScale >= MAX_ACCESSORY_SCALE}
@@ -2029,9 +2067,7 @@ export default function App() {
                             disabled={curScale <= MIN_ACCESSORY_SCALE}
                             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                           >−</button>
-                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                            {Math.round(curScale * 100)}%
-                          </span>
+                          <PercentField value={curScale} min={MIN_ACCESSORY_SCALE} max={MAX_ACCESSORY_SCALE} onChange={updateLeftArmAccessoryScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
                           <button
                             onClick={() => updateLeftArmAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
                             disabled={curScale >= MAX_ACCESSORY_SCALE}
@@ -2093,9 +2129,7 @@ export default function App() {
                             disabled={curScale <= MIN_ACCESSORY_SCALE}
                             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                           >−</button>
-                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                            {Math.round(curScale * 100)}%
-                          </span>
+                          <PercentField value={curScale} min={MIN_ACCESSORY_SCALE} max={MAX_ACCESSORY_SCALE} onChange={updateBodyAccessoryScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
                           <button
                             onClick={() => updateBodyAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
                             disabled={curScale >= MAX_ACCESSORY_SCALE}
@@ -2157,9 +2191,7 @@ export default function App() {
                             disabled={curScale <= MIN_ACCESSORY_SCALE}
                             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                           >−</button>
-                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                            {Math.round(curScale * 100)}%
-                          </span>
+                          <PercentField value={curScale} min={MIN_ACCESSORY_SCALE} max={MAX_ACCESSORY_SCALE} onChange={updateBodyFrontAccessoryScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
                           <button
                             onClick={() => updateBodyFrontAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
                             disabled={curScale >= MAX_ACCESSORY_SCALE}
@@ -2221,9 +2253,7 @@ export default function App() {
                             disabled={curScale <= MIN_ACCESSORY_SCALE}
                             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                           >−</button>
-                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                            {Math.round(curScale * 100)}%
-                          </span>
+                          <PercentField value={curScale} min={MIN_ACCESSORY_SCALE} max={MAX_ACCESSORY_SCALE} onChange={updateHeadAccessoryScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
                           <button
                             onClick={() => updateHeadAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
                             disabled={curScale >= MAX_ACCESSORY_SCALE}
@@ -2284,9 +2314,7 @@ export default function App() {
                             disabled={curScale <= MIN_ACCESSORY_SCALE}
                             className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
                           >−</button>
-                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
-                            {Math.round(curScale * 100)}%
-                          </span>
+                          <PercentField value={curScale} min={MIN_ACCESSORY_SCALE} max={MAX_ACCESSORY_SCALE} onChange={updateFaceAccessoryScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
                           <button
                             onClick={() => updateFaceAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
                             disabled={curScale >= MAX_ACCESSORY_SCALE}
@@ -2305,6 +2333,67 @@ export default function App() {
                             title={editBody ? 'Reset the face gear position used by every animation' : "Reset this animation's face gear position"}
                           >
                             {editBody ? 'Reset face gear position (all animations)' : 'Reset face gear position (this animation)'}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
+                {/* ── Head's back accessory (one layer below the head) ────── */}
+                {(() => {
+                  const img = activeChar.parts.headBackAccessoryImage;
+                  const curScale = resolveHeadBackAccessoryScale(activeChar.parts);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setHeadBackAccessoryUploadOpen(true)}
+                          title={img ? "Replace head's back accessory PNG" : "Upload a PNG for the head's back accessory"}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {img ? "Edit Head's Back Accessory" : "Upload Head's Back Accessory"}
+                        </Button>
+                        {img && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateHeadBackAccessoryImage(null)}
+                            title="Remove head's back accessory image"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {img && (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Head back scale</span>
+                          <button
+                            onClick={() => updateHeadBackAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale <= MIN_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <PercentField value={curScale} min={MIN_ACCESSORY_SCALE} max={MAX_ACCESSORY_SCALE} onChange={updateHeadBackAccessoryScale} className={Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary'} />
+                          <button
+                            onClick={() => updateHeadBackAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale >= MAX_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      )}
+                      {img && (editAnimPose || currentAnimation === 'edit') && (() => {
+                        const lo = resolveHeadBackAccessoryOffset(activeChar.parts, currentAnimation);
+                        const isDirty = lo.x !== 0 || lo.y !== 0 || lo.rotation !== 0;
+                        const editBody = currentAnimation === 'edit';
+                        return isDirty ? (
+                          <button
+                            onClick={resetHeadBackAccessoryOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title={editBody ? "Reset the head's back accessory position used by every animation" : "Reset this animation's head's back accessory position"}
+                          >
+                            {editBody ? "Reset head's back accessory position (all animations)" : "Reset head's back accessory position (this animation)"}
                           </button>
                         ) : null;
                       })()}
@@ -2461,6 +2550,16 @@ export default function App() {
         moveHint="Face gear moves and rotates with the head, draws on top of the face but under the head gear, and persists across weapon changes."
       />
 
+      <AccessoryUploadDialog
+        open={headBackAccessoryUploadOpen}
+        currentImage={activeChar.parts.headBackAccessoryImage}
+        onPick={updateHeadBackAccessoryImage}
+        onClose={() => setHeadBackAccessoryUploadOpen(false)}
+        title="Upload Head's Back Accessory PNG"
+        anchorText="attached behind the head (e.g. a ponytail or hood)"
+        moveHint="The head's back accessory moves and rotates with the head, draws one layer below the head, and persists across weapon changes."
+      />
+
       <SettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -2474,6 +2573,15 @@ export default function App() {
         animationName={poseExport?.animationName}
         currentTime={poseExport?.currentTime ?? 0}
         onClose={() => setPoseExport(null)}
+      />
+
+      <PosePreviewDialog
+        batch
+        open={folderPosesOpen}
+        characters={characters}
+        folders={folderList}
+        defaultFolder={activeChar.folder ?? null}
+        onClose={() => setFolderPosesOpen(false)}
       />
 
       <AccessoryUploadDialog
