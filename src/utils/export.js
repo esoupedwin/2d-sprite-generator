@@ -231,25 +231,27 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
 //   right_arm — the hand ("Right Arm's Skin") accessory, drawn above everything
 //   head      — head prop + the FIRST head skin on every frame (no blink)
 //   head_anim — head prop + the head-frame sequence (blink etc.), as previewed
-//   body      — torso, arms, weapon, body (back) accessory
+//   body      — torso, arms, weapon
 //   legs
+//   back      — the body's back accessory (cape / wings), behind everything
 // `head` and `head_anim` are alternatives for the game to choose between, not
 // layers to stack. Shared by the single-sheet download and the folder exports
 // so they can't drift apart.
-const HEAD_ONLY = { accessory: false, head: true, others: false, legs: false };
+const HEAD_ONLY = { accessory: false, back: false, head: true, others: false, legs: false };
 export const SPLIT_SHEET_GROUPS = [
-  { name: 'right_arm', partsFilter: { accessory: true,  head: false, others: false, legs: false } },
+  { name: 'right_arm', partsFilter: { accessory: true,  back: false, head: false, others: false, legs: false } },
   { name: 'head',      partsFilter: HEAD_ONLY, staticHead: true },
   { name: 'head_anim', partsFilter: HEAD_ONLY },
-  { name: 'body',      partsFilter: { accessory: false, head: false, others: true,  legs: false } },
-  { name: 'legs',      partsFilter: { accessory: false, head: false, others: false, legs: true  } },
+  { name: 'body',      partsFilter: { accessory: false, back: false, head: false, others: true,  legs: false } },
+  { name: 'legs',      partsFilter: { accessory: false, back: false, head: false, others: false, legs: true  } },
+  { name: 'back',      partsFilter: { accessory: false, back: true,  head: false, others: false, legs: false } },
 ];
 export const SHEETS_PER_ACTION = SPLIT_SHEET_GROUPS.length;
 
 /**
  * Browser download of one action: a single PNG of the whole character, or
  * (`split`, the default) one PNG per SPLIT_SHEET_GROUPS — `<base>_right_arm.png`,
- * `<base>_head.png` (still), `<base>_head_anim.png`, `<base>_body.png`, `<base>_legs.png`.
+ * `<base>_head.png` (still), `<base>_head_anim.png`, `<base>_body.png`, `<base>_legs.png`, `<base>_back.png`.
  */
 export async function exportSpriteSheet(character, animationName, opts = {}) {
   const { split = true, ...sheetOpts } = opts;
@@ -1016,7 +1018,7 @@ function download(href, filename) {
 // ─── "All Actions → Folder" export ───────────────────────────────────────────
 // Writes, through the dev server (/api/export-sprites), one sheet per
 // SPLIT_SHEET_GROUPS for every visible action:
-//   <root>/<character folder>/<character>/{right_arm,head,head_anim,body,legs}/<action>.png
+//   <root>/<character folder>/<character>/{right_arm,head,head_anim,body,legs,back}/<action>.png
 // All at identical frame coords in-game (head and head_anim are alternatives).
 
 /**

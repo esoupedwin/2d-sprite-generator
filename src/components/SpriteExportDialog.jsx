@@ -139,9 +139,9 @@ export function SpriteExportDialog({ open, onClose, onExport, animationName }) {
             <SplitToggle
               checked={split}
               onToggle={() => setSplit(s => !s)}
-              label="Split into right arm, head, head-anim, body and legs PNGs"
+              label="Split into right arm, head, head-anim, body, legs and back PNGs"
               desc={split
-                ? 'Right arm skin (hand accessory), head (first skin only, no blink), head_anim (with the head-frame sequence), body (torso, arms, weapon, back accessory) and legs on separate sheets at identical frame coords — overlay in-game; use head OR head_anim.'
+                ? 'Right arm skin (hand accessory), head (first skin only, no blink), head_anim (with the head-frame sequence), body (torso, arms, weapon), legs and back (body back accessory) on separate sheets at identical frame coords — overlay in-game; use head OR head_anim.'
                 : 'One PNG with the whole character.'}
             />
             <span className="text-[10px] text-muted-foreground/70 leading-snug">

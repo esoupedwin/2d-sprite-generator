@@ -13,8 +13,8 @@ const ROOT_FOLDER = '\u0000root';
 
 /**
  * "Export Folder" — every character in one manager folder, each written as
- * right-arm + head + head_anim + body + legs sheets per action (same layout as the single-character export):
- *   <output folder>/<folder>/<character>/{right_arm,head,head_anim,body,legs}/<action>.png
+ * right-arm + head + head_anim + body + legs + back sheets per action (same layout as the single-character export):
+ *   <output folder>/<folder>/<character>/{right_arm,head,head_anim,body,legs,back}/<action>.png
  *
  * `variant="cards"` runs the same folder picker but writes one character-card
  * PNG per character instead (no frames field):
@@ -61,7 +61,7 @@ export function FolderExportDialog({ open, onClose, characters, folders, default
       title={cards ? 'Export Folder Cards' : 'Export Folder'}
       subtitle={cards
         ? 'Every character in the folder · one framed card PNG each'
-        : 'Every character in the folder · right arm + head + head_anim + body + legs sheets per action'}
+        : 'Every character in the folder · right arm + head + head_anim + body + legs + back sheets per action'}
       busy={ex.busy}
       onClose={onClose}
     >

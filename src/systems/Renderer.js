@@ -253,11 +253,13 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     // set check when omitted.
     isMelee: isMeleeOpt = null,
     // partsFilter: null/undefined draws everything. Otherwise an object of
-    // group flags { legs, head, others, accessory? } — set a group to false to
-    // omit it; `accessory` (the hand accessory) defaults to `others`.
+    // group flags { legs, head, others, accessory?, back? } — set a group to false
+    // to omit it; `accessory` (the hand accessory) and `back` (the body back
+    // accessory) each default to `others`.
     // Used by split-export to render legs / head / body onto separate sprite
     // sheets at identical frame coords so they overlay exactly downstream.
-    //   others = back arm (+ left arm accessory), body back/front accessories, body, weapon, front arm, hand accessory
+    //   others = back arm (+ left arm accessory), body front accessory, body, weapon, front arm
+    //   (+ hand accessory and body back accessory unless split out via `accessory` / `back`)
     //   head   = head skin (+ extras), the head prop and the head accessory
     //   legs   = the two legs
     partsFilter = null,
@@ -276,6 +278,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
   // Hand ("right arm") accessory: its own group when the filter names it,
   // otherwise it rides with `others` as it always did.
   const includeAccessory = pf.accessory !== undefined ? !!pf.accessory : includeOthers;
+  // Body back accessory (cape / wings): likewise its own group when named.
+  const includeBack = pf.back !== undefined ? !!pf.back : includeOthers;
 
   ctx.save();
   ctx.translate(originX, originY);
@@ -328,7 +332,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
 
   // Body accessory (cape / wings / backpack) is the back-most layer — behind
   // legs, arms, body and weapon regardless of the layer order.
-  if (includeOthers) drawBodyAccessory(ctx, character, wt, bodyAccessoryImage, animation);
+  if (includeBack) drawBodyAccessory(ctx, character, wt, bodyAccessoryImage, animation);
 
   const order = resolveLayerOrder(partZOrder, armBehindLegs ? DEFAULT_ORDER_UNARMED : DEFAULT_ORDER_ARMED);
   for (const key of order) {
