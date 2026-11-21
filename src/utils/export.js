@@ -92,7 +92,7 @@ async function loadRenderAssets(character) {
   const skins = {};
   for (const key of Object.keys(DEFAULT_SKINS)) skins[key] = getSkin(key, skinOverrides);
   const parts = character.parts ?? {};
-  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage] = await Promise.all([
+  const [bodyImage, headImages, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage] = await Promise.all([
     loadImage(parts.bodyImage),
     Promise.all(headFrameUrls(parts).map(loadImage)),
     loadImage(parts.weaponImages?.[parts.weapon]),
@@ -101,13 +101,14 @@ async function loadRenderAssets(character) {
     loadImage(parts.bodyFrontAccessoryImage),
     loadImage(parts.leftArmAccessoryImage),
     loadImage(parts.headAccessoryImage),
+    loadImage(parts.faceAccessoryImage),
   ]);
   // headImages = every head-skin frame in play order (see utils/headAnim.js).
   //   headImageAt(t)     — clock-based (`every` honoured): single-frame exports.
   //   headPlayImageAt(t) — one play from t = 0 then resting: sprite sheets.
   const headImageAt     = (t) => pickHeadImage(headImages, headFrameIndex(parts, t));
   const headPlayImageAt = (t) => pickHeadImage(headImages, headPlayFrameIndex(parts, t));
-  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage };
+  return { skins, parts, bodyImage, headImages, headImageAt, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage };
 }
 
 /**
@@ -145,7 +146,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
   const resolved = resolveAnimWithOffsets(character, animationName);
   if (!resolved) return null;
   const { anim, persistentOffsets } = resolved;
-  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage } =
+  const { skins, parts, bodyImage, headImages, headPlayImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage } =
     assets ?? await loadRenderAssets(character);
   // `staticHead` pins the head to its first skin (the resting frame) — the still
   // "head" sheet. Otherwise the head-frame sequence plays ONCE from the top of
@@ -204,6 +205,7 @@ export async function buildSpriteSheet(character, animationName, { frameCount = 
       bodyFrontAccessoryImage,
       leftArmAccessoryImage,
       headAccessoryImage,
+      faceAccessoryImage,
       partsFilter,
       ...renderOpts,
     });
@@ -320,7 +322,7 @@ async function renderPoseBase(character, animationName, currentTime) {
   const t = currentTime % anim.duration;
   const worldTransforms = computeWorldTransforms(mergeOffsets(getPoseAtTime(anim, t), persistentOffsets));
 
-  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage } = await loadRenderAssets(character);
+  const { skins, parts, bodyImage, headImageAt, weaponImage, accessoryImage, bodyAccessoryImage, bodyFrontAccessoryImage, leftArmAccessoryImage, headAccessoryImage, faceAccessoryImage } = await loadRenderAssets(character);
 
   const renderOpts = {
     scale: POSE_SCALE,
@@ -333,6 +335,7 @@ async function renderPoseBase(character, animationName, currentTime) {
     bodyFrontAccessoryImage,
     leftArmAccessoryImage,
     headAccessoryImage,
+    faceAccessoryImage,
     ...resolveRenderOptions(character, animationName),
   };
   // Draws the pose with the ground point (local 0,0) at logical (originX, originY).
@@ -355,7 +358,7 @@ async function renderPoseBase(character, animationName, currentTime) {
     // Nothing drawn: return a small transparent canvas anchored at its centre.
     const s = 2 * CONTENT_MARGIN;
     const empty = drawAt(s, s, POSE_PIXEL_RATIO, s / 2, s / 2);
-    return { canvas: empty.canvas, ratio: POSE_PIXEL_RATIO, wLogical: s, hLogical: s, originX: s / 2 * POSE_PIXEL_RATIO, originY: s / 2 * POSE_PIXEL_RATIO };
+    return { canvas: empty.canvas, ratio: POSE_PIXEL_RATIO, wLogical: s, hLogical: s, originX: s / 2 * POSE_PIXEL_RATIO, originY: s / 2 * POSE_PIXEL_RATIO, feetY: s / 2 * POSE_PIXEL_RATIO };
   }
 
   // Probe bounds → logical extent relative to the ground point. One probe pixel
@@ -379,7 +382,7 @@ async function renderPoseBase(character, animationName, currentTime) {
   const originDevY = originY * POSE_PIXEL_RATIO;
 
   const b = contentBoundsDevice(ctx, big.width, big.height);
-  if (!b) return { canvas: big, ratio: POSE_PIXEL_RATIO, wLogical: w, hLogical: h, originX: originDevX, originY: originDevY };
+  if (!b) return { canvas: big, ratio: POSE_PIXEL_RATIO, wLogical: w, hLogical: h, originX: originDevX, originY: originDevY, feetY: originDevY };
 
   const m  = CONTENT_MARGIN * POSE_PIXEL_RATIO;
   const x0 = Math.max(0, b.minX - m);
@@ -394,6 +397,9 @@ async function renderPoseBase(character, animationName, currentTime) {
   return {
     canvas: cropped, ratio: POSE_PIXEL_RATIO, wLogical: cw / POSE_PIXEL_RATIO, hLogical: ch / POSE_PIXEL_RATIO,
     originX: originDevX - x0, originY: originDevY - y0,
+    // feetY: the bottom edge of the character's lowest pixel (its feet in any
+    // standing pose), device px — the pose card's "feet position" anchors on it.
+    feetY: b.maxY + 1 - y0,
   };
 }
 
@@ -447,6 +453,7 @@ function applyOutline(base, color = '#ffffff', widthLogical = 6) {
   return {
     canvas: out, ratio, wLogical: wLogical + pad * 2, hLogical: hLogical + pad * 2,
     originX: base.originX + padDev, originY: base.originY + padDev,
+    feetY: base.feetY + padDev,
   };
 }
 
@@ -483,7 +490,8 @@ export function composePose(base, options = {}) {
 // ── Pose card background (Current Pose export) ──────────────────────────────
 // A trading-card backdrop: white border, dark frame, a sunburst of three tones
 // of one colour fanning from the centre, and four light shards pointing out.
-// The (already outlined) pose is drawn at a fixed scale, centred. Built at
+// The (already outlined) pose is drawn at a fixed scale, centred horizontally,
+// with its feet at `feetY` (a fraction down the inner area). Built at
 // POSE_CARD_RES × the card's logical size (CARD_W × CARD_H) for a crisp SVG.
 export const POSE_CARD_DEFAULT_COLOR = '#1e8ff0';
 // Special characters get a gold card. At exactly this colour the hand-picked
@@ -554,7 +562,9 @@ function drawShard(ctx, x, y, cx, cy, len, base) {
   ctx.fill();
 }
 
-function buildPoseCard(pose, { color = POSE_CARD_DEFAULT_COLOR, size = 1 } = {}) {
+export const POSE_CARD_FEET_Y = 0.85;
+
+function buildPoseCard(pose, { color = POSE_CARD_DEFAULT_COLOR, size = 1, feetY = POSE_CARD_FEET_Y } = {}) {
   const gold = color.toLowerCase() === POSE_CARD_SPECIAL_COLOR;
   const S = POSE_CARD_RES;
   const card = document.createElement('canvas');
@@ -589,11 +599,13 @@ function buildPoseCard(pose, { color = POSE_CARD_DEFAULT_COLOR, size = 1 } = {})
   drawShard(ctx, ix + iw * 0.10, iy + ih * 0.76, cx, cy, L, B);
   drawShard(ctx, ix + iw * 0.86, iy + ih * 0.76, cx, cy, L, B);
 
-  // Same scale for every character (POSE_CARD_UNIT), centred on its bounding
-  // box; anything past the frame is clipped.
+  // Same scale for every character (POSE_CARD_UNIT), centred horizontally on
+  // its bounding box, its feet (lowest character pixel, outlines excluded) at
+  // feetY down the inner area; anything past the frame is clipped.
   const pw = pose.canvas.width, ph = pose.canvas.height;
   const k = (POSE_CARD_UNIT * size) / (POSE_SCALE * pose.ratio); // card px per pose device px
-  ctx.drawImage(pose.canvas, cx - pw * k / 2, cy - ph * k / 2, pw * k, ph * k);
+  const feet = pose.feetY ?? ph;
+  ctx.drawImage(pose.canvas, cx - pw * k / 2, iy + ih * feetY - feet * k, pw * k, ph * k);
   ctx.restore();
   return card;
 }
@@ -628,7 +640,8 @@ export async function buildCharacterThumbnail(character, px = 96) {
  * options.outline = { enabled, color, width } adds a coloured outline;
  * options.outerOutline (same shape) adds a second band around it, and
  * options.thirdOutline a third band around that;
- * options.card = { enabled, color, size } places it on a card background.
+ * options.card = { enabled, color, size, feetY } places it on a card background
+ * (feetY: where the feet sit, as a fraction down the card's inner area).
  */
 export async function buildPosePreview(character, animationName, currentTime = 0, options = {}) {
   const base = await renderPoseBase(character, animationName, currentTime);

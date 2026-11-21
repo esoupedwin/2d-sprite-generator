@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { cn } from '@/lib/utils';
-import { renderPosePreviewBase, composePose, poseSVGMarkup, downloadPoseSVG, downloadPosePNG, poseCardColorFor } from '../utils/export.js';
+import { renderPosePreviewBase, composePose, poseSVGMarkup, downloadPoseSVG, downloadPosePNG, poseCardColorFor, POSE_CARD_FEET_Y } from '../utils/export.js';
 
 const OUTLINE_MIN = 1, OUTLINE_MAX = 24, OUTLINE_STEP = 1;
 const CARD_SIZE_MIN = 0.5, CARD_SIZE_MAX = 2, CARD_SIZE_STEP = 0.05;
+const FEET_MIN = 0.2, FEET_MAX = 1, FEET_STEP = 0.01;
 
 // What the dialog opens with every time: a black outline, a white band and a
 // thin black rim around it, on the blue card. Colour links reset to these.
@@ -13,7 +14,7 @@ const DEFAULTS = {
   outline: true,  outlineColor: '#000000', outlineWidth: 10,
   outer:   true,  outerColor:   '#ffffff', outerWidth:   11,
   third:   true,  thirdColor:   '#000000', thirdWidth:   2,
-  card:    true,  cardSize: 1.45, // colour: poseCardColorFor(character) — gold when special
+  card:    true,  cardSize: 1.45, feetY: POSE_CARD_FEET_Y, // colour: poseCardColorFor(character) — gold when special
 };
 const COLOR_NAMES = { '#000000': 'black', '#ffffff': 'white' };
 
@@ -35,6 +36,7 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
   const [card, setCard] = useState(DEFAULTS.card);
   const [cardColor, setCardColor] = useState(() => poseCardColorFor(character));
   const [cardSize, setCardSize] = useState(DEFAULTS.cardSize);
+  const [feetY, setFeetY] = useState(DEFAULTS.feetY);
   const [preview, setPreview] = useState(null); // { pngDataUrl, width, height }
   const [rendering, setRendering] = useState(false);
   const colorRef = useRef(null);
@@ -49,7 +51,7 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
       setOutline(DEFAULTS.outline); setOutlineColor(DEFAULTS.outlineColor); setOutlineWidth(DEFAULTS.outlineWidth);
       setOuter(DEFAULTS.outer); setOuterColor(DEFAULTS.outerColor); setOuterWidth(DEFAULTS.outerWidth);
       setThird(DEFAULTS.third); setThirdColor(DEFAULTS.thirdColor); setThirdWidth(DEFAULTS.thirdWidth);
-      setCard(DEFAULTS.card); setCardColor(poseCardColorFor(character)); setCardSize(DEFAULTS.cardSize);
+      setCard(DEFAULTS.card); setCardColor(poseCardColorFor(character)); setCardSize(DEFAULTS.cardSize); setFeetY(DEFAULTS.feetY);
     }
   }, [open]);
 
@@ -64,7 +66,7 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
     outline:      { enabled: outline, color: outlineColor, width: outlineWidth },
     outerOutline: { enabled: outer,   color: outerColor,   width: outerWidth },
     thirdOutline: { enabled: third,   color: thirdColor,   width: thirdWidth },
-    card:         { enabled: card,    color: cardColor,    size: cardSize },
+    card:         { enabled: card,    color: cardColor,    size: cardSize, feetY },
   });
   // The latest settings, for the async first render below: its closure is from
   // the render that started it, which can predate the reset-on-open above (so
@@ -92,7 +94,7 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
     if (!open || !baseRef.current) return;
     setPreview(composePose(baseRef.current, opts()));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outline, outlineColor, outlineWidth, outer, outerColor, outerWidth, third, thirdColor, thirdWidth, card, cardColor, cardSize]);
+  }, [outline, outlineColor, outlineWidth, outer, outerColor, outerWidth, third, thirdColor, thirdWidth, card, cardColor, cardSize, feetY]);
 
   if (!open) return null;
 
@@ -212,6 +214,22 @@ export function PosePreviewDialog({ open, onClose, character, animationName, cur
                       <span className="text-[11px] min-w-[34px] text-center font-mono text-primary">{Math.round(cardSize * 100)}%</span>
                       <button onClick={() => setCardSize(v => Math.min(CARD_SIZE_MAX, +(v + CARD_SIZE_STEP).toFixed(2)))} disabled={cardSize >= CARD_SIZE_MAX} className={STEP_BTN}>+</button>
                     </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-muted-foreground" title="How far down the card the character's feet sit (0% = top, 100% = bottom). Always centred horizontally.">Feet position</span>
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => setFeetY(v => Math.max(FEET_MIN, +(v - FEET_STEP).toFixed(2)))} disabled={feetY <= FEET_MIN} className={STEP_BTN}>−</button>
+                        <span className="text-[11px] min-w-[34px] text-center font-mono text-primary">{Math.round(feetY * 100)}%</span>
+                        <button onClick={() => setFeetY(v => Math.min(FEET_MAX, +(v + FEET_STEP).toFixed(2)))} disabled={feetY >= FEET_MAX} className={STEP_BTN}>+</button>
+                      </div>
+                    </div>
+                    <input
+                      type="range" min={FEET_MIN} max={FEET_MAX} step={FEET_STEP} value={feetY}
+                      onChange={(e) => setFeetY(+e.target.value)}
+                      className="w-full accent-primary"
+                      aria-label="Feet position"
+                    />
                   </div>
                 </div>
               )}
