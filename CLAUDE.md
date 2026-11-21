@@ -277,6 +277,13 @@ A user-uploaded PNG anchored to the `head` bone (hat / helmet / ears / halo). Ch
 - **Handles**: indigo (`#6366F1` / `#A5B4FC`), drag types `head-accessory-pos` / `-rot`, in the shared character-wide accessory handle loop in `CharacterCanvas.jsx` (anchor `bone: 'head'`). `setTorsoAccessoryOffset` / `resetTorsoAccessoryOffset` with prefix `headAccessory`: Edit Body sets the character-wide offset, Edit Animation a per-animation override.
 - Drawn centred on its anchor; longest side scales to 80 units (`ACCESSORY_IMAGE_TARGET`) before the scale multiplier.
 
+## Face accessory ("Face Gear")
+
+A second head-bone PNG (eye patch / glasses / mask), identical to the head accessory but drawn **just before** it inside the `head` layer, so Face Gear sits under Head Gear.
+
+- **Data**: `parts.faceAccessoryImage` / `faceAccessoryScale` / `faceAccessoryOffset` / `faceAccessoryAnimOffsets[animId]`, read via `resolveFaceAccessoryOffset/Scale`. `faceAccessoryAnimOffsets` is part of `animationStateOf()`; prefix `faceAccessory` in `setTorsoAccessoryOffset` / `resetTorsoAccessoryOffset`.
+- **Handles**: amber (`#F59E0B` / `#FCD34D`), drag types `face-accessory-pos` / `-rot`. Part of the `head` group in split exports.
+
 ## Animation layers (how overrides compose)
 
 Three additive layers sit on top of the base animation data:

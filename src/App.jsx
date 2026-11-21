@@ -32,7 +32,7 @@ import { ANIMATIONS, resolveAnimation, getPoseAtTime, defaultAnimationFor, visib
 import { exportSpriteSheet, exportAllActionSheets, exportCharactersSheets, exportAnimationJSON, exportPoseSVG, exportPartsSheetSVG, exportCharacterCardPNG, exportCharacterCards } from './utils/export.js';
 import { framesToAnimation } from './utils/poseToAnimation.js';
 import { mergeOffsets } from './utils/transforms.js';
-import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale, resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale, resolveHeadAccessoryOffset, resolveHeadAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
+import { resolveWeaponOffset, resolveAccessoryOffset, resolveAccessoryScale, resolveBodyAccessoryOffset, resolveBodyAccessoryScale, resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale, resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale, resolveHeadAccessoryOffset, resolveHeadAccessoryScale, resolveFaceAccessoryOffset, resolveFaceAccessoryScale, hasWeapon } from './utils/weaponSettings.js';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -143,13 +143,14 @@ function animationStateOf(src) {
       bodyFrontAccessoryAnimOffsets: p.bodyFrontAccessoryAnimOffsets ?? {},
       leftArmAccessoryAnimOffsets:   p.leftArmAccessoryAnimOffsets   ?? {},
       headAccessoryAnimOffsets:      p.headAccessoryAnimOffsets      ?? {},
+      faceAccessoryAnimOffsets:      p.faceAccessoryAnimOffsets      ?? {},
     },
   });
 }
 
 // Character-wide accessories (`prefix` = 'bodyAccessory' | 'bodyFrontAccessory' |
-// 'leftArmAccessory' | 'headAccessory') — the two torso PNGs, the left (support)
-// hand PNG and the head PNG.
+// 'leftArmAccessory' | 'headAccessory' | 'faceAccessory') — the two torso PNGs,
+// the left (support) hand PNG and the head + face PNGs.
 // In Edit Body (animation 'edit') a drag sets the character-wide position
 // `parts.<prefix>Offset`, which every animation without its own override uses.
 // In Edit Animation it sets a per-animation override `<prefix>AnimOffsets[anim]`.
@@ -181,7 +182,7 @@ function resetTorsoAccessoryOffset(c, prefix, animation) {
 // Anchor keys in `parts` that canvas handle drags write (weapon + every
 // accessory, base and per-animation). Canvas undo snapshots exactly these, so
 // undoing a drag never reverts an unrelated change such as an image upload.
-const CANVAS_ANCHOR_KEY = /^(weapon|accessory|bodyAccessory|bodyFrontAccessory|leftArmAccessory|headAccessory)(Anim)?Offsets?$/;
+const CANVAS_ANCHOR_KEY = /^(weapon|accessory|bodyAccessory|bodyFrontAccessory|leftArmAccessory|headAccessory|faceAccessory)(Anim)?Offsets?$/;
 
 /**
  * Deep copy of a character under a fresh id — body, skins, images, weapon
@@ -216,6 +217,9 @@ function cloneCharacter(src) {
       ...(src.parts.headAccessoryImage ? { headAccessoryImage: src.parts.headAccessoryImage } : {}),
       ...(src.parts.headAccessoryScale != null ? { headAccessoryScale: src.parts.headAccessoryScale } : {}),
       headAccessoryOffset: { ...(src.parts.headAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
+      ...(src.parts.faceAccessoryImage ? { faceAccessoryImage: src.parts.faceAccessoryImage } : {}),
+      ...(src.parts.faceAccessoryScale != null ? { faceAccessoryScale: src.parts.faceAccessoryScale } : {}),
+      faceAccessoryOffset: { ...(src.parts.faceAccessoryOffset ?? { x: 0, y: 0, rotation: 0 }) },
       ...animParts,
     },
     boneOffsets:          { ...src.boneOffsets },
@@ -378,6 +382,7 @@ export default function App() {
   const [bodyFrontAccessoryUploadOpen, setBodyFrontAccessoryUploadOpen] = useState(false);
   const [leftArmAccessoryUploadOpen, setLeftArmAccessoryUploadOpen] = useState(false);
   const [headAccessoryUploadOpen, setHeadAccessoryUploadOpen] = useState(false);
+  const [faceAccessoryUploadOpen, setFaceAccessoryUploadOpen] = useState(false);
   const [customizeOpen,        setCustomizeOpen]        = useState(false);
 
   // Sprite sheet preview dialog. spritePreview = { character, animationName } | null.
@@ -897,6 +902,33 @@ export default function App() {
   const resetHeadAccessoryOffset = useCallback(() => {
     setCharacters(prev => prev.map(c =>
       c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'headAccessory', currentAnimation) : c));
+  }, [activeCharId, currentAnimation]);
+
+  // ── Face accessory (PNG on the head bone, under the head accessory) ──
+  const updateFaceAccessoryImage = useCallback((dataUrl) => {
+    setCharacters(prev => prev.map(c => {
+      if (c.id !== activeCharId) return c;
+      const parts = { ...c.parts };
+      if (dataUrl) parts.faceAccessoryImage = dataUrl;
+      else         delete parts.faceAccessoryImage;
+      return { ...c, parts };
+    }));
+  }, [activeCharId]);
+
+  const setFaceAccessoryOffsetAbsolute = useCallback((newOffset) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? setTorsoAccessoryOffset(c, 'faceAccessory', currentAnimation, newOffset) : c));
+  }, [activeCharId, currentAnimation]);
+
+  const updateFaceAccessoryScale = useCallback((newScale) => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? { ...c, parts: { ...c.parts, faceAccessoryScale: newScale } } : c
+    ));
+  }, [activeCharId]);
+
+  const resetFaceAccessoryOffset = useCallback(() => {
+    setCharacters(prev => prev.map(c =>
+      c.id === activeCharId ? resetTorsoAccessoryOffset(c, 'faceAccessory', currentAnimation) : c));
   }, [activeCharId, currentAnimation]);
 
   const updateBoneOffsets = useCallback((newOffsets) => {
@@ -1493,6 +1525,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeChar.parts.headAccessoryAnimOffsets, activeChar.parts.headAccessoryOffset, currentAnimation],
   );
+  const faceAccessoryOffset = useMemo(
+    () => resolveFaceAccessoryOffset(activeChar.parts, currentAnimation),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeChar.parts.faceAccessoryAnimOffsets, activeChar.parts.faceAccessoryOffset, currentAnimation],
+  );
   // Per-animation layer z-order override (null = default). `layerOrder` is the
   // resolved back → front order used by both the render and the editor panel.
   const renderOpts = useMemo(() => resolveRenderOptions(activeChar, currentAnimation), [activeChar, currentAnimation]);
@@ -1796,6 +1833,8 @@ export default function App() {
                 onLeftArmAccessoryOffsetSet={setLeftArmAccessoryOffsetAbsolute}
                 headAccessoryOffset={headAccessoryOffset}
                 onHeadAccessoryOffsetSet={setHeadAccessoryOffsetAbsolute}
+                faceAccessoryOffset={faceAccessoryOffset}
+                onFaceAccessoryOffsetSet={setFaceAccessoryOffsetAbsolute}
                 onSelectBone={editAnimPose && !poseEditorOpen ? selectBone : undefined}
                 canvasBg={settings.canvasBg}
                 gridSpacing={settings.gridSpacing}
@@ -2209,6 +2248,69 @@ export default function App() {
                     </div>
                   );
                 })()}
+                {/* ── Face accessory (on the head, under the head gear) ───── */}
+                {(() => {
+                  const img = activeChar.parts.faceAccessoryImage;
+                  const curScale = resolveFaceAccessoryScale(activeChar.parts);
+                  return (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setFaceAccessoryUploadOpen(true)}
+                          title={img ? 'Replace face gear PNG' : 'Upload a PNG for the face gear'}
+                        >
+                          <ImageUp className="h-3.5 w-3.5 mr-1.5" />
+                          {img ? 'Edit Face Gear' : 'Upload Face Gear'}
+                        </Button>
+                        {img && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => updateFaceAccessoryImage(null)}
+                            title="Remove face gear image"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {img && (
+                        <div className="flex items-center justify-end gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Face gear scale</span>
+                          <button
+                            onClick={() => updateFaceAccessoryScale(Math.max(MIN_ACCESSORY_SCALE, +((curScale - ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale <= MIN_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >−</button>
+                          <span className={cn('text-[11px] min-w-[32px] text-center font-mono', Math.abs(curScale - 1) < 0.001 ? 'text-muted-foreground' : 'text-primary')}>
+                            {Math.round(curScale * 100)}%
+                          </span>
+                          <button
+                            onClick={() => updateFaceAccessoryScale(Math.min(MAX_ACCESSORY_SCALE, +((curScale + ACCESSORY_SCALE_STEP).toFixed(2))))}
+                            disabled={curScale >= MAX_ACCESSORY_SCALE}
+                            className="w-[22px] h-[22px] rounded-sm border border-border bg-secondary text-foreground text-[13px] leading-none flex items-center justify-center hover:border-primary hover:bg-secondary/80 disabled:opacity-35 disabled:cursor-default transition-colors"
+                          >+</button>
+                        </div>
+                      )}
+                      {img && (editAnimPose || currentAnimation === 'edit') && (() => {
+                        const lo = resolveFaceAccessoryOffset(activeChar.parts, currentAnimation);
+                        const isDirty = lo.x !== 0 || lo.y !== 0 || lo.rotation !== 0;
+                        const editBody = currentAnimation === 'edit';
+                        return isDirty ? (
+                          <button
+                            onClick={resetFaceAccessoryOffset}
+                            className="text-[10px] text-muted-foreground hover:text-destructive transition-colors self-end"
+                            title={editBody ? 'Reset the face gear position used by every animation' : "Reset this animation's face gear position"}
+                          >
+                            {editBody ? 'Reset face gear position (all animations)' : 'Reset face gear position (this animation)'}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
+                  );
+                })()}
                 </section>
               )}
               {customizeOpen && (currentAnimation === 'edit' || (editAnimPose && !poseEditorOpen)) && <Separator />}
@@ -2347,6 +2449,16 @@ export default function App() {
         title="Upload Head Accessory PNG"
         anchorText="attached to the head"
         moveHint="The head accessory moves and rotates with the head, draws on top of the head, and persists across weapon changes."
+      />
+
+      <AccessoryUploadDialog
+        open={faceAccessoryUploadOpen}
+        currentImage={activeChar.parts.faceAccessoryImage}
+        onPick={updateFaceAccessoryImage}
+        onClose={() => setFaceAccessoryUploadOpen(false)}
+        title="Upload Face Gear PNG"
+        anchorText="attached to the head (e.g. an eye patch or glasses)"
+        moveHint="Face gear moves and rotates with the head, draws on top of the face but under the head gear, and persists across weapon changes."
       />
 
       <SettingsDialog

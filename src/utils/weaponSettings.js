@@ -118,6 +118,21 @@ export function resolveHeadAccessoryOffset(parts, animation) {
       ?? ZERO_OFFSET;
 }
 
+// Face accessory — a single PNG on the `head` bone (eye patch / glasses /
+// mask), drawn under the head accessory. Character-wide. Same fallback chain:
+// parts.faceAccessoryAnimOffsets[animation] → parts.faceAccessoryOffset → zero
+export function resolveFaceAccessoryScale(parts) {
+  if (!parts) return 1;
+  return parts.faceAccessoryScale ?? 1;
+}
+
+export function resolveFaceAccessoryOffset(parts, animation) {
+  if (!parts) return ZERO_OFFSET;
+  return parts.faceAccessoryAnimOffsets?.[animation]
+      ?? parts.faceAccessoryOffset
+      ?? ZERO_OFFSET;
+}
+
 // ── Weapon TYPE ───────────────────────────────────────────────────────────────
 // `parts.weapon` is either a built-in key ('sword', 'rifle', …, 'none') or a
 // legacy custom key ('cw_…') whose behaviour comes from its `template`. Every

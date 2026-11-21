@@ -5,6 +5,7 @@ import {
   resolveBodyFrontAccessoryOffset, resolveBodyFrontAccessoryScale,
   resolveLeftArmAccessoryOffset, resolveLeftArmAccessoryScale,
   resolveHeadAccessoryOffset, resolveHeadAccessoryScale,
+  resolveFaceAccessoryOffset, resolveFaceAccessoryScale,
   isMeleeWeapon, MELEE_WEAPONS,
 } from '../utils/weaponSettings.js';
 import {
@@ -166,14 +167,16 @@ function drawLeftArmAccessory(ctx, character, worldTransforms, image, animation)
   ctx.restore();
 }
 
-// Head accessory (hat / helmet / ears) on the `head` bone, drawn as part of the
-// head layer right after the head skin + prop, so it always sits on the head.
-function drawHeadAccessory(ctx, character, worldTransforms, image, animation) {
+// Head accessories on the `head` bone, drawn as part of the head layer right
+// after the head skin + prop, so they always sit on the head: the face
+// accessory (eye patch / glasses) first, then the head accessory (hat / helmet /
+// ears) on top of it.
+function drawHeadAccessory(ctx, character, worldTransforms, image, animation, face = false) {
   if (!image) return;
   const bone = worldTransforms['head'];
   if (!bone) return;
-  const ao = resolveHeadAccessoryOffset(character, animation);
-  const s  = resolveHeadAccessoryScale(character);
+  const ao = face ? resolveFaceAccessoryOffset(character, animation) : resolveHeadAccessoryOffset(character, animation);
+  const s  = face ? resolveFaceAccessoryScale(character)              : resolveHeadAccessoryScale(character);
   const factor = ACCESSORY_IMAGE_TARGET / Math.max(image.naturalWidth, image.naturalHeight);
   const w = image.naturalWidth  * factor;
   const h = image.naturalHeight * factor;
@@ -242,6 +245,7 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
     bodyFrontAccessoryImage = null,
     leftArmAccessoryImage = null,
     headAccessoryImage = null,
+    faceAccessoryImage = null,
     animation = '',
     // isMelee: pass explicitly when the caller has access to customWeapons
     // so that custom weapons (key='cw_…') whose template='sword' draw behind
@@ -313,7 +317,8 @@ export function renderCharacter(ctx, character, worldTransforms, options = {}) {
         drawExtras(ctx, 'head', character, wt);
       }
       drawPart(ctx, 'head_prop', character, wt); // head prop rides with the head
-      drawHeadAccessory(ctx, character, wt, headAccessoryImage, animation); // so does the head accessory
+      drawHeadAccessory(ctx, character, wt, faceAccessoryImage, animation, true); // so does the face gear…
+      drawHeadAccessory(ctx, character, wt, headAccessoryImage, animation); // …and the head gear above it
     },
   };
   const includeFor = (key) =>
